@@ -21,7 +21,7 @@ func newDoctorCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
 		Short: "Validate config.yml and check registry health",
-		Args:  cobra.NoArgs,
+		Args:  usageArgs(cobra.NoArgs), // extra args are a usage error → exit 2 (spec §9)
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := config.RootDir()
 			if err != nil {

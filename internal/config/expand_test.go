@@ -91,6 +91,43 @@ func TestExpandErrors(t *testing.T) {
 	}
 }
 
+// TestExpandSubstitutesInLists covers substitute()'s []any branch — the
+// highest-traffic templated shape (setup/teardown/start lists). A declared
+// ${PARAM} is substituted inside every list entry; runtime tokens like
+// ${PORT0} in the same list pass through untouched.
+func TestExpandSubstitutesInLists(t *testing.T) {
+	raw := rawTree(t, `
+templates:
+  svc:
+    params: [NAME]
+    setup:
+      - createdb ${NAME}_dev
+      - seed ${NAME} --port ${PORT0}
+    teardown:
+      - dropdb ${NAME}_dev
+projects:
+  acme:
+    template: svc
+    params: { NAME: acme }
+`)
+	if err := expandTemplates(raw); err != nil {
+		t.Fatalf("expandTemplates: %v", err)
+	}
+	acme := raw["projects"].(map[string]any)["acme"].(map[string]any)
+
+	setup := acme["setup"].([]any)
+	if got := setup[0]; got != "createdb acme_dev" {
+		t.Errorf("setup[0] = %v; ${NAME} must be substituted inside the list", got)
+	}
+	if got := setup[1]; got != "seed acme --port ${PORT0}" {
+		t.Errorf("setup[1] = %v; ${NAME} substituted but runtime ${PORT0} must pass through", got)
+	}
+	teardown := acme["teardown"].([]any)
+	if got := teardown[0]; got != "dropdb acme_dev" {
+		t.Errorf("teardown[0] = %v; ${NAME} must be substituted inside the list", got)
+	}
+}
+
 func TestExpandNoTemplatesIsNoop(t *testing.T) {
 	raw := rawTree(t, `{projects: {p: {repo: /r}}}`)
 	if err := expandTemplates(raw); err != nil {

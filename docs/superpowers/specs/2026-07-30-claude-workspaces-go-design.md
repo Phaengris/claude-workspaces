@@ -189,6 +189,14 @@ Rules carried from v1's documented behavior:
   `setup: [ … ]` flow style — quote the value or use block style (Ruby's
   Psych tolerated this; goccy correctly rejects it). User docs show block
   style in every example containing `${…}`.
+- **Error-position caveat** (implementation finding, 2026-07-30): strict-decode
+  errors quote goccy's `[line:col]` position, which references the exact bytes
+  decoded. A config with no templates is strict-decoded from the original file,
+  so its positions point at the user's `config.yml`. A config that uses templates
+  must first be expanded and re-marshaled, so its positions refer to the
+  regenerated (key-sorted, re-laid-out) document, not the original file — the
+  error message flags this explicitly. AST-level expansion that preserves source
+  positions for the templated case is the known future fix.
 - Ordering of user-visible output (env files, project lists) is sorted
   alphabetically — declared as the contract, not insertion order.
 

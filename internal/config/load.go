@@ -46,15 +46,32 @@ func Load(root string) (*Config, error) {
 	if raw == nil {
 		return &Config{}, nil
 	}
-	if err := expandTemplates(raw); err != nil {
-		return nil, xerr.Wrap(xerr.ErrConfig, err)
+
+	// Strict-decode source selection (implementation finding, 2026-07-30):
+	// goccy's positioned errors reference the bytes it decodes. When no
+	// templates are in play we decode the ORIGINAL file bytes, so [line:col]
+	// positions point at the user's config.yml. When templates ARE in play the
+	// expand + re-marshal round-trip is unavoidable, and positions then refer to
+	// the regenerated (key-sorted, re-laid-out) document — so we flag that in the
+	// error message rather than mislead. AST-level expansion is the future fix.
+	toDecode := data
+	templated := usesTemplates(raw)
+	if templated {
+		if err := expandTemplates(raw); err != nil {
+			return nil, xerr.Wrap(xerr.ErrConfig, err)
+		}
+		clean, err := yaml.Marshal(raw)
+		if err != nil {
+			return nil, xerr.Wrap(xerr.ErrConfig, err)
+		}
+		toDecode = clean
 	}
-	clean, err := yaml.Marshal(raw)
+
+	cfg, err := decodeStrict(toDecode)
 	if err != nil {
-		return nil, xerr.Wrap(xerr.ErrConfig, err)
-	}
-	cfg, err := decodeStrict(clean)
-	if err != nil {
+		if templated {
+			err = fmt.Errorf("%w\n(note: line/column positions above refer to the template-expanded config, not the original %s)", err, path)
+		}
 		return nil, xerr.Wrap(xerr.ErrConfig, err)
 	}
 	for _, p := range cfg.Projects {

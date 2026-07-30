@@ -6,6 +6,32 @@ import (
 	"strings"
 )
 
+// usesTemplates reports whether the raw config exercises the template system:
+// a top-level `templates:` block, or any project carrying a `template` or
+// `params` key. Load uses this to decide whether the expand + re-marshal
+// round-trip is needed (it isn't for the no-templates majority, letting strict
+// decode run on the original bytes for exact error positions). `params` alone
+// still routes through expansion so its "params without template" error fires.
+func usesTemplates(raw map[string]any) bool {
+	if _, ok := raw["templates"]; ok {
+		return true
+	}
+	projects, _ := raw["projects"].(map[string]any)
+	for _, pAny := range projects {
+		project, ok := pAny.(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, ok := project["template"]; ok {
+			return true
+		}
+		if _, ok := project["params"]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // expandTemplates resolves `templates:` on the raw YAML tree, in place,
 // before strict typed decoding (spec §4). Load-time `${PARAM}` substitution
 // covers only names declared in the template's params list; runtime tokens

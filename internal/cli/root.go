@@ -2,8 +2,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -23,6 +25,12 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	// Flag-parse failures (unknown/bad flags) are usage errors → exit 2 (spec
+	// §9). Set on the root only; cobra's FlagErrorFunc lookup walks to the parent,
+	// so every subcommand inherits it.
+	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		return xerr.Wrap(xerr.ErrUsage, err)
+	})
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		envx.SanitizeSelf() // undo version-manager activation before anything spawns (spec §6)
 	}
@@ -30,13 +38,52 @@ func Root() *cobra.Command {
 	return root
 }
 
+// usageArgs wraps a positional-args validator so a violation (a leaf command's
+// wrong arg count) carries xerr.ErrUsage → exit 2 (spec §9). This is the
+// structural interception point for arg-count errors: cobra runs a command's
+// Args validator in execute() and returns its plain error with no typed kind,
+// so tagging it here beats string-matching the message. (Unknown-command
+// errors take a different path — see classifyUsageError.)
+func usageArgs(next cobra.PositionalArgs) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := next(cmd, args); err != nil {
+			return xerr.Wrap(xerr.ErrUsage, err)
+		}
+		return nil
+	}
+}
+
 // Main runs the CLI and returns the process exit code. It is the single exit
 // point: commands return errors (wrapped with an xerr kind where specific),
 // nothing below main prints-and-dies.
 func Main() int {
-	err := Root().Execute()
+	err := classifyUsageError(Root().Execute())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "workspace:", err)
 	}
 	return xerr.ExitCode(err)
+}
+
+// classifyUsageError tags cobra's unknown-command error with xerr.ErrUsage so
+// it exits 2 (spec §9). WHY string matching here: an unknown subcommand is
+// reported by cobra's Command.Find via legacyArgs, before the target command's
+// Args validator runs, as a plain error carrying no typed kind. Unlike flag
+// errors (intercepted structurally by SetFlagErrorFunc) and arg-count errors
+// (intercepted structurally by usageArgs on a command's Args), it has no
+// structural hook: the root command is not Runnable, so cobra short-circuits to
+// help/ErrHelp before ValidateArgs, and Find hardcodes legacyArgs when Args is
+// nil. Matching cobra's stable "unknown command" prefix is the documented
+// last-resort classification, kept in this one place. Errors already carrying
+// an xerr kind (usage, config, not-found) pass through untouched.
+func classifyUsageError(err error) error {
+	if err == nil {
+		return err
+	}
+	if errors.Is(err, xerr.ErrUsage) || errors.Is(err, xerr.ErrConfig) || errors.Is(err, xerr.ErrNotFound) {
+		return err
+	}
+	if strings.HasPrefix(err.Error(), "unknown command") {
+		return xerr.Wrap(xerr.ErrUsage, err)
+	}
+	return err
 }

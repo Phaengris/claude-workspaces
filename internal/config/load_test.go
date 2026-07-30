@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +53,75 @@ func TestLoadMissingFile(t *testing.T) {
 	_, err := Load(t.TempDir())
 	if !errors.Is(err, xerr.ErrConfig) || !strings.Contains(err.Error(), "config.yml") {
 		t.Errorf("missing config.yml must be an ErrConfig naming the file, got %v", err)
+	}
+}
+
+// lineOf returns the 1-based line number of the first line in yml that
+// contains needle, so position assertions derive the expected line from the
+// fixture rather than hardcoding a magic number.
+func lineOf(t *testing.T, yml, needle string) int {
+	t.Helper()
+	for i, line := range strings.Split(yml, "\n") {
+		if strings.Contains(line, needle) {
+			return i + 1
+		}
+	}
+	t.Fatalf("needle %q not found in fixture", needle)
+	return 0
+}
+
+// TestLoadNoTemplatePositionsAreExact pins Finding 1's fix: a config with no
+// templates skips the expand/re-marshal round-trip and strict-decodes the
+// ORIGINAL bytes, so goccy's [line:col] positions point at the user's file.
+func TestLoadNoTemplatePositionsAreExact(t *testing.T) {
+	yml := `values:
+  PORT:
+    start: 5000
+    per_workspace: 10
+projects:
+  app:
+    repo: /tmp/x
+    bogus_key: nope
+`
+	wantLine := lineOf(t, yml, "bogus_key")
+	root := writeConfig(t, yml)
+	_, err := Load(root)
+	if err == nil {
+		t.Fatal("unknown key must be a strict-decode error")
+	}
+	if !errors.Is(err, xerr.ErrConfig) {
+		t.Errorf("error must wrap xerr.ErrConfig, got %v", err)
+	}
+	marker := fmt.Sprintf("[%d:", wantLine)
+	if !strings.Contains(err.Error(), marker) {
+		t.Errorf("no-template config error must cite the user's line %d (%q); got: %v", wantLine, marker, err)
+	}
+}
+
+// TestLoadTemplatedPositionsAreFlagged pins Finding 1's honesty note: a
+// templated config still goes through expand + re-marshal, so its positions
+// refer to the expanded form — the error must say so, and still wrap ErrConfig.
+func TestLoadTemplatedPositionsAreFlagged(t *testing.T) {
+	yml := `templates:
+  base:
+    params: [NAME]
+    repo: /r/${NAME}
+projects:
+  app:
+    template: base
+    params: { NAME: app }
+    bogus_key: nope
+`
+	root := writeConfig(t, yml)
+	_, err := Load(root)
+	if err == nil {
+		t.Fatal("unknown key in a templated project must be a strict-decode error")
+	}
+	if !errors.Is(err, xerr.ErrConfig) {
+		t.Errorf("error must wrap xerr.ErrConfig, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "template-expanded") {
+		t.Errorf("templated config error must flag that positions refer to the template-expanded form; got: %v", err)
 	}
 }
 
