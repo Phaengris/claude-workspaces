@@ -184,10 +184,11 @@ Rules carried from v1's documented behavior:
 - **Start entries**: a YAML string is a run-and-wait command; a single-key
   map is a named daemon. One custom unmarshaler owns this distinction.
 - **YAML flow-style caveat** (implementation finding, 2026-07-30): the YAML
-  spec forbids `{`/`}` inside flow collections, so `${…}` tokens cannot
-  appear in `env: { … }` or `setup: [ … ]` flow style — use block style
-  there (Ruby's Psych tolerated this; goccy correctly rejects it). User
-  docs must show block style in every example containing `${…}`.
+  spec forbids `{`/`}` in *plain (unquoted) scalars* inside flow
+  collections, so unquoted `${…}` tokens cannot appear in `env: { … }` or
+  `setup: [ … ]` flow style — quote the value or use block style (Ruby's
+  Psych tolerated this; goccy correctly rejects it). User docs show block
+  style in every example containing `${…}`.
 - Ordering of user-visible output (env files, project lists) is sorted
   alphabetically — declared as the contract, not insertion order.
 
