@@ -206,11 +206,20 @@ No per-command version-manager wrapper. Three pure mechanisms
 (v1 `env_tools` behavior, post-`3c17215`):
 
 1. **Allowlist**: spawned processes receive only a fixed set of safe parent
-   vars (`HOME USER LOGNAME SHELL TERM TERM_PROGRAM LANG LANGUAGE LC_*
-   TZ DISPLAY WAYLAND_DISPLAY XAUTHORITY SSH_AUTH_SOCK SSH_AGENT_PID
-   GPG_AGENT_INFO GNUPGHOME XDG_* DBUS_SESSION_BUS_ADDRESS`) plus workspace/
-   project env on top. Version-manager pin vars are excluded by *prefix*
-   (`RBENV_ PYENV_ NODENV_ PLENV_ GOENV_ RUBYENV_ ASDF_ MISE_ __MISE_`).
+   vars — exact names, not globs (bounded on purpose: the list cannot grow
+   by accident; `env_allow` is the extension point): `HOME USER LOGNAME
+   SHELL TERM TERM_PROGRAM LANG LANGUAGE LC_ALL LC_CTYPE LC_MESSAGES
+   LC_COLLATE LC_NUMERIC LC_TIME TZ DISPLAY WAYLAND_DISPLAY XAUTHORITY
+   SSH_AUTH_SOCK SSH_AGENT_PID GPG_AGENT_INFO GNUPGHOME XDG_RUNTIME_DIR
+   XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME
+   DBUS_SESSION_BUS_ADDRESS` — plus workspace/project env on top.
+   (Earlier drafts abbreviated `LC_*`/`XDG_*`; the exact list is the v1
+   contract and the implemented behavior.) Version-manager pin vars are
+   excluded by *prefix* (`RBENV_ PYENV_ NODENV_ PLENV_ GOENV_ RUBYENV_
+   ASDF_ MISE_ __MISE_`); an `env_allow` entry that exactly names a pin
+   var outranks the prefix drop (explicit user intent wins). PATH is
+   always sanitized per (2), even if named in `env_allow` — the overlay
+   env is the raw-override channel.
 2. **Sanitized PATH pass-through**: PATH survives, minus segments that are
    concrete per-version install bins — contains `/versions/` or `/installs/`
    and ends in `/bin` — so version-manager *shims* stay reachable and resolve
