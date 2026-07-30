@@ -21,6 +21,9 @@ projects:
     start:
       - echo waiting
       - rails: bin/rails s -p ${PORT0}
+    # teardown/env are block style, not flow style, on purpose: goccy rejects
+    # ${...} tokens inside flow collections [...] / {...} (the braces are flow
+    # indicators), so do not "simplify" these back to flow style.
     teardown:
       - dropdb --if-exists ${DB_NAME}
     env:
