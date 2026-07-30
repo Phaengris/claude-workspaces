@@ -159,8 +159,10 @@ projects:
       - echo "bare string = run-and-wait command"
       - rails: bin/rails s -p ${PORT0}        # name: cmd = daemon
     stop: []                 # optional extra stop commands
-    teardown: [dropdb --if-exists ${DB_NAME}]
-    env: { DB_NAME: my-app_${WORKSPACE}_development }
+    teardown:
+      - dropdb --if-exists ${DB_NAME}
+    env:
+      DB_NAME: my-app_${WORKSPACE}_development
     browse_port: ${PORT0}
     instructions: |          # appended to WORKSPACE.md
       ...
@@ -181,6 +183,11 @@ Rules carried from v1's documented behavior:
   worktree's `.env`.
 - **Start entries**: a YAML string is a run-and-wait command; a single-key
   map is a named daemon. One custom unmarshaler owns this distinction.
+- **YAML flow-style caveat** (implementation finding, 2026-07-30): the YAML
+  spec forbids `{`/`}` inside flow collections, so `${…}` tokens cannot
+  appear in `env: { … }` or `setup: [ … ]` flow style — use block style
+  there (Ruby's Psych tolerated this; goccy correctly rejects it). User
+  docs must show block style in every example containing `${…}`.
 - Ordering of user-visible output (env files, project lists) is sorted
   alphabetically — declared as the contract, not insertion order.
 
