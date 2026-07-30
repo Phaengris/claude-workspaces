@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"git.internal/cat/claude-workspaces-go/internal/envx"
 	"git.internal/cat/claude-workspaces-go/internal/xerr"
 )
 
@@ -22,6 +23,10 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		envx.SanitizeSelf() // undo version-manager activation before anything spawns (spec §6)
+	}
+	root.AddCommand(newDoctorCmd())
 	return root
 }
 

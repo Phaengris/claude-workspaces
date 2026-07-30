@@ -1,0 +1,15 @@
+# doctor on a valid config reports OK and the project list, sorted.
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+exec workspace doctor
+stdout 'config: OK'
+stdout 'projects \(2\): app-a, app-b'
+stdout 'values: PORT = 10 per workspace from 5000'
+
+-- root/config.yml --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app-b:
+    repo: /tmp/does-not-need-to-exist-in-m0
+  app-a:
+    repo: /tmp/also-fine

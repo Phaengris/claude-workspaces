@@ -1,0 +1,5 @@
+# doctor with no config.yml is a config error, not a crash.
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+mkdir $WORK/root
+! exec workspace doctor
+stderr 'config.yml'
