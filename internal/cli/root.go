@@ -41,10 +41,18 @@ func Root() *cobra.Command {
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		envx.SanitizeSelf() // undo version-manager activation before anything spawns (spec §6)
 	}
+	// Use-string convention, applied by every command in the tree: <angle
+	// brackets> for a required positional, [square brackets] for an optional one.
+	// So `status [workspace]` takes it or leaves it, `env <workspace> [project]`
+	// and `cd <workspace> [project]` require the workspace, and `ls`/`ports`/
+	// `which`/`doctor` take none. cobra prints these verbatim in help and in
+	// usage errors, so a drifting style is a user-visible inconsistency.
 	root.AddCommand(newLsCmd())
 	root.AddCommand(newPortsCmd())
 	root.AddCommand(newStatusCmd())
 	root.AddCommand(newEnvCmd())
+	root.AddCommand(newWhichCmd())
+	root.AddCommand(newCdCmd())
 	root.AddCommand(newDoctorCmd())
 	return root
 }

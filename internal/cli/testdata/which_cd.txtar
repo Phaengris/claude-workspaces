@@ -1,0 +1,240 @@
+# which and cd against a fixture root built around the path-prefix trap.
+#
+# The registry deliberately holds sibling dirs whose names are string prefixes of
+# each other, plus a nested pair:
+#   A-1_x            (#0, A-1)   — the short name
+#   A-1_xtra         (#1, A-1b)  — a sibling whose dir "$WORK/root/A-1_x" is a
+#                                  string prefix of but NOT an ancestor of
+#   A-1_x-scratch    (no entry)  — the same trap with NO workspace to fall back
+#                                  on: the answer must be "not inside a workspace"
+#   N-1_outer        (#2, N-1)
+#   N-1_outer/N-2_inner (#3, N-2) — synthetic nesting, the only way to pin
+#                                  "deepest match wins"
+#
+# Neither command touches git, so no repos are created here (see the git-shim
+# block at the end, which asserts exactly that).
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+
+# The registry keys on ABSOLUTE workspace dirs, and txtar file bodies are
+# extracted verbatim (no env expansion), so the registry is shipped as a
+# template and WORKROOT is substituted here.
+exec sh -c 'sed "s|WORKROOT|$WORK/root|g" "$WORK/allocations.tmpl" > "$WORK/root/.allocations.json"'
+grep 'A-1_xtra' $WORK/root/.allocations.json
+! grep 'WORKROOT' $WORK/root/.allocations.json
+
+# --- which: cwd inside a workspace ----------------------------------------
+# `cd` is a testscript builtin that moves the SCRIPT's cwd, which is what the
+# `workspace` subprocess inherits — that is the whole input to which.
+cd $WORK/root/A-1_x
+exec workspace which
+stdout '^A-1_x$'
+
+# A deep subdirectory still resolves to the workspace, not to nothing.
+cd $WORK/root/A-1_x/deep/deeper
+exec workspace which
+stdout '^A-1_x$'
+
+# A project checkout inside the workspace is just another subdirectory.
+cd $WORK/root/A-1_x/app
+exec workspace which
+stdout '^A-1_x$'
+
+# --- which: THE prefix trap -----------------------------------------------
+# strings.HasPrefix("$WORK/root/A-1_xtra", "$WORK/root/A-1_x") is true, so a
+# prefix-based ancestry check treats A-1_x as an enclosing workspace here.
+# Component-wise it is not one. The negative assertions are anchored, so they
+# fail only on the bug.
+cd $WORK/root/A-1_xtra
+exec workspace which
+stdout '^A-1_xtra$'
+! stdout '^A-1_x$'
+
+cd $WORK/root/A-1_xtra/deep
+exec workspace which
+stdout '^A-1_xtra$'
+! stdout '^A-1_x$'
+
+# The two assertions above are NOT sufficient on their own, and this is the
+# lesson: A-1_xtra is itself a registry entry, so the deepest-match rule picks it
+# and accidentally hides the prefix bug. The trap only bites where the
+# string-prefix sibling is NOT a workspace — A-1_x-scratch below is a plain
+# directory, so the only correct answer is "not inside a workspace", and a
+# HasPrefix implementation says A-1_x instead. (Verified by mutation: replacing
+# isAncestorOrSame with strings.HasPrefix fails exactly here.)
+cd $WORK/root/A-1_x-scratch
+! exec workspace which
+stderr 'not inside a workspace'
+! stdout 'A-1_x'
+
+cd $WORK/root/A-1_x-scratch/deep
+! exec workspace which
+stderr 'not inside a workspace'
+
+# --- which: nested workspaces, deepest wins -------------------------------
+cd $WORK/root/N-1_outer
+exec workspace which
+stdout '^N-1_outer$'
+
+cd $WORK/root/N-1_outer/N-2_inner
+exec workspace which
+stdout '^N-2_inner$'
+
+# From a subdir of the inner workspace: both registry dirs are ancestors, the
+# deeper one is the answer.
+cd $WORK/root/N-1_outer/N-2_inner/sub
+exec workspace which
+stdout '^N-2_inner$'
+! stdout '^N-1_outer$'
+
+# --- which --json ---------------------------------------------------------
+cd $WORK/root/A-1_x/deep
+exec workspace which --json
+# $WORK must sit OUTSIDE the quotes: testscript expands env vars in unquoted
+# chunks only, and the chunks of one argument are concatenated.
+stdout '"dir": "'$WORK'/root/A-1_x"'
+stdout '"name": "A-1_x"'
+stdout '"task_id": "A-1"'
+
+# --- which: outside any workspace -----------------------------------------
+# The root dir itself is not a workspace, and neither is $WORK above it.
+cd $WORK
+! exec workspace which
+stderr 'not inside a workspace'
+cd $WORK/root
+! exec workspace which
+stderr 'not inside a workspace'
+# Exit code 3 (not found) is pinned by TestWhichCdExitCodes.
+
+# --- cd -------------------------------------------------------------------
+# Print-only: a child process cannot change the parent shell's cwd, so `cd`
+# emits an absolute path for the M5 shell wrapper to consume. Its answer does
+# not depend on where it runs from — $WORK is outside every workspace here.
+cd $WORK
+exec workspace cd A-1_x
+stdout '^'$WORK'/root/A-1_x$'
+
+# A task id resolves like a full name (wsp.Resolve).
+exec workspace cd A-1
+stdout '^'$WORK'/root/A-1_x$'
+
+# The trap name resolves to itself here too.
+exec workspace cd A-1_xtra
+stdout '^'$WORK'/root/A-1_xtra$'
+
+# With a project: the project's dir inside the workspace. `app` has no `path`,
+# so the config key is the subdirectory.
+exec workspace cd A-1_x app
+stdout '^'$WORK'/root/A-1_x/app$'
+
+# `path:` is honored (lib lives at libs/lib), and the project need not be
+# checked out — cd answers where it belongs, which is what the caller acts on.
+exec workspace cd A-1_x lib
+stdout '^'$WORK'/root/A-1_x/libs/lib$'
+
+# --json is unused, not rejected: the path IS the contract, so the flag is
+# accepted and ignored rather than turning a scriptable command into an error.
+exec workspace cd A-1_x --json
+stdout '^'$WORK'/root/A-1_x$'
+! stdout '[{}]'
+
+# --- cd: error paths ------------------------------------------------------
+# Unknown workspace → not found (exit 3, pinned in Go), message names the ident.
+! exec workspace cd NOPE-9
+stderr 'NOPE-9'
+
+# Unknown project → plain error naming the project (exit 1): the workspace WAS
+# found, so "not found" would send a caller looking in the wrong place.
+! exec workspace cd A-1_x nope
+stderr 'nope'
+
+# --- empty registry -------------------------------------------------------
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/empty
+! exec workspace which
+stderr 'not inside a workspace'
+! exec workspace cd A-1_x
+stderr 'A-1_x'
+
+# --- missing config -------------------------------------------------------
+# Both commands open with loadRoot, so a broken root is a config error (exit 4)
+# before anything about the cwd or the identifier is considered.
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/no-config
+mkdir $WORK/no-config
+! exec workspace which
+stderr 'config.yml'
+! exec workspace cd A-1_x
+stderr 'config.yml'
+
+# --- neither command spawns git -------------------------------------------
+# which is pure path arithmetic and cd is pure config lookup: no worktree probe
+# belongs in either. A logging `git` shim prepended to PATH makes it observable.
+# (This block runs LAST — the shim shadows real git for everything after it.)
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+chmod 0777 $WORK/shim/git
+env PATH=$WORK/shim:$PATH
+cd $WORK/root/A-1_x/deep
+exec workspace which
+stdout '^A-1_x$'
+! exists $WORK/git-calls
+exec workspace cd A-1_x app
+! exists $WORK/git-calls
+
+-- shim/git --
+#!/bin/sh
+# Records that a command reached for git, then fails like a missing repo would.
+echo "git $@" >> "$WORK/git-calls"
+exit 1
+-- root/config.yml --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: /tmp/app-src
+  lib:
+    repo: /tmp/lib-src
+    path: libs/lib
+-- allocations.tmpl --
+{
+  "WORKROOT/A-1_x": {
+    "index": 0,
+    "task_id": "A-1",
+    "description": "fix the thing",
+    "created_at": "2026-08-01T09:00:00Z",
+    "adopted": false
+  },
+  "WORKROOT/A-1_xtra": {
+    "index": 1,
+    "task_id": "A-1b",
+    "description": "the prefix trap",
+    "created_at": "2026-08-01T10:00:00Z",
+    "adopted": false
+  },
+  "WORKROOT/N-1_outer": {
+    "index": 2,
+    "task_id": "N-1",
+    "description": "outer",
+    "created_at": "2026-08-02T09:00:00Z",
+    "adopted": false
+  },
+  "WORKROOT/N-1_outer/N-2_inner": {
+    "index": 3,
+    "task_id": "N-2",
+    "description": "inner",
+    "created_at": "2026-08-02T10:00:00Z",
+    "adopted": false
+  }
+}
+-- root/A-1_x/app/README --
+app in A-1_x
+-- root/A-1_x/deep/deeper/README --
+deep inside A-1_x
+-- root/A-1_xtra/deep/README --
+deep inside A-1_xtra
+-- root/A-1_x-scratch/deep/README --
+not a workspace at all, just a dir whose path extends "A-1_x" as a string
+-- root/N-1_outer/README --
+outer workspace
+-- root/N-1_outer/N-2_inner/sub/README --
+deep inside the nested workspace
+-- empty/config.yml --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
