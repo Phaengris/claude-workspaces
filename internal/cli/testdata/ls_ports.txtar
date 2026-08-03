@@ -18,6 +18,7 @@ env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
 # template and WORKROOT is substituted here.
 exec sh -c 'sed "s|WORKROOT|$WORK/root|g" "$WORK/allocations.tmpl" > "$WORK/root/.allocations.json"'
 grep 'A-1_x' $WORK/root/.allocations.json
+! grep 'WORKROOT' $WORK/root/.allocations.json
 
 # A-1_x/app: real repo on main, everything committed → clean.
 exec git -C $WORK/root/A-1_x/app init -b main
@@ -113,6 +114,37 @@ stderr 'unknown command'
 ! exec workspace ports extra
 stderr 'unknown command'
 
+# --- git is scoped to -g --------------------------------------------------
+# Plain `ls` is registry data only and must not spawn git AT ALL: on a big root
+# the per-project worktree/branch probes would cost projects×workspaces serial
+# subprocesses outside the bounded stats walk, for output that shows none of it.
+# A logging `git` shim PREPENDED to PATH makes that observable — no log file
+# after plain ls, a log file after -g. (The rest of PATH must stay: testscript
+# resolves the `workspace` command itself through it. This block runs last, so
+# the shim shadows real git for everything that follows.)
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+chmod 0777 $WORK/shim/git
+env PATH=$WORK/shim:$PATH
+exec workspace ls
+stdout '^A-1_x +#0 +A-1 +fix the thing$'
+! exists $WORK/git-calls
+exec workspace ls --json
+stdout '"task_id": "A-1"'
+! exists $WORK/git-calls
+exec workspace ports
+stdout '^PORT +A-1_x +5000-5009$'
+! exists $WORK/git-calls
+# -g does reach for git — and degrades (no branch cells) when it fails.
+exec workspace ls -g
+exists $WORK/git-calls
+stdout '^A-1_x +#0 +A-1 +fix the thing$'
+! stdout 'app@'
+
+-- shim/git --
+#!/bin/sh
+# Records that ls reached for git, then fails like a missing repo would.
+echo "git $@" >> "$WORK/git-calls"
+exit 1
 -- root/config.yml --
 values:
   PORT: { start: 5000, per_workspace: 10 }

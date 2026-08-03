@@ -93,21 +93,32 @@ func newLsCmd() *cobra.Command {
 
 // lsEntries derives the full listing once, for both renderings — the human
 // table and --json read the same values, so the two can never disagree.
-// The git stats behind -g are fetched in a SINGLE bounded StatsFor call across
-// every workspace's checked-out project dirs, rather than one call per
-// workspace, so the worker bound holds globally and the walk is one wave.
+//
+// EVERY git touch lives inside the withGit branch, and must stay there. Plain
+// `ls` is pure registry data (the allocation plus the dir's base name), so it
+// costs zero subprocesses no matter how large the root is. Note that
+// wsp.ProjectStates is itself a git caller — IsWorkTree + Branch per configured
+// project, serially — so deriving states unconditionally would make plain `ls`
+// on a 10-workspace × 5-project root spawn ~100 git processes outside the
+// gitStatWorkers bound and then print none of it. The stats behind -g are
+// fetched in a SINGLE bounded StatsFor call over every workspace's checked-out
+// project dirs, rather than one call per workspace, so the bound holds globally
+// and the walk is one wave (spec §7).
 func lsEntries(cfg *config.Config, reg alloc.Registry, withGit bool) []lsEntry {
 	all := wsp.List(reg) // sorted by name; the output order for both renderings
-	states := make([][]wsp.ProjectState, len(all))
-	var dirs []string
-	for i, ws := range all {
-		states[i] = wsp.ProjectStates(cfg, ws)
-		for _, st := range states[i] {
-			dirs = append(dirs, st.Dir)
-		}
-	}
-	var stats map[string]gitx.Stats
+	var (
+		states [][]wsp.ProjectState // nil unless withGit
+		stats  map[string]gitx.Stats
+	)
 	if withGit {
+		states = make([][]wsp.ProjectState, len(all))
+		var dirs []string
+		for i, ws := range all {
+			states[i] = wsp.ProjectStates(cfg, ws)
+			for _, st := range states[i] {
+				dirs = append(dirs, st.Dir)
+			}
+		}
 		stats = gitx.StatsFor(dirs, gitStatWorkers)
 	}
 
