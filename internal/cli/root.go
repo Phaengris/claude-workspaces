@@ -31,6 +31,13 @@ func Root() *cobra.Command {
 	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		return xerr.Wrap(xerr.ErrUsage, err)
 	})
+	// --json is global on purpose: every M1 query command (ls, ports, status,
+	// env, which, cd) honors it, so it is registered once as a persistent flag
+	// rather than per-command. Commands read it with cmd.Flags().GetBool("json")
+	// — cobra's Flags() includes inherited persistent flags — and render via
+	// internal/ui.PrintJSON. A command that grows its own local "json" flag
+	// would shadow this one; don't.
+	root.PersistentFlags().Bool("json", false, "machine-readable output")
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		envx.SanitizeSelf() // undo version-manager activation before anything spawns (spec §6)
 	}
