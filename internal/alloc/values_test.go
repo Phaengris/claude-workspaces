@@ -31,6 +31,30 @@ func TestNextIndexFillsGaps(t *testing.T) {
 	}
 }
 
+// TestBlock pins the allocation arithmetic ComputeValues and `workspace ports`
+// share: the block is inclusive, and a workspace's index — not its position in
+// any listing — decides where its block starts.
+func TestBlock(t *testing.T) {
+	cases := []struct {
+		name        string
+		v           config.Value
+		index       int
+		first, last int
+	}{
+		{"first workspace", config.Value{Start: 5000, PerWorkspace: 10}, 0, 5000, 5009},
+		{"index gap", config.Value{Start: 5000, PerWorkspace: 10}, 2, 5020, 5029},
+		{"single-number value", config.Value{Start: 1, PerWorkspace: 1}, 3, 4, 4},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			first, last := alloc.Block(tc.v, tc.index)
+			if first != tc.first || last != tc.last {
+				t.Errorf("Block(%+v, %d) = %d-%d, want %d-%d", tc.v, tc.index, first, last, tc.first, tc.last)
+			}
+		})
+	}
+}
+
 func TestComputeValues(t *testing.T) {
 	values := map[string]config.Value{
 		"PORT":     {Start: 5000, PerWorkspace: 10},

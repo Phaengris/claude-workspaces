@@ -41,6 +41,8 @@ func Root() *cobra.Command {
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		envx.SanitizeSelf() // undo version-manager activation before anything spawns (spec §6)
 	}
+	root.AddCommand(newLsCmd())
+	root.AddCommand(newPortsCmd())
 	root.AddCommand(newDoctorCmd())
 	return root
 }

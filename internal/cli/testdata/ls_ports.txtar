@@ -1,0 +1,154 @@
+# ls and ports against a fixture root with two workspaces at indices 0 and 2.
+# The index gap is the point: B-7_y's port block must come from its own index
+# (5000 + 2*10), not from its position in the listing.
+#
+# Hermetic git: the host's ~/.gitconfig or /etc/gitconfig could set
+# init.defaultBranch, commit signing or status tweaks and change what `ls -g`
+# reports, so both config scopes are /dev/null and identity comes from the env.
+env GIT_CONFIG_GLOBAL=/dev/null
+env GIT_CONFIG_SYSTEM=/dev/null
+env GIT_AUTHOR_NAME=t
+env GIT_AUTHOR_EMAIL=t@t
+env GIT_COMMITTER_NAME=t
+env GIT_COMMITTER_EMAIL=t@t
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+
+# The registry keys on ABSOLUTE workspace dirs, and txtar file bodies are
+# extracted verbatim (no env expansion), so the registry is shipped as a
+# template and WORKROOT is substituted here.
+exec sh -c 'sed "s|WORKROOT|$WORK/root|g" "$WORK/allocations.tmpl" > "$WORK/root/.allocations.json"'
+grep 'A-1_x' $WORK/root/.allocations.json
+
+# A-1_x/app: real repo on main, everything committed → clean.
+exec git -C $WORK/root/A-1_x/app init -b main
+exec git -C $WORK/root/A-1_x/app add README
+exec git -C $WORK/root/A-1_x/app commit -m init
+
+# B-7_y/app: same, but dirt is left untracked → dirty.
+exec git -C $WORK/root/B-7_y/app init -b main
+exec git -C $WORK/root/B-7_y/app add README
+exec git -C $WORK/root/B-7_y/app commit -m init
+
+# --- ls -------------------------------------------------------------------
+# One row per workspace, sorted by name, index prefixed with '#'.
+exec workspace ls
+stdout '^A-1_x +#0 +A-1 +fix the thing$'
+stdout '^B-7_y +#2 +B-7 +add the widget$'
+stdout '(?s)A-1_x.*B-7_y'
+! stdout 'no workspaces'
+
+# -g appends one cell per CHECKED-OUT project: project@branch, '*' when dirty.
+# `lib` is configured but checked out nowhere, so it never appears.
+exec workspace ls -g
+stdout '^A-1_x +#0 +A-1 +fix the thing +app@main$'
+stdout '^B-7_y +#2 +B-7 +add the widget +app@main\*$'
+! stdout 'lib'
+
+# --json is an array sorted by name; no `projects` key without -g.
+exec workspace ls --json
+stdout '"name": "A-1_x"'
+stdout '"task_id": "B-7"'
+stdout '"index": 2'
+stdout '"description": "fix the thing"'
+stdout '"created_at": "2026-08-02T11:00:00Z"'
+stdout '"adopted": true'
+stdout '(?s)"name": "A-1_x".*"name": "B-7_y"'
+! stdout '"projects"'
+
+# -g --json adds the per-project array with branch and dirty flags.
+exec workspace ls -g --json
+stdout '"projects"'
+stdout '"branch": "main"'
+stdout '"dirty": false'
+stdout '"dirty": true'
+! stdout '"name": "lib"'
+
+# --- ports ----------------------------------------------------------------
+# VALUE  WORKSPACE  FIRST-LAST, derived from start + index*per_workspace.
+exec workspace ports
+stdout '^PORT +A-1_x +5000-5009$'
+stdout '^PORT +B-7_y +5020-5029$'
+stdout '(?s)A-1_x.*B-7_y'
+
+exec workspace ports --json
+stdout '"PORT"'
+stdout '"A-1_x"'
+stdout '"first": 5000'
+stdout '"last": 5009'
+stdout '"first": 5020'
+stdout '"last": 5029'
+
+# --- empty registry -------------------------------------------------------
+# A root with a valid config and no allocations is not an error: both commands
+# say so on stdout and exit 0. --json stays machine-parseable (empty container).
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/empty
+exec workspace ls
+stdout '^no workspaces$'
+exec workspace ports
+stdout '^no workspaces$'
+exec workspace ls --json
+stdout '^\[\]$'
+exec workspace ports --json
+stdout '^\{\}$'
+
+# --- error paths ----------------------------------------------------------
+# Missing config.yml → config error (exit 4, pinned in Go by TestQueryExitCodes).
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/no-config
+mkdir $WORK/no-config
+! exec workspace ls
+stderr 'config.yml'
+! exec workspace ports
+stderr 'config.yml'
+
+# Unreadable registry → plain error naming the registry (exit 1).
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/broken
+! exec workspace ls
+stderr 'registry'
+! exec workspace ports
+stderr 'registry'
+
+# Extra positional args are a usage error on both commands.
+! exec workspace ls extra
+stderr 'unknown command'
+! exec workspace ports extra
+stderr 'unknown command'
+
+-- root/config.yml --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: /tmp/app-src
+  lib:
+    repo: /tmp/lib-src
+-- allocations.tmpl --
+{
+  "WORKROOT/B-7_y": {
+    "index": 2,
+    "task_id": "B-7",
+    "description": "add the widget",
+    "created_at": "2026-08-02T11:00:00Z",
+    "adopted": true
+  },
+  "WORKROOT/A-1_x": {
+    "index": 0,
+    "task_id": "A-1",
+    "description": "fix the thing",
+    "created_at": "2026-08-01T09:00:00Z",
+    "adopted": false
+  }
+}
+-- root/A-1_x/app/README --
+app in A-1_x
+-- root/B-7_y/app/README --
+app in B-7_y
+-- root/B-7_y/app/dirt --
+uncommitted
+-- empty/config.yml --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+-- broken/config.yml --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+-- broken/.allocations.json --
+{ this is not json
