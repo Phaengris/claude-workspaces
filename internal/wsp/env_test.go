@@ -17,6 +17,9 @@ func testCfg() *config.Config {
 				"URL":     "http://localhost:${PORT0}/${UNKNOWN}",
 				"SHARED":  "project",
 			}},
+			// "web" exists to exercise the path override and the
+			// not-checked-out branch of ProjectStates (Task 4).
+			"web": {Repo: "/w", Path: "www"},
 		},
 	}
 }
