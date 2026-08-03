@@ -27,7 +27,9 @@ func fixtureRoot(t *testing.T, files map[string]string) string {
 // TestQueryExitCodes pins the exit codes the txtar script can only assert as
 // "non-zero" (spec §9): a config problem is 4 (the kind Load attaches, passed
 // through untouched), an unreadable registry is a plain error → 1, and an empty
-// registry is not an error at all → 0.
+// registry is not an error at all → 0. Every command that opens with loadRoot
+// and can run without a workspace argument is covered, `status` included —
+// identifier-specific codes live in TestStatusEnvExitCodes.
 func TestQueryExitCodes(t *testing.T) {
 	cases := map[string]struct {
 		files map[string]string
@@ -39,7 +41,7 @@ func TestQueryExitCodes(t *testing.T) {
 		"empty registry":  {files: map[string]string{"config.yml": validConfig}, want: 0},
 	}
 	for name, tc := range cases {
-		for _, sub := range []string{"ls", "ports"} {
+		for _, sub := range []string{"ls", "ports", "status"} {
 			t.Run(name+"/"+sub, func(t *testing.T) {
 				fixtureRoot(t, tc.files)
 				if got := exitCodeFor(t, sub); got != tc.want {

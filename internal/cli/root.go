@@ -43,6 +43,8 @@ func Root() *cobra.Command {
 	}
 	root.AddCommand(newLsCmd())
 	root.AddCommand(newPortsCmd())
+	root.AddCommand(newStatusCmd())
+	root.AddCommand(newEnvCmd())
 	root.AddCommand(newDoctorCmd())
 	return root
 }

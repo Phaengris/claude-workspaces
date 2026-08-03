@@ -1,0 +1,253 @@
+# status and env against a fixture root with two workspaces at indices 0 and 2.
+#
+# The fixture is built to exercise every derived state status can report:
+#   A-1_x (#0): app  checked out on main, setup stamp MATCHES  → setup current
+#               api  checked out on main, setup stamp GARBAGE  → setup stale
+#               lib  configured, never checked out             → not checked out
+#   B-7_y (#2): app  checked out but HEAD is unborn (no commit) → branch unknown
+#               (no stamp at all → setup stale, the missing-stamp half)
+#               empty description                              → bare task line
+#
+# Hermetic git: the host's ~/.gitconfig or /etc/gitconfig could set
+# init.defaultBranch or status tweaks and change what status reports, so both
+# config scopes are /dev/null and identity comes from the env.
+env GIT_CONFIG_GLOBAL=/dev/null
+env GIT_CONFIG_SYSTEM=/dev/null
+env GIT_AUTHOR_NAME=t
+env GIT_AUTHOR_EMAIL=t@t
+env GIT_COMMITTER_NAME=t
+env GIT_COMMITTER_EMAIL=t@t
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+
+# The registry keys on ABSOLUTE workspace dirs, and txtar file bodies are
+# extracted verbatim (no env expansion), so the registry is shipped as a
+# template and WORKROOT is substituted here.
+exec sh -c 'sed "s|WORKROOT|$WORK/root|g" "$WORK/allocations.tmpl" > "$WORK/root/.allocations.json"'
+grep 'A-1_x' $WORK/root/.allocations.json
+! grep 'WORKROOT' $WORK/root/.allocations.json
+
+exec git -C $WORK/root/A-1_x/app init -b main
+exec git -C $WORK/root/A-1_x/app add README
+exec git -C $WORK/root/A-1_x/app commit -m init
+
+exec git -C $WORK/root/A-1_x/api init -b main
+exec git -C $WORK/root/A-1_x/api add README
+exec git -C $WORK/root/A-1_x/api commit -m init
+
+# No commit here on purpose: `rev-parse --abbrev-ref HEAD` fails on an unborn
+# HEAD, which is the only way to get an empty Branch out of ProjectStates.
+exec git -C $WORK/root/B-7_y/app init -b main
+
+# --- status <ws> ----------------------------------------------------------
+# Header block, then one line per CONFIGURED project (sorted), whether or not
+# it is checked out here. em-dash between task id and description.
+exec workspace status A-1_x
+stdout '^workspace: A-1_x$'
+stdout '^task: A-1 — fix the thing$'
+# $WORK must sit OUTSIDE the quotes: testscript expands env vars in unquoted
+# chunks only, and the chunks of one argument are concatenated.
+stdout '^dir: '$WORK'/root/A-1_x$'
+stdout '^index: 0$'
+stdout '^projects:$'
+stdout '^  api: checked out \(branch main\), setup stale$'
+stdout '^  app: checked out \(branch main\), setup current$'
+stdout '^  lib: not checked out$'
+stdout '(?s)workspace:.*task:.*dir:.*index:.*projects:'
+stdout '(?s)  api:.*  app:.*  lib:'
+
+# A task id resolves to the same workspace as its full name.
+exec workspace status A-1
+stdout '^workspace: A-1_x$'
+
+# Empty description → no trailing em-dash. Unreadable branch → "branch unknown".
+# Missing stamp → stale, same wording as a mismatched one.
+exec workspace status B-7
+stdout '^task: B-7$'
+! stdout 'B-7 —'
+stdout '^index: 2$'
+stdout '^  app: checked out \(branch unknown\), setup stale$'
+stdout '^  api: not checked out$'
+stdout '^  lib: not checked out$'
+
+# --json is the full derived object: all configured projects, same rule.
+exec workspace status A-1_x --json
+stdout '"dir": "'$WORK'/root/A-1_x"'
+stdout '"name": "A-1_x"'
+stdout '"index": 0'
+stdout '"task_id": "A-1"'
+stdout '"description": "fix the thing"'
+stdout '"created_at": "2026-08-01T09:00:00Z"'
+stdout '"adopted": false'
+stdout '"checked_out": true'
+stdout '"checked_out": false'
+stdout '"branch": "main"'
+stdout '"setup_current": true'
+stdout '"setup_current": false'
+stdout '(?s)"name": "api".*"name": "app".*"name": "lib"'
+
+# --- status (no ws) -------------------------------------------------------
+# Exactly the `ls` one-line format (same row builder), no git columns.
+exec workspace status
+stdout '^A-1_x +#0 +A-1 +fix the thing$'
+stdout '^B-7_y +#2 +B-7'
+stdout '(?s)A-1_x.*B-7_y'
+! stdout 'workspace: '
+! stdout 'app@'
+
+exec workspace status --json
+stdout '(?s)"name": "A-1_x".*"name": "B-7_y"'
+! stdout '"projects"'
+
+# --- env ------------------------------------------------------------------
+# Sorted K=V lines. Project env overrides global per key; runtime tokens are
+# substituted into VALUES only.
+exec workspace env A-1 app
+stdout '^BASE_URL=http://localhost:5000$'
+stdout '^DB_NAME=app_A-1_dev$'
+stdout '^RAILS_ENV=development$'
+stdout '(?s)BASE_URL.*DB_NAME.*RAILS_ENV'
+
+# THE contract this task pins: RuntimeVars are substitution inputs, NOT env
+# vars. PORT0/WORKSPACE/PROJECT appear inside values above and nowhere as keys.
+! stdout '^PORT0='
+! stdout '^PORT1='
+! stdout '^WORKSPACE='
+! stdout '^PROJECT='
+
+# Same by full workspace name, and the index (not the listing position) drives
+# the numbers: B-7_y is #2, so PORT0 is 5020.
+exec workspace env B-7_y app
+stdout '^BASE_URL=http://localhost:5020$'
+stdout '^DB_NAME=app_B-7_dev$'
+
+# Without a project: global env only, so no project overlay wins and ${PROJECT}
+# has no value to substitute (unknown tokens pass through — spec §4).
+exec workspace env A-1
+stdout '^DB_NAME=global_A-1$'
+stdout '^BASE_URL=http://localhost:5000$'
+! stdout 'app_A-1_dev'
+
+# A configured project that is not checked out still has resolvable env: env is
+# a config question, not a checkout question.
+exec workspace env A-1 lib
+stdout '^DB_NAME=lib-db$'
+
+exec workspace env A-1 app --json
+stdout '"DB_NAME": "app_A-1_dev"'
+stdout '"BASE_URL": "http://localhost:5000"'
+! stdout '"PORT0"'
+! stdout '"WORKSPACE"'
+
+# --- error paths ----------------------------------------------------------
+# Unknown workspace → not found (exit 3, pinned in Go by TestStatusEnvExitCodes),
+# and the message names the ident that failed.
+! exec workspace status NOPE-9
+stderr 'NOPE-9'
+! exec workspace env NOPE-9
+stderr 'NOPE-9'
+! exec workspace env NOPE-9 app
+stderr 'NOPE-9'
+
+# Unknown project → plain error naming the project (exit 1): ResolvedEnv would
+# silently hand back the global env, which looks like success.
+! exec workspace env A-1 nope
+stderr 'nope'
+
+# Missing config.yml → config error (exit 4).
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/no-config
+mkdir $WORK/no-config
+! exec workspace status
+stderr 'config.yml'
+! exec workspace env A-1
+stderr 'config.yml'
+
+# --- empty registry -------------------------------------------------------
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/empty
+exec workspace status
+stdout '^no workspaces$'
+exec workspace status --json
+stdout '^\[\]$'
+! exec workspace status A-1
+stderr 'A-1'
+
+# --- no-arg status spawns no git ------------------------------------------
+# The listing is registry data only (lsEntries with withGit=false), so it must
+# not probe worktrees: on a big root that is projects×workspaces subprocesses
+# for output that shows no branch at all. A logging `git` shim prepended to PATH
+# makes it observable. (This block runs LAST — the shim shadows real git for
+# everything after it.)
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+chmod 0777 $WORK/shim/git
+env PATH=$WORK/shim:$PATH
+exec workspace status
+stdout '^A-1_x +#0 +A-1 +fix the thing$'
+! exists $WORK/git-calls
+exec workspace status --json
+stdout '"task_id": "A-1"'
+! exists $WORK/git-calls
+# env is pure config + arithmetic: no git either.
+exec workspace env A-1 app
+stdout '^DB_NAME=app_A-1_dev$'
+! exists $WORK/git-calls
+# status <ws> does reach for git — and degrades to "not checked out" when it fails.
+exec workspace status A-1_x
+exists $WORK/git-calls
+stdout '^  app: not checked out$'
+
+-- shim/git --
+#!/bin/sh
+# Records that a command reached for git, then fails like a missing repo would.
+echo "git $@" >> "$WORK/git-calls"
+exit 1
+-- root/config.yml --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+env:
+  RAILS_ENV: development
+  BASE_URL: http://localhost:${PORT0}
+  DB_NAME: global_${WORKSPACE}
+projects:
+  app:
+    repo: /tmp/app-src
+    setup:
+      - echo ${PORT0}
+    env:
+      DB_NAME: ${PROJECT}_${WORKSPACE}_dev
+  api:
+    repo: /tmp/api-src
+    setup:
+      - echo ${PORT1}
+  lib:
+    repo: /tmp/lib-src
+    env:
+      DB_NAME: lib-db
+-- allocations.tmpl --
+{
+  "WORKROOT/B-7_y": {
+    "index": 2,
+    "task_id": "B-7",
+    "description": "",
+    "created_at": "2026-08-02T11:00:00Z",
+    "adopted": true
+  },
+  "WORKROOT/A-1_x": {
+    "index": 0,
+    "task_id": "A-1",
+    "description": "fix the thing",
+    "created_at": "2026-08-01T09:00:00Z",
+    "adopted": false
+  }
+}
+-- root/A-1_x/app/README --
+app in A-1_x
+-- root/A-1_x/api/README --
+api in A-1_x
+-- root/A-1_x/.workspace/setup-app.ok --
+05d79e6b6baf4d305c04290aa25ae4c9c4b47cc65f064410470c857b6164a65b
+-- root/A-1_x/.workspace/setup-api.ok --
+0000000000000000000000000000000000000000000000000000000000000000
+-- root/B-7_y/app/README --
+app in B-7_y
+-- empty/config.yml --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
