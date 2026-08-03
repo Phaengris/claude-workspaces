@@ -9,6 +9,7 @@ import (
 
 	"git.internal/cat/claude-workspaces-go/internal/ui"
 	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"git.internal/cat/claude-workspaces-go/internal/xerr"
 )
 
 // newEnvCmd builds `workspace env <workspace> [project]`: the environment a
@@ -48,15 +49,16 @@ func newEnvCmd() *cobra.Command {
 				// The command validates the name, because wsp.ResolvedEnv cannot:
 				// an unknown project there silently yields the global env alone,
 				// which prints as a plausible-looking result. A typo'd project
-				// must fail loudly (plain error → exit 1) rather than hand back
-				// an env that is missing the very overlay that was asked for.
+				// must fail loudly, and spec §9 governs the code: exit 3
+				// ("workspace/project not found") covers this half of the
+				// identifier exactly as it covers an unknown workspace.
 				//
 				// Only the CONFIG is consulted — a project need not be checked
 				// out in this workspace for its env to resolve. The message names
 				// the project and stops there: enumerating every configured
 				// project turns a one-line error into a wall of unrelated names.
 				if _, ok := cfg.Projects[project]; !ok {
-					return fmt.Errorf("project %q is not configured", project)
+					return xerr.Wrap(xerr.ErrNotFound, fmt.Errorf("project %q is not configured", project))
 				}
 			}
 

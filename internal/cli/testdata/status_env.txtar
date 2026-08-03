@@ -148,8 +148,8 @@ stderr 'NOPE-9'
 ! exec workspace env NOPE-9 app
 stderr 'NOPE-9'
 
-# Unknown project → plain error naming the project (exit 1): ResolvedEnv would
-# silently hand back the global env, which looks like success.
+# Unknown project → not found (exit 3, spec §9), naming the project: ResolvedEnv
+# would silently hand back the global env, which looks like success.
 ! exec workspace env A-1 nope
 stderr 'nope'
 

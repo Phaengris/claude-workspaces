@@ -11,7 +11,10 @@ import (
 
 // Subst replaces ${K} for every key in vars. Unknown tokens pass through
 // untouched — runtime tokens and load-time template params share one syntax,
-// and passing unknowns through is what makes that safe (spec §4).
+// and passing unknowns through is what makes that safe (spec §4). Replacement
+// is single-pass per key in map order; if a substituted value itself contains
+// another key's ${K}, the result is order-dependent and unsupported — values
+// must not be token-bearing after substitution.
 func Subst(s string, vars map[string]string) string {
 	for k, v := range vars {
 		s = strings.ReplaceAll(s, "${"+k+"}", v)

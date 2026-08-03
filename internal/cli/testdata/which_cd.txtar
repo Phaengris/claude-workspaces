@@ -142,8 +142,9 @@ stdout '^'$WORK'/root/A-1_x$'
 ! exec workspace cd NOPE-9
 stderr 'NOPE-9'
 
-# Unknown project → plain error naming the project (exit 1): the workspace WAS
-# found, so "not found" would send a caller looking in the wrong place.
+# Unknown project → not found (exit 3, spec §9), naming the project: the
+# project half of the identifier didn't resolve, exactly as an unknown
+# workspace wouldn't have.
 ! exec workspace cd A-1_x nope
 stderr 'nope'
 

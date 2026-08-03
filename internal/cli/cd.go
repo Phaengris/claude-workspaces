@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"git.internal/cat/claude-workspaces-go/internal/xerr"
 )
 
 // newCdCmd builds `workspace cd <workspace> [project]`: the absolute directory
@@ -48,13 +49,13 @@ func newCdCmd() *cobra.Command {
 				project := args[1]
 				// Validated against the CONFIG, exactly as `env` does: wsp.ProjectDir
 				// falls back to the bare name for an unknown project, so a typo
-				// would print a plausible path that nothing will ever create. A
-				// plain error → exit 1, not 3: the workspace WAS found, and
-				// reporting "not found" would send a caller looking in the wrong
-				// place. The message names the project and stops there rather
+				// would print a plausible path that nothing will ever create.
+				// Exit 3 (not found), per spec §9: the project half of the
+				// identifier didn't resolve, exactly as the workspace half would
+				// not have. The message names the project and stops there rather
 				// than listing every configured one.
 				if _, ok := cfg.Projects[project]; !ok {
-					return fmt.Errorf("project %q is not configured", project)
+					return xerr.Wrap(xerr.ErrNotFound, fmt.Errorf("project %q is not configured", project))
 				}
 				dir = wsp.ProjectDir(ws, cfg, project)
 			}

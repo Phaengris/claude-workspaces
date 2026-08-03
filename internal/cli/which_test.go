@@ -44,7 +44,9 @@ func siblingRoot(t *testing.T) string {
 // TestWhichCdExitCodes pins the codes txtar can only assert as "non-zero" (spec
 // §9). The load-bearing ones: `which` outside a workspace is 3, so a script can
 // branch on it exactly as it does on `status <unknown>`; `cd` with a good
-// workspace and a bogus project is 1, not 3, because the workspace WAS found.
+// workspace and a bogus project is also 3 — spec §9 promises exit 3 for
+// "workspace/project not found", and that covers the project half of the
+// identifier just as it covers the workspace half.
 func TestWhichCdExitCodes(t *testing.T) {
 	t.Run("which inside a workspace", func(t *testing.T) {
 		root := siblingRoot(t)
@@ -69,7 +71,7 @@ func TestWhichCdExitCodes(t *testing.T) {
 		"cd by task id":           {args: []string{"cd", "A-1"}, want: 0},
 		"cd with project":         {args: []string{"cd", "A-1_x", "app"}, want: 0},
 		"cd unknown workspace":    {args: []string{"cd", "NOPE"}, want: 3},
-		"cd unconfigured project": {args: []string{"cd", "A-1_x", "nope"}, want: 1},
+		"cd unconfigured project": {args: []string{"cd", "A-1_x", "nope"}, want: 3},
 		// Resolution happens before project validation, so an unknown workspace
 		// keeps its own code even when the project is bogus too.
 		"cd unknown workspace and project": {args: []string{"cd", "nope", "nope"}, want: 3},

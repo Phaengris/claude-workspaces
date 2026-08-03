@@ -40,11 +40,12 @@ func registryRoot(t *testing.T) string {
 }
 
 // TestStatusEnvExitCodes pins the codes txtar can only assert as "non-zero"
-// (spec §9). The interesting ones are 3 for an unresolvable identifier — which
-// is what makes `workspace status X` usable as a shell test for existence — and
-// 1, not 3, for a workspace that exists with a project that does not: the
-// workspace WAS found, so reporting "not found" would send a caller looking in
-// the wrong place.
+// (spec §9). Every unresolvable-identifier case here is 3: spec §9 promises
+// exit 3 for "workspace/project not found", and that covers an unconfigured
+// project exactly as it covers an unknown workspace — the workspace resolving
+// successfully first doesn't change what the project half of the identifier
+// means. This is what makes `workspace status X` usable as a shell test for
+// existence.
 func TestStatusEnvExitCodes(t *testing.T) {
 	cases := map[string]struct {
 		args []string
@@ -63,7 +64,7 @@ func TestStatusEnvExitCodes(t *testing.T) {
 	}
 
 	// Against a root that really holds the workspace: resolvable identifiers
-	// succeed, an unconfigured project is a plain error.
+	// succeed, an unconfigured project is exit 3 too (spec §9).
 	withRegistry := map[string]struct {
 		args []string
 		want int
@@ -72,7 +73,7 @@ func TestStatusEnvExitCodes(t *testing.T) {
 		"status found by name":     {args: []string{"status", "A-1_x"}, want: 0},
 		"env found":                {args: []string{"env", "A-1"}, want: 0},
 		"env with project":         {args: []string{"env", "A-1", "app"}, want: 0},
-		"env unconfigured project": {args: []string{"env", "A-1", "nope"}, want: 1},
+		"env unconfigured project": {args: []string{"env", "A-1", "nope"}, want: 3},
 		// Resolution happens before project validation, so an unknown workspace
 		// keeps its own code even when the project is bogus too.
 		"env unknown workspace and project": {args: []string{"env", "nope", "nope"}, want: 3},

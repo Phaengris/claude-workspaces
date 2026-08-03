@@ -9,14 +9,6 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-// decodeStrict decodes YAML into Config, rejecting unknown and duplicate keys
-// with a positioned error. Strictness is the config contract (spec §4): a
-// typo'd or repeated key is an error, not a silently ignored/overwritten
-// setting. Enforcement: yaml.Strict() supplies unknown-field rejection; goccy's
-// parser rejects duplicate mapping keys unconditionally (independent of
-// Strict()), so both halves hold — a future decoder/option change must preserve
-// duplicate-key rejection too. An empty document decodes to a non-nil empty
-// *Config.
 // A `templates:` key is consumed by expansion on the raw tree, so the typed
 // schema has no home for it — yet an empty or null `templates:` block skips
 // expansion entirely (usesTemplates says it declares nothing) and therefore
@@ -28,6 +20,14 @@ type document struct {
 	Templates map[string]any `yaml:"templates"`
 }
 
+// decodeStrict decodes YAML into Config, rejecting unknown and duplicate keys
+// with a positioned error. Strictness is the config contract (spec §4): a
+// typo'd or repeated key is an error, not a silently ignored/overwritten
+// setting. Enforcement: yaml.Strict() supplies unknown-field rejection; goccy's
+// parser rejects duplicate mapping keys unconditionally (independent of
+// Strict()), so both halves hold — a future decoder/option change must preserve
+// duplicate-key rejection too. An empty document decodes to a non-nil empty
+// *Config.
 func decodeStrict(data []byte) (*Config, error) {
 	var doc document
 	dec := yaml.NewDecoder(bytes.NewReader(data), yaml.Strict())
