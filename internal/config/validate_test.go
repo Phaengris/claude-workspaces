@@ -39,6 +39,22 @@ func TestValidateDetectsDependencyCycle(t *testing.T) {
 	}
 }
 
+func TestCycleReportListsParticipants(t *testing.T) {
+	// b<->c cycle with a depending on b: current Kahn implementation reports
+	// downstream node "a" as involved too. This test PINS that behavior and
+	// documents it — if you change the algorithm to report only true cycle
+	// members, update this test and the doc comment together.
+	cfg := &Config{Projects: map[string]*Project{
+		"a": {Repo: "/r", Depends: StringList{"b"}},
+		"b": {Repo: "/r", Depends: StringList{"c"}},
+		"c": {Repo: "/r", Depends: StringList{"b"}},
+	}}
+	err := cfg.validate()
+	if err == nil || !strings.Contains(err.Error(), "dependency cycle involving: [a b c]") {
+		t.Errorf("want cycle error listing [a b c], got %v", err)
+	}
+}
+
 func TestValidateOK(t *testing.T) {
 	cfg := &Config{Projects: map[string]*Project{
 		"a": {Repo: "/r", Depends: StringList{"b"}},

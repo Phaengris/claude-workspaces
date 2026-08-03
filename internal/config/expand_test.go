@@ -134,3 +134,42 @@ func TestExpandNoTemplatesIsNoop(t *testing.T) {
 		t.Fatalf("config without templates must pass: %v", err)
 	}
 }
+
+func TestExpandCollectsAllProjectErrors(t *testing.T) {
+	raw := rawTree(t, `
+templates:
+  c:
+    params: [NAME]
+    repo: /r/${NAME}
+projects:
+  p1: {template: nope}
+  p2: {template: c}
+  p3: {repo: /r, params: {X: y}}
+`)
+	err := expandTemplates(raw)
+	if err == nil {
+		t.Fatal("want errors")
+	}
+	for _, want := range []string{
+		`project "p1": unknown template "nope"`,
+		`project "p2": missing param "NAME" of template "c"`,
+		`project "p3": params without template`,
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("joined error should contain %q, got:\n%v", want, err)
+		}
+	}
+}
+
+func TestUsesTemplatesEmptyKeyIsFalse(t *testing.T) {
+	for name, yml := range map[string]string{
+		"null templates":  `{templates: ~, projects: {p: {repo: /r}}}`,
+		"empty templates": `{templates: {}, projects: {p: {repo: /r}}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if usesTemplates(rawTree(t, yml)) {
+				t.Error("no project references a template — must be false (exact-position fast path)")
+			}
+		})
+	}
+}

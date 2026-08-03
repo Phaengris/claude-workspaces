@@ -69,6 +69,40 @@ projects:
 	}
 }
 
+// TestDecodeStrictnessSurvivesInlining guards the `document` wrapper (which
+// inlines Config to accept and discard a leftover `templates:` key): inlining
+// must not soften strict decode. An unknown TOP-LEVEL key and a duplicate key
+// are both still errors, and `templates:` is tolerated only while empty.
+func TestDecodeStrictnessSurvivesInlining(t *testing.T) {
+	cases := map[string]struct {
+		yml      string
+		wantErr  bool
+		wantName string
+	}{
+		"unknown top-level key": {yml: "porjects: {}\n", wantErr: true, wantName: "porjects"},
+		"duplicate key":         {yml: "values: {}\nvalues: {}\n", wantErr: true, wantName: "values"},
+		"empty templates key":   {yml: "templates: {}\nprojects: {p: {repo: /r}}\n"},
+		"null templates key":    {yml: "templates: ~\nprojects: {p: {repo: /r}}\n"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := decodeStrict([]byte(tc.yml))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("want error for %q", tc.yml)
+				}
+				if !strings.Contains(err.Error(), tc.wantName) {
+					t.Errorf("error should name %q, got: %v", tc.wantName, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("an empty templates block must decode: %v", err)
+			}
+		})
+	}
+}
+
 func TestStartEntryRejectsMultiKeyMap(t *testing.T) {
 	yml := `
 projects:
