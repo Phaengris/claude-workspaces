@@ -29,6 +29,16 @@ stdout 'nothing checked out'
 exec workspace restart T-1
 stdout 'nothing checked out'
 
+# --- cold whole-project down: stop: commands skipped, loudly --------------------
+# down never runs EnsureProject, so app's worktree must NOT appear — but app
+# configures stop: commands, and those may manage state outside the worktree
+# (docker compose down, …): declining them silently would hide that. One note
+# line, still exit 0, and the marker they would create is naturally absent.
+exec workspace down T-1 app
+stdout 'app: stop commands skipped \(not checked out\)'
+stdout 'app:sleeper already stopped'
+! exists $WORK/root/T-1_x/app
+
 # --- up → down: confirmed TERM stop --------------------------------------------
 # Capture the pid record BEFORE down; after down the pid file is gone and the
 # process is dead — kill -0 against the captured pid must fail.
@@ -76,10 +86,11 @@ stdout 'started app:sleeper \(pid \d+\)'
 exec workspace down T-1
 
 # --- KILL escalation (deliberately ONCE in the suite: ~5s wall clock) ------------
-# The daemon installs `trap "" TERM` — TERM is ignored all the way down the
-# exec chain (SIG_IGN survives exec), so down burns the full 5s TERM budget
-# before escalating to KILL. The ready file gates the race between our signal
-# and the login shell still initializing (trap not yet installed).
+# The daemon command installs `trap '' TERM` directly (Task 1's flat pattern —
+# SIG_IGN survives fork and exec, so it holds down the whole chain), so down
+# burns the full 5s TERM budget before escalating to KILL. The ready file gates
+# the race between our signal and the login shell still initializing (trap not
+# yet installed).
 exec workspace up T-1 stubborn
 stdout 'started stubborn:trap \(pid \d+\)'
 exec sh -c 'for i in $(seq 50); do test -f $WORK/root/T-1_x/stubborn/ready && exit 0; sleep 0.1; done; exit 1'
@@ -100,7 +111,7 @@ projects:
   stubborn:
     repo: WORKROOT/src/stubborn
     start:
-      - trap: sh -c 'trap "" TERM; touch ready; sleep 30'
+      - trap: trap '' TERM; touch ready; sleep 30
 -- root/src/app/README --
 app source
 -- root/src/stubborn/README --

@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -36,7 +37,11 @@ import (
 //
 // down never runs EnsureProject: stopping must not create worktrees. A
 // targeted project that was never checked out simply has nothing running and
-// no dir to run `stop:` commands in — its epilogue is skipped, not failed.
+// no dir to run `stop:` commands in — its epilogue is skipped, not failed
+// (erroring would break restart-from-cold), but skipped LOUDLY when stop
+// commands are actually configured: they may manage state outside the
+// worktree (a `docker compose down`, say), and silently declining
+// user-configured cleanup would hide that. One note line, still exit 0.
 //
 // Failure policy is up's join-and-continue: resolution fails up front
 // (unknown name → exit 3, nothing acted on); once stopping begins, one
@@ -107,8 +112,14 @@ func downProject(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, w wsp
 		pid, starttime, err := proc.ReadPidFile(pidPath)
 		if err != nil {
 			// DaemonState just read this file successfully, so reaching here
-			// takes a race (file removed/corrupted in between); report it —
+			// takes a race. The file VANISHING is the daemon converging to
+			// stopped on its own (or a concurrent down) — the state down
+			// promises, so success, not error. Corruption is still reported:
 			// with no (pid, starttime) there is nothing safe to signal.
+			if errors.Is(err, fs.ErrNotExist) {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s already stopped\n", d.Key())
+				continue
+			}
 			errs = append(errs, fail(fmt.Errorf("%s: %w", d.Key(), err)))
 			continue
 		}
@@ -120,7 +131,9 @@ func downProject(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, w wsp
 		// Confirmed not alive (freshly killed, or the "" no-op: it vanished
 		// between the liveness check and the signal) — either way the record
 		// is now stale, and removing it is THIS caller's contractual job.
-		if err := os.Remove(pidPath); err != nil {
+		// Already-gone is fine: someone else finishing the removal is still
+		// the promised end state (convergence over a spurious exit 1).
+		if err := os.Remove(pidPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, fail(fmt.Errorf("%s: removing pid file: %w", d.Key(), err)))
 			continue
 		}
@@ -132,11 +145,19 @@ func downProject(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, w wsp
 	}
 
 	if w.WholeProject {
+		stops := wsp.StopCommands(cfg, w.Project)
 		dir := wsp.ProjectDir(ws, cfg, w.Project)
-		if _, err := os.Stat(dir); err == nil {
+		if _, statErr := os.Stat(dir); statErr != nil {
+			// Not checked out: nothing to run the epilogue in, and down must
+			// not create worktrees. Note the skip when there WAS something to
+			// skip; a project without stop commands loses nothing, so silence.
+			if len(stops) > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s: stop commands skipped (not checked out)\n", w.Project)
+			}
+		} else {
 			vars := wsp.RuntimeVars(cfg, ws.Alloc.TaskID, w.Project, ws.Alloc.Index)
 			env := wsp.CommandEnv(cfg, w.Project, ws.Alloc.TaskID, ws.Alloc.Index)
-			for _, c := range wsp.StopCommands(cfg, w.Project) {
+			for _, c := range stops {
 				if err := proc.Run(dir, wsp.Subst(c, vars), env); err != nil {
 					errs = append(errs, fail(err)) // reads "command failed: <reason>"
 				}

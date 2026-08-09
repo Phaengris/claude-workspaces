@@ -51,10 +51,11 @@ func newRestartCmd() *cobra.Command {
 				hintNothingCheckedOut(cmd, ws)
 				return nil
 			}
-			return errors.Join(
-				downWork(cmd, cfg, ws, work),
-				upWork(cmd, cfg, ws, work),
-			)
+			// Locals make the sequencing unmistakable: the down half runs to
+			// completion before the up half begins, whatever it returned.
+			downErr := downWork(cmd, cfg, ws, work)
+			upErr := upWork(cmd, cfg, ws, work)
+			return errors.Join(downErr, upErr)
 		},
 	}
 }

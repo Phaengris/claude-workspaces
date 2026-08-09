@@ -1,6 +1,11 @@
 package cli
 
 import (
+	"bytes"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -34,6 +39,65 @@ func TestDownRestartExitCodes(t *testing.T) {
 				t.Errorf("%v exit code = %d, want %d (spec §9)", tc.args, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestDownReverseOrder pins BOTH levels of down's reverse-order contract (the
+// decided Order row) without any processes: web depends on api, so up order is
+// api-then-web and down must walk web-then-api; within each project, daemons
+// listed one-then-two must be visited two-then-one. No pid files exist, so
+// every daemon reads `already stopped` — the LINE ORDER is the assertion, and
+// an accidental forward loop at either level reorders it. The exact-match also
+// pins Finding 2's quiet branch: neither project has stop: commands, so the
+// missing worktrees produce no skip notes.
+func TestDownReverseOrder(t *testing.T) {
+	const orderConfig = `values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  api:
+    repo: /tmp/api-src
+    start:
+      - one: sleep 30
+      - two: sleep 30
+  web:
+    repo: /tmp/web-src
+    depends: api
+    start:
+      - one: sleep 30
+      - two: sleep 30
+`
+	root := fixtureRoot(t, map[string]string{"config.yml": orderConfig})
+	reg := `{"` + filepath.Join(root, "A-1_x") + `": {"index": 0, "task_id": "A-1", ` +
+		`"description": "d", "created_at": "2026-08-01T09:00:00Z", "adopted": false}}`
+	if err := os.WriteFile(filepath.Join(root, ".allocations.json"), []byte(reg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := Root()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(io.Discard)
+	// Targets in FORWARD dependency order, so any reversal in the output is
+	// the code's doing (ResolveTargets orders by topo regardless of args).
+	cmd.SetArgs([]string{"down", "A-1", "api", "web"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("down: %v", err)
+	}
+
+	want := []string{
+		"web:two already stopped",
+		"web:one already stopped",
+		"api:two already stopped",
+		"api:one already stopped",
+	}
+	got := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(got) != len(want) {
+		t.Fatalf("down printed %d lines, want %d:\n%s", len(got), len(want), out.String())
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d = %q, want %q (reverse-order contract)", i, got[i], want[i])
+		}
 	}
 }
 

@@ -6,10 +6,11 @@
 #   src/bad — start: [bare `false`, daemon `never: sleep 30`]: the run-and-wait
 #             fails, so its daemon must never start
 #
-# Daemon lifetime discipline: `down` does not exist yet (Task 4), so every
-# daemon here is `sleep 30` — self-expiring well before any timeout, and the
-# testscript workdir is throwaway. Nothing in this script may start an
-# unbounded process.
+# Daemon lifetime discipline: every daemon here is `sleep 30` — self-expiring
+# well before any timeout — and the script still ends with `workspace down`
+# for each workspace it started daemons in (Task 4's rule: the sleep is the
+# backstop, not the plan). Nothing in this script may start an unbounded
+# process.
 #
 # `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
 # (hermetic git env + root at $WORK/root; WORKROOT template substitution).
@@ -100,6 +101,15 @@ stderr 'no project or daemon named "nope"'
 # --- usage: no positionals → exit 2 -------------------------------------------
 ! exec workspace up
 stderr 'requires at least 1'
+
+# --- cleanup: stop what this script started ------------------------------------
+# T-1 has app running and bad checked out (its prelude failed before the
+# daemon); T-2 has app running from the single-daemon block.
+exec workspace down T-1
+stdout 'stopped app:sleeper \(TERM\)'
+stdout 'bad:never already stopped'
+exec workspace down T-2
+stdout 'stopped app:sleeper \(TERM\)'
 
 -- config.tmpl --
 values:
