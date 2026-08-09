@@ -69,28 +69,43 @@ func newUpCmd() *cobra.Command {
 				return err // carries its own kind: 3 unknown, 2 malformed, 1 ambiguous
 			}
 			if len(work) == 0 {
-				fmt.Fprintf(cmd.OutOrStdout(),
-					"nothing checked out — run: workspace checkout %s <project…>\n", ws.Name())
+				hintNothingCheckedOut(cmd, ws)
 				return nil
 			}
-
-			var errs []error
-			for _, w := range work {
-				if err := upProject(cmd, cfg, ws, w); err != nil {
-					errs = append(errs, err) // already prefixed `project "<name>": …`
-				}
-			}
-			// up checks projects out (EnsureProject creates worktrees), so
-			// WORKSPACE.md must be refreshed like checkout/new do — ensure.go
-			// makes that the caller's job. Refreshed REGARDLESS of failures:
-			// a half-succeeded up has changed what is checked out, and the
-			// file must describe reality, not the happy path.
-			if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {
-				errs = append(errs, err)
-			}
-			return errors.Join(errs...) // nil when everything succeeded
+			return upWork(cmd, cfg, ws, work)
 		},
 	}
+}
+
+// hintNothingCheckedOut prints the shared no-op-success hint of up, down and
+// restart: an empty resolved work list means the workspace has nothing checked
+// out, converge-on-nothing already complies with every one of those commands'
+// promises (the ensure doctrine), and a user typing any of them almost
+// certainly wants something checked out first.
+func hintNothingCheckedOut(cmd *cobra.Command, ws wsp.Workspace) {
+	fmt.Fprintf(cmd.OutOrStdout(),
+		"nothing checked out — run: workspace checkout %s <project…>\n", ws.Name())
+}
+
+// upWork converges an already-resolved work list to running: upProject per
+// entry in the given (topological) order, join-and-continue — one project's
+// failure does not abandon the rest. Shared by `up` and `restart`'s up half.
+//
+// up checks projects out (EnsureProject creates worktrees), so WORKSPACE.md
+// is refreshed like checkout/new do — ensure.go makes that the caller's job.
+// Refreshed REGARDLESS of failures: a half-succeeded up has changed what is
+// checked out, and the file must describe reality, not the happy path.
+func upWork(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, work []wsp.TargetWork) error {
+	var errs []error
+	for _, w := range work {
+		if err := upProject(cmd, cfg, ws, w); err != nil {
+			errs = append(errs, err) // already prefixed `project "<name>": …`
+		}
+	}
+	if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...) // nil when everything succeeded
 }
 
 // upProject converges one resolved project: ensure-chain, prelude, daemons.

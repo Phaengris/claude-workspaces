@@ -73,6 +73,19 @@ func RunAndWaits(cfg *config.Config, project string) []string {
 	return out
 }
 
+// StopCommands lists the project's `stop:` entries — extra commands `down`
+// runs AFTER the project's daemons are stopped, in listed order, and only when
+// the WHOLE project was targeted (they are the project's epilogue, the mirror
+// of RunAndWaits' prelude). Like RunAndWaits they are unnamed and untracked;
+// running them every whole-project down is the point.
+func StopCommands(cfg *config.Config, project string) []string {
+	p := cfg.Projects[project]
+	if p == nil {
+		return nil
+	}
+	return p.Stop
+}
+
 // PidPath is where the daemon's `<pid> <starttime>` record lives:
 // `<ws.Dir>/.workspace/pids/<project>:<daemon>`. One file per daemon, and the
 // ONLY thing recorded about it — a daemon exists iff this file names a live
