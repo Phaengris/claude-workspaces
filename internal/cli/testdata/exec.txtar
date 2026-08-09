@@ -40,15 +40,21 @@ exec workspace exec T-1 pwd
 stdout '^'$WORK'/root/T-1_x$'
 exec workspace exec T-1 printenv DB_NAME
 stdout '^app_T-1_dev$'
-# APP_VAR is app's project overlay; without a project it must not exist
-# (printenv on an unset name exits 1).
-! exec workspace exec T-1 printenv APP_VAR
+# APP_VAR is app's project overlay; without a project it must be ABSENT. The
+# positive form — the brackets print, empty — proves both that the command
+# actually ran AND that the var did not exist (a bare `! exec` would also pass
+# if the command never started at all).
+exec workspace exec T-1 sh -c 'echo "[$APP_VAR]"'
+stdout '^\[\]$'
 
 # --- parent-only vars never leak ----------------------------------------------
 # SECRET_X is set in THIS script's env, so the workspace process inherits it;
-# the replaced command must not see it (test -n on an unset name exits 1).
+# the replaced command must not see it. Positive form again: `[]` on stdout is
+# the command RUNNING and observing an empty env slot — a failure to launch
+# could not fake this.
 env SECRET_X=leak
-! exec workspace exec T-1 app sh -c 'test -n "$SECRET_X"'
+exec workspace exec T-1 app sh -c 'echo "[$SECRET_X]"'
+stdout '^\[\]$'
 env SECRET_X=
 
 # --- a first arg that is NOT a configured project is the command --------------
@@ -62,13 +68,22 @@ stderr 'not found'
 # Bare `exec T-1 app` sniffs app as the project and has no command left.
 ! exec workspace exec T-1 app
 stderr 'command'
-# After `--`, arguments are never project-sniffed: app is the COMMAND here,
-# and no executable named app exists → command-not-found.
+# A `--` right after the workspace suppresses the sniff: app is the COMMAND
+# here, and no executable named app exists → command-not-found.
 ! exec workspace exec T-1 -- app
 stderr 'not found'
-# `--` with a real command still runs in the workspace dir.
+# `--` with a real command still runs in the workspace dir with the global env.
 exec workspace exec T-1 -- pwd
 stdout '^'$WORK'/root/T-1_x$'
+exec workspace exec T-1 -- printenv DB_NAME
+stdout '^app_T-1_dev$'
+
+# --- a `--` anywhere later belongs to the exec'd command -----------------------
+# Only the position right after the workspace is the separator; the command's
+# own `--` must arrive verbatim (`git checkout -- README` would otherwise
+# silently become a branch switch).
+exec workspace exec T-1 app echo one -- two
+stdout '^one -- two$'
 
 # --- flags after the command belong to the command, not to workspace ----------
 exec workspace exec T-1 echo --json

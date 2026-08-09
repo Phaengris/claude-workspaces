@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"git.internal/cat/claude-workspaces-go/internal/wsp"
 )
 
 // daemonConfig is a config whose projects declare daemons, so the target
@@ -268,5 +270,51 @@ func append_(t *testing.T, path, content string) {
 	}
 	if err := f.Close(); err != nil {
 		t.Errorf("close %s: %v", path, err)
+	}
+}
+
+// TestLogsEmptyStdoutNotesStderr pins the empty-stdout pointer note (M3 review
+// take-along): a .log that exists but holds nothing, next to a .err.log that
+// does, earns one hint line — and ONLY then. -n 0 asked for empty history,
+// -f is about to stream stderr itself, and an empty .err.log means there is
+// genuinely nothing to point at.
+func TestLogsEmptyStdoutNotesStderr(t *testing.T) {
+	const note = "(no stdout output; stderr has output — try -f)"
+	newWS := func(t *testing.T, errContent string) (wsp.Workspace, wsp.Daemon) {
+		t.Helper()
+		ws := wsp.Workspace{Dir: t.TempDir()}
+		d := wsp.Daemon{Project: "app", Name: "web"}
+		if err := os.MkdirAll(filepath.Dir(wsp.LogPath(ws, d)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		write(t, wsp.LogPath(ws, d), "")
+		write(t, wsp.ErrLogPath(ws, d), errContent)
+		return ws, d
+	}
+	closed := make(chan struct{})
+	close(closed)
+
+	cases := map[string]struct {
+		errContent string
+		lines      int
+		follow     bool
+		want       bool
+	}{
+		"empty stdout, stderr content": {errContent: "boom\n", lines: 50, want: true},
+		"stderr also empty":            {errContent: "", lines: 50, want: false},
+		"-n 0 asked for nothing":       {errContent: "boom\n", lines: 0, want: false},
+		"-f streams stderr itself":     {errContent: "boom\n", lines: 50, follow: true, want: false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			ws, d := newWS(t, tc.errContent)
+			var out bytes.Buffer
+			if err := printLogs(&out, ws, d, tc.lines, tc.follow, closed); err != nil {
+				t.Fatalf("printLogs: %v", err)
+			}
+			if got := strings.Contains(out.String(), note); got != tc.want {
+				t.Errorf("output %q: note present = %v, want %v", out.String(), got, tc.want)
+			}
+		})
 	}
 }

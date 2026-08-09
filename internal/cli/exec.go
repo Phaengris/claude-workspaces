@@ -31,8 +31,18 @@ import (
 // worktree, which must be checked out; its env overlay applies). Anything else
 // is the command (cwd = the workspace dir, global env only). The ambiguity
 // this buys — a command that happens to be named like a project — is resolved
-// by `--` (arguments after it are never project-sniffed) or by an explicit
-// path (`./app`), the decided v1 behavior.
+// by `--` directly after the workspace (`exec T-1 -- app` runs the command
+// app) or by an explicit path (`./app`), the decided v1 behavior.
+//
+// `--` is the separator ONLY in that one position. Its only job is suppressing
+// the project sniff, and the sniff only ever looks at the argument right after
+// the workspace — so a `--` anywhere later belongs to the COMMAND and is
+// passed through verbatim: `exec T-1 app git checkout -- README` must hand git
+// its `--` untouched (eating it would silently turn a file restore into a
+// branch switch). pflag makes the literal reach us: with interspersed parsing
+// off it stops at the first positional and never consumes a later `--`; one
+// BEFORE the workspace name (`exec -- T-1 …`) is pflag's own terminator,
+// consumed there, and needs no handling — the workspace slot is never sniffed.
 //
 // argv[0] resolution deliberately does NOT use exec.LookPath: LookPath honors
 // this PROCESS's env ($PATH, and on some platforms $PATHEXT), and the whole
@@ -58,13 +68,16 @@ func newExecCmd() *cobra.Command {
 				return err
 			}
 
-			args, dash := stripDash(args, cmd.ArgsLenAtDash())
 			project := ""
 			rest := args[1:]
-			// The sniff: args[1] is the project iff it names a configured
-			// project AND sits strictly before any `--` (dash > 1 keeps
-			// `exec T-1 -- app` meaning "the command app").
-			if len(rest) > 0 && (dash == -1 || dash > 1) && cfg.Projects[rest[0]] != nil {
+			switch {
+			case len(rest) > 0 && rest[0] == "--":
+				// The separator: suppress the sniff, drop the marker. Only
+				// THIS position is special — see the doc comment; later
+				// `--`s are the command's own and stay in argv.
+				rest = rest[1:]
+			case len(rest) > 0 && cfg.Projects[rest[0]] != nil:
+				// The sniff: the argument names a configured project.
 				project = rest[0]
 				rest = rest[1:]
 			}
@@ -112,25 +125,6 @@ func newExecCmd() *cobra.Command {
 	// -la), same reason plain `kubectl exec`/`ssh` stop early.
 	cmd.Flags().SetInterspersed(false)
 	return cmd
-}
-
-// stripDash normalizes the two ways a `--` separator reaches us. When pflag
-// consumes it (it appeared before any positional), dash is already its index
-// and args are clean. But with interspersed parsing off, a `--` AFTER the
-// first positional — the common spelling, `exec T-1 -- app` — is passed
-// through as a literal argument and ArgsLenAtDash stays -1; the first such
-// literal is removed here and its index reported instead. Later occurrences
-// are the command's own arguments and pass through untouched.
-func stripDash(args []string, dash int) ([]string, int) {
-	if dash >= 0 {
-		return args, dash
-	}
-	for i, a := range args {
-		if a == "--" {
-			return append(append([]string{}, args[:i]...), args[i+1:]...), i
-		}
-	}
-	return args, -1
 }
 
 // pathFrom extracts the PATH value from a curated "K=V" env slice; "" when the

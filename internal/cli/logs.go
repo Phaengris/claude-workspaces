@@ -145,6 +145,17 @@ func printLogs(w io.Writer, ws wsp.Workspace, d wsp.Daemon, lines int, follow bo
 		if _, err := w.Write(tail); err != nil {
 			return err
 		}
+		// A daemon like python's http.server writes only to stderr, so an
+		// empty stdout tail with a non-empty .err.log reads as "no output"
+		// when there is plenty — one line points at where it went. Suppressed
+		// under -f (which streams stderr anyway) and -n 0 (empty history was
+		// explicitly requested); a fileSize error is ignored, the note is a
+		// hint, never worth failing a successful tail over.
+		if len(tail) == 0 && lines > 0 && !follow {
+			if n, err := fileSize(wsp.ErrLogPath(ws, d)); err == nil && n > 0 {
+				fmt.Fprintln(w, "(no stdout output; stderr has output — try -f)")
+			}
+		}
 	}
 	if !follow {
 		return nil
