@@ -3,7 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // validate reports every problem at once (errors.Join), not just the first —
@@ -21,6 +23,9 @@ func (c *Config) validate() error {
 		}
 		if p.Repo == "" {
 			errs = append(errs, fmt.Errorf("project %q: repo is required", name))
+		}
+		if p.Path != "" && !safeProjectPath(p.Path) {
+			errs = append(errs, fmt.Errorf("project %q: path must be relative and must not escape the workspace (got %q)", name, p.Path))
 		}
 		for _, dep := range p.Depends {
 			if _, ok := c.Projects[dep]; !ok {
@@ -41,6 +46,31 @@ func (c *Config) validate() error {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
+}
+
+// safeProjectPath reports whether a project's `path` stays strictly inside
+// the workspace dir it will be joined onto. `path` is where destroy (and
+// new's undo) force-remove a worktree, so an escaping value would let config
+// point removal at a FOREIGN directory — rejected at load time, before any
+// command can act on it. Three rules, checked on the value as written:
+// absolute paths are out; ANY `..` component is out, even one that cleans
+// away harmlessly (the literal rule spares everyone reasoning about Clean
+// semantics); and a path that cleans to "." is out — it would name the
+// workspace dir itself, not a location inside it. The empty path never gets
+// here: it means "default to the project's config key" (validate guards).
+func safeProjectPath(path string) bool {
+	if filepath.IsAbs(path) {
+		return false
+	}
+	if filepath.Clean(path) == "." {
+		return false
+	}
+	for _, comp := range strings.Split(path, string(filepath.Separator)) {
+		if comp == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // checkCycles runs Kahn's algorithm over the depends graph; whatever cannot
