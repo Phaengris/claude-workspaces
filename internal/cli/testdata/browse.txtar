@@ -1,0 +1,92 @@
+# browse: URL from browse_port after runtime substitution; xdg-open only when
+# it exists on PATH, plain URL print otherwise (the SSH-friendly path).
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT template substitution).
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+# Real source repos.
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+exec git -C $WORK/root/src/api init -b main
+exec git -C $WORK/root/src/api add README
+exec git -C $WORK/root/src/api commit -m init
+
+exec workspace new T-1 x app
+
+# Narrow PATH to a dir holding ONLY git and the workspace binary itself
+# (testscript serves its commands through PATH): browse needs git for
+# checked-out detection, and xdg-open must NOT be findable — that pins the
+# print-the-URL path. OLDPATH keeps the original for the xdg-open block at
+# the end.
+mkdir $WORK/bin
+exec sh -c 'ln -s "$(command -v git)" "$WORK/bin/git"'
+exec sh -c 'ln -s "$(command -v workspace)" "$WORK/bin/workspace"'
+env OLDPATH=$PATH
+env PATH=$WORK/bin
+
+# --- project defaulting: exactly one checked-out project ----------------------
+exec workspace browse T-1
+stdout '^http://localhost:18200$'
+! stdout 'opening'
+
+# --- explicit project ----------------------------------------------------------
+exec workspace browse T-1 app
+stdout '^http://localhost:18200$'
+
+# --- explicit project need not be checked out; port substituted per workspace --
+exec workspace browse T-1 api
+stdout '^http://localhost:18201$'
+
+# --- empty browse_port → plain error naming the project ------------------------
+! exec workspace browse T-1 noport
+stderr 'project "noport"'
+stderr 'browse_port'
+
+# --- unknown project → not configured (exit 3, pinned in the unit test) --------
+! exec workspace browse T-1 nope
+stderr 'project "nope" is not configured'
+
+# --- ambiguity: two checked out, no project given → usage error listing them ---
+exec workspace checkout T-1 api
+! exec workspace browse T-1
+stderr 'app'
+stderr 'api'
+
+# --- nothing checked out → usage error pointing at checkout --------------------
+exec workspace new T-2 y
+! exec workspace browse T-2
+stderr 'nothing checked out'
+
+# --- xdg-open on PATH: spawned detached with the URL, "opening" printed --------
+# The fake opener records its argument; browse does not wait for it, so the
+# script polls briefly for the file (detached spawn, no ordering guarantee).
+chmod 0777 $WORK/xdg/xdg-open
+env PATH=$WORK/xdg:$OLDPATH
+exec workspace browse T-1 app
+stdout '^opening http://localhost:18200$'
+exec sh -c 'i=0; while [ ! -f "$WORK/xdg-open-called" ]; do i=$((i+1)); [ "$i" -gt 100 ] && exit 1; sleep 0.05; done'
+grep '^http://localhost:18200$' $WORK/xdg-open-called
+
+-- config.tmpl --
+values:
+  PORT: { start: 18200, per_workspace: 5 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    browse_port: ${PORT0}
+  api:
+    repo: WORKROOT/src/api
+    browse_port: ${PORT1}
+  noport:
+    repo: WORKROOT/src/app
+-- xdg/xdg-open --
+#!/bin/sh
+echo "$1" > "$WORK/xdg-open-called"
+-- root/src/app/README --
+app source
+-- root/src/api/README --
+api source
