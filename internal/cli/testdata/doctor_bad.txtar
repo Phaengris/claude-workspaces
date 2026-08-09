@@ -1,0 +1,11 @@
+# doctor on an invalid config exits 4 and lists every problem.
+env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+! exec workspace doctor
+stderr 'unknown'
+stderr 'comand_runner'
+
+-- root/config.yml --
+projects:
+  app:
+    repo: /tmp/x
+    comand_runner: rbenv exec

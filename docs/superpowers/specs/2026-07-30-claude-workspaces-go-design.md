@@ -159,8 +159,10 @@ projects:
       - echo "bare string = run-and-wait command"
       - rails: bin/rails s -p ${PORT0}        # name: cmd = daemon
     stop: []                 # optional extra stop commands
-    teardown: [dropdb --if-exists ${DB_NAME}]
-    env: { DB_NAME: my-app_${WORKSPACE}_development }
+    teardown:
+      - dropdb --if-exists ${DB_NAME}
+    env:
+      DB_NAME: my-app_${WORKSPACE}_development
     browse_port: ${PORT0}
     instructions: |          # appended to WORKSPACE.md
       ...
@@ -181,6 +183,20 @@ Rules carried from v1's documented behavior:
   worktree's `.env`.
 - **Start entries**: a YAML string is a run-and-wait command; a single-key
   map is a named daemon. One custom unmarshaler owns this distinction.
+- **YAML flow-style caveat** (implementation finding, 2026-07-30): the YAML
+  spec forbids `{`/`}` in *plain (unquoted) scalars* inside flow
+  collections, so unquoted `${…}` tokens cannot appear in `env: { … }` or
+  `setup: [ … ]` flow style — quote the value or use block style (Ruby's
+  Psych tolerated this; goccy correctly rejects it). User docs show block
+  style in every example containing `${…}`.
+- **Error-position caveat** (implementation finding, 2026-07-30): strict-decode
+  errors quote goccy's `[line:col]` position, which references the exact bytes
+  decoded. A config with no templates is strict-decoded from the original file,
+  so its positions point at the user's `config.yml`. A config that uses templates
+  must first be expanded and re-marshaled, so its positions refer to the
+  regenerated (key-sorted, re-laid-out) document, not the original file — the
+  error message flags this explicitly. AST-level expansion that preserves source
+  positions for the templated case is the known future fix.
 - Ordering of user-visible output (env files, project lists) is sorted
   alphabetically — declared as the contract, not insertion order.
 
@@ -198,11 +214,20 @@ No per-command version-manager wrapper. Three pure mechanisms
 (v1 `env_tools` behavior, post-`3c17215`):
 
 1. **Allowlist**: spawned processes receive only a fixed set of safe parent
-   vars (`HOME USER LOGNAME SHELL TERM TERM_PROGRAM LANG LANGUAGE LC_*
-   TZ DISPLAY WAYLAND_DISPLAY XAUTHORITY SSH_AUTH_SOCK SSH_AGENT_PID
-   GPG_AGENT_INFO GNUPGHOME XDG_* DBUS_SESSION_BUS_ADDRESS`) plus workspace/
-   project env on top. Version-manager pin vars are excluded by *prefix*
-   (`RBENV_ PYENV_ NODENV_ PLENV_ GOENV_ RUBYENV_ ASDF_ MISE_ __MISE_`).
+   vars — exact names, not globs (bounded on purpose: the list cannot grow
+   by accident; `env_allow` is the extension point): `HOME USER LOGNAME
+   SHELL TERM TERM_PROGRAM LANG LANGUAGE LC_ALL LC_CTYPE LC_MESSAGES
+   LC_COLLATE LC_NUMERIC LC_TIME TZ DISPLAY WAYLAND_DISPLAY XAUTHORITY
+   SSH_AUTH_SOCK SSH_AGENT_PID GPG_AGENT_INFO GNUPGHOME XDG_RUNTIME_DIR
+   XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME
+   DBUS_SESSION_BUS_ADDRESS` — plus workspace/project env on top.
+   (Earlier drafts abbreviated `LC_*`/`XDG_*`; the exact list is the v1
+   contract and the implemented behavior.) Version-manager pin vars are
+   excluded by *prefix* (`RBENV_ PYENV_ NODENV_ PLENV_ GOENV_ RUBYENV_
+   ASDF_ MISE_ __MISE_`); an `env_allow` entry that exactly names a pin
+   var outranks the prefix drop (explicit user intent wins). PATH is
+   always sanitized per (2), even if named in `env_allow` — the overlay
+   env is the raw-override channel.
 2. **Sanitized PATH pass-through**: PATH survives, minus segments that are
    concrete per-version install bins — contains `/versions/` or `/installs/`
    and ends in `/bin` — so version-manager *shims* stay reachable and resolve

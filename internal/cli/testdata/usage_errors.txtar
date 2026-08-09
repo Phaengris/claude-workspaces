@@ -1,0 +1,15 @@
+# Usage errors (unknown command, unknown flag, bad arg count) fail non-zero.
+# testscript's `! exec` asserts only a non-zero exit; the exact code (2, spec §9)
+# is pinned by the Go unit test TestUsageErrorsExit2.
+
+# Unknown subcommand.
+! exec workspace bogus-command
+stderr 'unknown command'
+
+# Unknown flag.
+! exec workspace --bad-flag
+stderr 'unknown flag'
+
+# Too many args for a NoArgs command.
+! exec workspace doctor extra-arg
+stderr 'unknown command'
