@@ -70,6 +70,46 @@ func TestValidateProjectPath(t *testing.T) {
 	}
 }
 
+// TestValidateColonsInNames pins the other half of containment: ':' is the
+// separator of the `project:daemon` target grammar (spec §2), so a name
+// containing one would be unaddressable — `up T-1 a:b` could not tell the
+// project "a", daemon "b" reading from the project "a:b" reading. Both kinds
+// of name are rejected at load time, and both messages name the offender.
+func TestValidateColonsInNames(t *testing.T) {
+	cfg := &Config{Projects: map[string]*Project{
+		"a:b": {Repo: "/r"},
+		"app": {Repo: "/r", Start: []StartEntry{
+			{Cmd: "bare: run and wait"}, // bare entries are not addressed: fine
+			{Name: "web:pack", Cmd: "webpack -w"},
+			{Name: "rails", Cmd: "rails s"},
+		}},
+	}}
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("want validation errors")
+	}
+	for _, want := range []string{
+		`project "a:b": name must not contain ':'`,
+		`project "app": daemon name "web:pack" must not contain ':'`,
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should contain %q, got:\n%v", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), `"rails"`) {
+		t.Errorf("a clean daemon name must not be reported, got:\n%v", err)
+	}
+}
+
+func TestValidateColonFreeNamesOK(t *testing.T) {
+	cfg := &Config{Projects: map[string]*Project{
+		"app": {Repo: "/r", Start: []StartEntry{{Cmd: "echo hi: there"}, {Name: "rails", Cmd: "rails s"}}},
+	}}
+	if err := cfg.validate(); err != nil {
+		t.Errorf("valid names rejected: %v", err)
+	}
+}
+
 func TestValidateDetectsDependencyCycle(t *testing.T) {
 	cfg := &Config{Projects: map[string]*Project{
 		"a": {Repo: "/r", Depends: StringList{"b"}},

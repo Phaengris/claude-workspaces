@@ -11,12 +11,17 @@ import (
 // validate reports every problem at once (errors.Join), not just the first —
 // doctor prints the full list (spec §2). A nil return means the config is
 // structurally sound: every project has a repo, every dependency names a known
-// project, every value's start/per_workspace are in range, and the depends
-// graph is acyclic.
+// project, every value's start/per_workspace are in range, the depends graph
+// is acyclic, and no project or daemon name contains ':' — that character
+// separates the halves of a `project:daemon` target (spec §2), so a name
+// carrying one would be unaddressable by up/down/restart/logs.
 func (c *Config) validate() error {
 	var errs []error
 	for _, name := range sortedKeys(c.Projects) {
 		p := c.Projects[name]
+		if strings.Contains(name, ":") {
+			errs = append(errs, fmt.Errorf("project %q: name must not contain ':'", name))
+		}
 		if p == nil {
 			errs = append(errs, fmt.Errorf("project %q: empty definition", name))
 			continue
@@ -30,6 +35,11 @@ func (c *Config) validate() error {
 		for _, dep := range p.Depends {
 			if _, ok := c.Projects[dep]; !ok {
 				errs = append(errs, fmt.Errorf("project %q: depends on unknown project %q", name, dep))
+			}
+		}
+		for _, e := range p.Start {
+			if strings.Contains(e.Name, ":") {
+				errs = append(errs, fmt.Errorf("project %q: daemon name %q must not contain ':'", name, e.Name))
 			}
 		}
 	}
