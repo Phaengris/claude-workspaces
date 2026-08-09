@@ -97,8 +97,8 @@ func newLsCmd() *cobra.Command {
 // EVERY git touch lives inside the withGit branch, and must stay there. Plain
 // `ls` is pure registry data (the allocation plus the dir's base name), so it
 // costs zero subprocesses no matter how large the root is. Note that
-// wsp.ProjectStates is itself a git caller — IsWorkTree + Branch per configured
-// project, serially — so deriving states unconditionally would make plain `ls`
+// wsp.ProjectStates is itself a git caller — IsWorkTreeRoot + Branch per
+// configured project, serially — so deriving states unconditionally would make plain `ls`
 // on a 10-workspace × 5-project root spawn ~100 git processes outside the
 // gitStatWorkers bound and then print none of it. The stats behind -g are
 // fetched in a SINGLE bounded StatsFor call over every workspace's checked-out

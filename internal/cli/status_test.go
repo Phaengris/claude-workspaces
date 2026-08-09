@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"git.internal/cat/claude-workspaces-go/internal/alloc"
@@ -144,6 +145,72 @@ func TestStatusProjectDetail(t *testing.T) {
 				t.Errorf("statusProjectDetail = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestStatusDaemonDetail pins the two daemon-line wordings. A stopped daemon
+// shows no pid at all: DaemonState reports 0 for every not-running reason
+// (missing, stale, recycled record), and printing "(pid 0)" would read as a
+// real process.
+func TestStatusDaemonDetail(t *testing.T) {
+	if got, want := statusDaemonDetail(statusDaemon{Running: true, Pid: 4242}), "running (pid 4242)"; got != want {
+		t.Errorf("statusDaemonDetail(running) = %q, want %q", got, want)
+	}
+	if got, want := statusDaemonDetail(statusDaemon{}), "stopped"; got != want {
+		t.Errorf("statusDaemonDetail(stopped) = %q, want %q", got, want)
+	}
+}
+
+// TestStatusOfDaemons pins WHICH projects carry daemon state: a checked-out
+// project always does (empty list when it configures none — the key is present
+// so a --json consumer never has to distinguish "no daemons" from "not
+// measured"), a project that is not checked out never does (nil → no lines, no
+// key), matching the existing one-line convention for absent projects.
+//
+// Daemon ORDER is listed order, not sorted: it is start order (spec §7), and
+// re-sorting would hide the sequence `up` actually follows. Run-and-waits (bare
+// start entries) are not daemons and must not appear.
+func TestStatusOfDaemons(t *testing.T) {
+	cfg := &config.Config{Projects: map[string]*config.Project{
+		"app": {Repo: "/tmp/app-src", Start: []config.StartEntry{
+			{Cmd: "touch prestart"},
+			{Name: "web", Cmd: "sleep 30"},
+			{Name: "api", Cmd: "sleep 30"},
+		}},
+		"quiet": {Repo: "/tmp/quiet-src"},
+		"lib":   {Repo: "/tmp/lib-src", Start: []config.StartEntry{{Name: "liblet", Cmd: "sleep 30"}}},
+	}}
+	dir := t.TempDir()
+	ws := wsp.Workspace{Dir: dir, Alloc: alloc.Allocation{Index: 0, TaskID: "A-1"}}
+	// app and quiet are checked out (real work trees); lib is not.
+	gitInit(t, filepath.Join(dir, "app"))
+	gitInit(t, filepath.Join(dir, "quiet"))
+
+	byName := map[string]statusProject{}
+	for _, p := range statusOf(cfg, ws).Projects {
+		byName[p.Name] = p
+	}
+
+	app := byName["app"]
+	if app.Daemons == nil {
+		t.Fatalf("app = %+v, want a daemons list (checked out)", app)
+	}
+	var got []string
+	for _, d := range *app.Daemons {
+		if d.Running || d.Pid != 0 {
+			t.Errorf("daemon %+v reported running; nothing was ever started", d)
+		}
+		got = append(got, d.Name)
+	}
+	if want := []string{"web", "api"}; !slices.Equal(got, want) {
+		t.Errorf("app daemons = %v, want %v (listed order, run-and-waits excluded)", got, want)
+	}
+
+	if q := byName["quiet"]; q.Daemons == nil || len(*q.Daemons) != 0 {
+		t.Errorf("quiet = %+v, want an EMPTY daemons list (checked out, none configured)", q)
+	}
+	if lib := byName["lib"]; lib.Daemons != nil {
+		t.Errorf("lib = %+v, want no daemons list (not checked out)", lib)
 	}
 }
 

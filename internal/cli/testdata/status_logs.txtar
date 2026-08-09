@@ -1,0 +1,120 @@
+# status daemon lines + the logs command.
+#
+# Fixture:
+#   src/app — daemons `sleeper` and `other` (listed in that order), setup
+#             stamped so the project line reads "setup current"
+#   lib     — configured, never checked out, daemon `liblet`: the probe that a
+#             not-checked-out project shows NO daemon lines and no daemons key
+#
+# Daemon lifetime discipline (Task 4's rule): every daemon is `sleep 30` —
+# self-expiring well before any timeout — and the script still ends with
+# `workspace down`. Only ONE of app's two daemons is ever started: the whole
+# point is that status distinguishes them.
+#
+# The logs half needs no daemon at all: a daemon must exist in CONFIG, and the
+# log file it reads is hand-written here (fixture.log). That keeps the -n
+# assertion exact instead of racing a real process's output.
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+
+exec workspace new T-1 x
+
+# --- status: one line per configured daemon of each CHECKED-OUT project ------
+# Starting app:sleeper alone checks app out (up's ensure chain) and leaves
+# app:other configured but stopped.
+exec workspace up T-1 app:sleeper
+stdout 'started app:sleeper \(pid \d+\)'
+
+exec workspace status T-1
+stdout '^  app: checked out \(branch T-1\), setup current$'
+stdout '^    sleeper: running \(pid \d+\)$'
+stdout '^    other: stopped$'
+# Daemon lines are indented UNDER their project and follow it in listed order
+# (start order), not sorted — the project heading is the only project context.
+stdout '(?s)  app:.*    sleeper:.*    other:'
+
+# A not-checked-out project keeps the existing one-line convention: no daemon
+# lines at all, so lib's `liblet` is nowhere in the output.
+stdout '^  lib: not checked out$'
+! stdout 'liblet'
+
+# --json: projects[] carries daemons:[{name, running, pid}] in the same order.
+exec workspace status T-1 --json
+stdout '(?s)"daemons": \[\s+\{\s+"name": "sleeper",\s+"running": true,\s+"pid": \d+'
+stdout '(?s)"name": "other",\s+"running": false,\s+"pid": 0'
+# lib is not checked out: nothing was measured, so it carries no daemons key.
+! stdout 'liblet'
+
+# --- logs: last N lines of the daemon's .log --------------------------------
+# app:other exists in config and has never run; its log is written by hand.
+cp fixture.log $WORK/root/T-1_x/.workspace/logs/app:other.log
+
+# `cmp stdout` rather than `stdout <regexp>`: "exactly the last 2 lines" is a
+# statement about the WHOLE output, and a regexp match cannot say that.
+exec workspace logs T-1 other -n 2
+cmp stdout tail2.txt
+
+# Default is the last 50 lines, so a 5-line log prints whole and byte-identical.
+exec workspace logs T-1 other
+cmp stdout fixture.log
+
+# project:daemon addresses the same daemon.
+exec workspace logs T-1 app:other -n 1
+stdout '^line5$'
+! stdout 'line4'
+
+# --- logs: a project target is a usage error naming the candidates -----------
+# (exit 2 pinned in TestLogsExitCodes; here the message is the contract.)
+! exec workspace logs T-1 app
+stderr 'app:sleeper'
+stderr 'app:other'
+
+# --- logs: unknown daemon → not found (exit 3, pinned in Go) -----------------
+! exec workspace logs T-1 nope
+stderr 'no project or daemon named "nope"'
+
+# --- logs: configured daemon that never ran → note, exit 0 -------------------
+exec workspace logs T-1 liblet
+stdout '^no log yet for lib:liblet$'
+
+# --- cleanup: stop what this script started ---------------------------------
+exec workspace down T-1
+stdout 'stopped app:sleeper \(TERM\)'
+stdout 'other already stopped'
+
+# And status now reports both daemons stopped.
+exec workspace status T-1
+stdout '^    sleeper: stopped$'
+stdout '^    other: stopped$'
+
+-- config.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    setup:
+      - echo ran > setup.log
+    start:
+      - sleeper: sleep 30
+      - other: sleep 30
+  lib:
+    repo: WORKROOT/src/lib
+    start:
+      - liblet: sleep 30
+-- fixture.log --
+line1
+line2
+line3
+line4
+line5
+-- tail2.txt --
+line4
+line5
+-- root/src/app/README --
+app source
