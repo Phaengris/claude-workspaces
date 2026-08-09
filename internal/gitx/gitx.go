@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -72,6 +73,34 @@ func git(dir string, args ...string) (string, error) {
 func IsWorkTree(dir string) bool {
 	out, err := git(dir, "rev-parse", "--is-inside-work-tree")
 	return err == nil && out == "true"
+}
+
+// IsWorkTreeRoot reports whether dir is the TOP of a git work tree — the
+// directory a checkout actually lives at, not merely a directory somewhere
+// underneath one.
+//
+// This is the predicate "is this project checked out here?" needs.
+// IsWorkTree's question (`--is-inside-work-tree`) walks UP: if the workspaces
+// area happens to sit inside any enclosing repo — a dotfiles repo, a monorepo
+// checkout, a version-controlled home directory — then EVERY plain directory
+// under it answers "true", and a caller reading that as "already a worktree"
+// silently skips creating one while still writing .env, running setup and
+// stamping the result inside the enclosing repo's territory.
+//
+// The implementation asks git for the top level and requires it to BE dir.
+// Both sides go through filepath.Clean only: `--show-toplevel` prints a
+// PHYSICAL path (symlinks resolved) while the caller's path may be logical,
+// so an EvalSymlinks on the local side would be the principled next step —
+// deliberately not done, because no test in this tree needs it and resolving
+// links changes which directory the answer is about. If a symlinked
+// workspaces root ever surfaces, that is the place to fix it. As with
+// IsWorkTree, any git failure is simply "no".
+func IsWorkTreeRoot(dir string) bool {
+	top, err := git(dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return false
+	}
+	return filepath.Clean(top) == filepath.Clean(dir)
 }
 
 // Branch returns the current branch name of the work tree at dir

@@ -64,6 +64,10 @@ func newNewCmd() *cobra.Command {
 		Short: "Create a workspace: allocate, scaffold docs, check projects out",
 		// A task id plus a description; fewer is a usage error → exit 2 (spec §9).
 		Args: usageArgs(cobra.MinimumNArgs(2)),
+		// --json is inherited and deliberately unused: spec §2 scopes it to the
+		// query commands. Accepting and ignoring it keeps `workspace --json new
+		// T-1 desc` working for a caller that sets the flag globally, rather
+		// than failing on a command with no query result to serialize.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			taskID, desc := args[0], args[1]
 			// Allocate does not validate the id (it also serves M4 adoption);
@@ -153,16 +157,22 @@ func newNewCmd() *cobra.Command {
 
 			for _, name := range ordered {
 				// The worktree undo is pushed BEFORE EnsureProject, guarded by
-				// IsWorkTree: EnsureProject is a single call that internally
-				// does worktree+env+setup, so a failure AFTER creating the
-				// worktree must still undo it — while a failure before (or a
-				// worktree never created) makes the undo a no-op. Registering
-				// only "on success" would leak the worktree of the very
-				// project that failed at its setup step.
+				// IsWorkTreeRoot: EnsureProject is a single call that
+				// internally does worktree+env+setup, so a failure AFTER
+				// creating the worktree must still undo it — while a failure
+				// before (or a worktree never created) makes the undo a no-op.
+				// Registering only "on success" would leak the worktree of the
+				// very project that failed at its setup step.
+				//
+				// ROOT is the same question EnsureProject's own gate asks: with
+				// the workspaces root nested inside an enclosing repo, the
+				// looser IsWorkTree would call this undo on a dest that never
+				// became a worktree, handing `git worktree remove --force` a
+				// directory git does not know as one.
 				dest := wsp.ProjectDir(ws, cfg, name)
 				repo := cfg.Projects[name].Repo
 				undo.push(func() error {
-					if !gitx.IsWorkTree(dest) {
+					if !gitx.IsWorkTreeRoot(dest) {
 						return nil
 					}
 					// Containment gate before the force-removal (shared with

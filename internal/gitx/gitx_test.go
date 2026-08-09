@@ -57,6 +57,52 @@ func TestIsWorkTreeAndBranch(t *testing.T) {
 	}
 }
 
+// TestIsWorkTreeRoot pins the distinction IsWorkTree structurally cannot make.
+// `rev-parse --is-inside-work-tree` walks UP, so every directory nested
+// anywhere inside a repo answers "true" — including a plain directory that has
+// nothing to do with that repo's checkout. IsWorkTreeRoot answers the question
+// callers actually mean by "a project is checked out here": is THIS dir the
+// TOP of a work tree.
+func TestIsWorkTreeRoot(t *testing.T) {
+	repo := mkRepo(t, "main")
+	if !gitx.IsWorkTreeRoot(repo) {
+		t.Error("a repo's top-level dir must be a work tree root")
+	}
+
+	// The load-bearing case: a subdirectory of a repo is INSIDE a work tree
+	// but is not its top. IsWorkTree says yes; IsWorkTreeRoot must say no.
+	sub := filepath.Join(repo, "sub", "deeper")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !gitx.IsWorkTree(sub) {
+		t.Fatal("precondition: a dir nested in a repo is inside a work tree")
+	}
+	if gitx.IsWorkTreeRoot(sub) {
+		t.Error("a dir nested inside a repo must NOT be a work tree root")
+	}
+
+	if gitx.IsWorkTreeRoot(t.TempDir()) {
+		t.Error("plain dir outside any repo must not be a work tree root")
+	}
+	if gitx.IsWorkTreeRoot(filepath.Join(t.TempDir(), "missing")) {
+		t.Error("missing dir must not be a work tree root")
+	}
+
+	// A LINKED worktree's dest is a root too — that is the shape the tool
+	// creates, so the predicate must accept it, not just primary checkouts.
+	dest := filepath.Join(t.TempDir(), "wt")
+	if err := gitx.WorktreeAdd(repo, dest, "T-root", ""); err != nil {
+		t.Fatalf("WorktreeAdd: %v", err)
+	}
+	if !gitx.IsWorkTreeRoot(dest) {
+		t.Error("a linked worktree's dest must be a work tree root")
+	}
+	if gitx.IsWorkTreeRoot(filepath.Dir(dest)) {
+		t.Error("the PARENT of a linked worktree must not be a work tree root")
+	}
+}
+
 // TestGitEnvNeutralized: a process running inside a git hook inherits
 // GIT_DIR (and friends) pointed at the hook's repo. gitx must strip those
 // from the child env or `git -C <dir>` discovery answers about the wrong

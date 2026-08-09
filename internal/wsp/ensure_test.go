@@ -149,6 +149,87 @@ func TestEnsureProjectSetupEnvAndSubst(t *testing.T) {
 	}
 }
 
+// enclosedFixture builds the reviewer's scenario: the whole workspaces area
+// sits inside SOME OTHER git repo (a dotfiles repo, a monorepo checkout, a
+// home directory under version control — all ordinary), and the project's
+// destination is a plain directory that already exists there. Under the old
+// `is-inside-work-tree` gate the enclosing repo made dest answer "already a
+// worktree", so EnsureProject skipped WorktreeAdd entirely and went straight
+// on to write .env and run setup inside the enclosing repo's territory,
+// stamping the result — checkout exited 0 having created no worktree at all.
+// Returns cfg, ws and dest.
+func enclosedFixture(t *testing.T, setup []string) (*config.Config, wsp.Workspace, string) {
+	t.Helper()
+	t.Setenv("SHELL", "/bin/sh")
+	base := t.TempDir()
+	enclosing := filepath.Join(base, "enclosing")
+	mkRepoAt(t, enclosing, "main")
+	src := filepath.Join(base, "src", "app")
+	mkRepoAt(t, src, "main")
+
+	wsDir := filepath.Join(enclosing, "workspaces", "T-1")
+	dest := filepath.Join(wsDir, "app")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		Projects: map[string]*config.Project{"app": {Repo: src, Setup: setup}},
+	}
+	return cfg, wsp.Workspace{Dir: wsDir, Alloc: alloc.Allocation{Index: 0, TaskID: "T-1"}}, dest
+}
+
+// TestEnsureProjectNonEmptyDirInsideEnclosingRepo: with a NON-EMPTY plain dir
+// at dest, EnsureProject must now fail loudly — git's own "not an empty
+// directory" refusal — instead of silently declaring the project checked out.
+// An honest error is the whole point of the fix: the user can see and fix it.
+func TestEnsureProjectNonEmptyDirInsideEnclosingRepo(t *testing.T) {
+	cfg, ws, dest := enclosedFixture(t, []string{"echo ran >> setup.log"})
+	if err := os.WriteFile(filepath.Join(dest, "stray"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := wsp.EnsureProject(cfg, ws, "app")
+	if err == nil {
+		t.Fatal("EnsureProject succeeded on a plain dir nested in an enclosing repo; it must attempt WorktreeAdd and report git's failure")
+	}
+	if !strings.Contains(err.Error(), `project "app"`) {
+		t.Errorf("error %q does not name the project", err)
+	}
+	// The failure is the FIRST step, so nothing downstream may have happened:
+	// no .env, no setup, no stamp claiming the work is current.
+	for _, name := range []string{".env", "setup.log"} {
+		if _, statErr := os.Stat(filepath.Join(dest, name)); statErr == nil {
+			t.Errorf("%s written despite the worktree step failing", name)
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(ws.Dir, ".workspace", "setup-app.ok")); statErr == nil {
+		t.Error("setup stamp written despite the worktree step failing")
+	}
+	if gitx.IsWorkTreeRoot(dest) {
+		t.Error("dest must not be a work tree root after a failed WorktreeAdd")
+	}
+}
+
+// TestEnsureProjectEmptyDirInsideEnclosingRepo: the same enclosing-repo
+// scenario with an EMPTY dir at dest converges instead of erroring — git
+// accepts an empty directory as a worktree destination — and the result is a
+// real worktree on the task branch, not the enclosing repo's checkout. This is
+// the mutation guard on the fix: reverting to IsWorkTree makes this pass
+// vacuously with no worktree, so the branch assertion is what pins it.
+func TestEnsureProjectEmptyDirInsideEnclosingRepo(t *testing.T) {
+	cfg, ws, dest := enclosedFixture(t, []string{"echo ran >> setup.log"})
+
+	if err := wsp.EnsureProject(cfg, ws, "app"); err != nil {
+		t.Fatalf("EnsureProject over an empty dir inside an enclosing repo: %v", err)
+	}
+	if !gitx.IsWorkTreeRoot(dest) {
+		t.Fatal("dest must be a real work tree root: the enclosing repo must never stand in for the project's own worktree")
+	}
+	if b, err := gitx.Branch(dest); err != nil || b != "T-1" {
+		t.Errorf("Branch(dest) = %q, %v; want the task branch T-1 (not the enclosing repo's)", b, err)
+	}
+}
+
 func TestEnsureProjectSetupFailure(t *testing.T) {
 	cfg, ws := ensureFixture(t, []string{"false"})
 

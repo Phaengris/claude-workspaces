@@ -240,6 +240,28 @@ func TestProjectStatesSorted(t *testing.T) {
 	}
 }
 
+// TestProjectStatesIgnoresEnclosingRepo: when the workspaces area itself lives
+// inside some other git repo, a plain project directory is "inside a work
+// tree" — the enclosing one — and the old predicate reported it as checked
+// out, so `status` claimed a project with an unknown branch and `destroy`
+// would have run its teardown. Checked-out means THIS dir is the top of a work
+// tree, nothing less.
+func TestProjectStatesIgnoresEnclosingRepo(t *testing.T) {
+	base := t.TempDir()
+	enclosing := filepath.Join(base, "enclosing")
+	mkRepoAt(t, enclosing, "main")
+
+	wsDir := filepath.Join(enclosing, "workspaces", "T-1")
+	if err := os.MkdirAll(filepath.Join(wsDir, "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ws := wsp.Workspace{Dir: wsDir, Alloc: alloc.Allocation{TaskID: "T-1"}}
+
+	if states := wsp.ProjectStates(testCfg(), ws); len(states) != 0 {
+		t.Errorf("states = %+v; a plain dir inside an enclosing repo is not checked out", states)
+	}
+}
+
 func TestProjectStatesNoneCheckedOut(t *testing.T) {
 	if states := wsp.ProjectStates(testCfg(), wsp.Workspace{Dir: t.TempDir()}); len(states) != 0 {
 		t.Errorf("empty workspace dir must yield no states, got %+v", states)

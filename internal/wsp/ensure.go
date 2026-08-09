@@ -34,10 +34,17 @@ func CommandEnv(cfg *config.Config, project, taskID string, index int) []string 
 // checkout ensure-chain. Each step is idempotent, so re-running after any
 // failure converges:
 //
-//  1. worktree: if ProjectDir is not already a work tree, check out a linked
-//     worktree on branch <task id> from the project's base_branch (the
-//     IsWorkTree gate also covers Task 1's TOCTOU note — a branch checked out
-//     elsewhere surfaces as WorktreeAdd's own error, never a half-state);
+//  1. worktree: if ProjectDir is not already the ROOT of a work tree, check
+//     out a linked worktree on branch <task id> from the project's base_branch
+//     (the gate also covers Task 1's TOCTOU note — a branch checked out
+//     elsewhere surfaces as WorktreeAdd's own error, never a half-state). The
+//     gate is gitx.IsWorkTreeRoot, not IsWorkTree: "inside a work tree" walks
+//     up, so with the workspaces area nested in any enclosing repo a plain
+//     directory at dest answered yes, the worktree step was skipped, and steps
+//     2-3 wrote .env and ran setup inside the enclosing repo, stamped as done.
+//     Asking the narrower question means a stray directory at dest now reaches
+//     WorktreeAdd, which either adopts it (git accepts an EMPTY dir) or fails
+//     loudly — an honest error the user can act on, never silent wrongness;
 //  2. .env: rewritten every time (WriteEnvFile needs the worktree to exist,
 //     hence the order);
 //  3. setup: skipped when the stamp records the current SetupHash; otherwise
@@ -59,7 +66,7 @@ func EnsureProject(cfg *config.Config, ws Workspace, project string) error {
 	}
 
 	dest := ProjectDir(ws, cfg, project)
-	if !gitx.IsWorkTree(dest) {
+	if !gitx.IsWorkTreeRoot(dest) {
 		if err := gitx.WorktreeAdd(p.Repo, dest, ws.Alloc.TaskID, p.BaseBranch); err != nil {
 			return fail(err)
 		}
