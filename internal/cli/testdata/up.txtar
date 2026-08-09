@@ -1,0 +1,111 @@
+# up: ensure-chain, run-and-waits, daemon starts, idempotence.
+#
+# Fixture:
+#   src/app — start: [bare `touch prestart-ran`, daemon `sleeper: sleep 30`],
+#             setup appends to setup.log (the "EnsureProject chained" probe)
+#   src/bad — start: [bare `false`, daemon `never: sleep 30`]: the run-and-wait
+#             fails, so its daemon must never start
+#
+# Daemon lifetime discipline: `down` does not exist yet (Task 4), so every
+# daemon here is `sleep 30` — self-expiring well before any timeout, and the
+# testscript workdir is throwaway. Nothing in this script may start an
+# unbounded process.
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT template substitution).
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+# Real source repos (worktrees need commits to branch from).
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+exec git -C $WORK/root/src/bad init -b main
+exec git -C $WORK/root/src/bad add README
+exec git -C $WORK/root/src/bad commit -m init
+
+# --- empty workspace: converge-on-nothing is a no-op success -----------------
+exec workspace new T-1 x
+exec workspace up T-1
+stdout 'nothing checked out'
+stdout 'workspace checkout'
+
+# --- first up of a whole project ---------------------------------------------
+# EnsureProject chains (worktree + .env + stamped setup), then the run-and-wait
+# runs in the project dir, then the daemon starts and its pid file appears.
+exec workspace up T-1 app
+stdout 'started app:sleeper \(pid \d+\)'
+exists $WORK/root/T-1_x/app/prestart-ran
+exists $WORK/root/T-1_x/.workspace/setup-app.ok
+exists $WORK/root/T-1_x/.workspace/pids/app:sleeper
+exists $WORK/root/T-1_x/.workspace/logs/app:sleeper.log
+exists $WORK/root/T-1_x/.workspace/logs/app:sleeper.err.log
+exec sh -c 'test "$(wc -l < "$WORK/root/T-1_x/app/setup.log")" -eq 1'
+
+# --- second up: idempotent ----------------------------------------------------
+# The running daemon is skipped and keeps its pid record byte-identical
+# (the idempotence pin: same pid AND same starttime, not a restart).
+rm $WORK/root/T-1_x/app/prestart-ran
+cp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-before
+exec workspace up T-1 app
+stdout 'app:sleeper already running \(pid \d+\)'
+! stdout 'started'
+cmp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-before
+
+# Run-and-waits DO re-run on every up of the whole project (spec §7): the
+# probe file was consumed above, and up put it back.
+exists $WORK/root/T-1_x/app/prestart-ran
+
+# --- single-daemon target from cold ------------------------------------------
+# A bare daemon name unique across configured projects resolves to app:sleeper,
+# and addressing the daemon alone still runs the owning project's ensure-chain
+# — the worktree does not exist before this `up` and does after. WholeProject
+# is false, so the run-and-wait must NOT run. Exercises the `start` alias too.
+exec workspace new T-2 y
+exec workspace start T-2 sleeper
+stdout 'started app:sleeper \(pid \d+\)'
+exists $WORK/root/T-2_y/.workspace/setup-app.ok
+exists $WORK/root/T-2_y/.workspace/pids/app:sleeper
+! exists $WORK/root/T-2_y/app/prestart-ran
+
+# --- run-and-wait failure aborts the project's daemons ------------------------
+# bad's `false` fails before its daemon: exit 1, project-prefixed error, and
+# NO pid file — a project whose prelude failed must not run half its stack.
+! exec workspace up T-1 bad
+stderr 'project "bad"'
+! exists $WORK/root/T-1_x/.workspace/pids/bad:never
+
+# app's daemon from earlier is untouched by bad's failure (join-and-continue
+# convention: one project's failure never abandons another's state).
+exists $WORK/root/T-1_x/.workspace/pids/app:sleeper
+
+# --- unknown target ------------------------------------------------------------
+# Exit 3 is pinned in TestUpExitCodes; txtar asserts the refusal message.
+! exec workspace up T-1 nope
+stderr 'no project or daemon named "nope"'
+
+# --- usage: no positionals → exit 2 -------------------------------------------
+! exec workspace up
+stderr 'requires at least 1'
+
+-- config.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    setup:
+      - echo ran >> setup.log
+    start:
+      - touch prestart-ran
+      - sleeper: sleep 30
+  bad:
+    repo: WORKROOT/src/bad
+    start:
+      - "false"
+      - never: sleep 30
+-- root/src/app/README --
+app source
+-- root/src/bad/README --
+bad source

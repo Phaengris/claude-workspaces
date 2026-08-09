@@ -12,9 +12,11 @@ import (
 // doctor prints the full list (spec §2). A nil return means the config is
 // structurally sound: every project has a repo, every dependency names a known
 // project, every value's start/per_workspace are in range, the depends graph
-// is acyclic, and no project or daemon name contains ':' — that character
+// is acyclic, no project or daemon name contains ':' — that character
 // separates the halves of a `project:daemon` target (spec §2), so a name
-// carrying one would be unaddressable by up/down/restart/logs.
+// carrying one would be unaddressable by up/down/restart/logs — and no
+// project declares two daemons with the same name (their pid/log files are
+// keyed `project:daemon`, so a repeat would clobber its twin's records).
 func (c *Config) validate() error {
 	var errs []error
 	for _, name := range sortedKeys(c.Projects) {
@@ -37,10 +39,24 @@ func (c *Config) validate() error {
 				errs = append(errs, fmt.Errorf("project %q: depends on unknown project %q", name, dep))
 			}
 		}
+		// Daemon names must be unique WITHIN a project: the `project:daemon`
+		// key names the daemon's pid and log files, so a repeated name would
+		// make two daemons share one pid file — the second start silently
+		// overwrites the first's record and orphans its process. Caught here,
+		// before `up` can ever write a pid file. Bare entries (Name == "")
+		// are unnamed run-and-waits and repeat freely.
+		daemons := make(map[string]bool, len(p.Start))
 		for _, e := range p.Start {
 			if strings.Contains(e.Name, ":") {
 				errs = append(errs, fmt.Errorf("project %q: daemon name %q must not contain ':'", name, e.Name))
 			}
+			if e.Name == "" {
+				continue
+			}
+			if daemons[e.Name] {
+				errs = append(errs, fmt.Errorf("project %q: duplicate daemon name %q", name, e.Name))
+			}
+			daemons[e.Name] = true
 		}
 	}
 	for _, name := range sortedKeys(c.Values) {

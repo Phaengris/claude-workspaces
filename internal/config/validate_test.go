@@ -101,6 +101,52 @@ func TestValidateColonsInNames(t *testing.T) {
 	}
 }
 
+// TestValidateDuplicateDaemonNames pins uniqueness of daemon names WITHIN one
+// project: the `project:daemon` key names pid and log files, so two daemons
+// sharing a name would silently share (and clobber) one pid file — the second
+// start would overwrite the first's record and orphan its process. Rejected at
+// load time, before any pid file can be written. Bare (unnamed) run-and-wait
+// entries repeat freely, and the same daemon name in DIFFERENT projects is
+// fine — the project half of the key disambiguates those.
+func TestValidateDuplicateDaemonNames(t *testing.T) {
+	t.Run("duplicate within a project rejected", func(t *testing.T) {
+		cfg := &Config{Projects: map[string]*Project{
+			"app": {Repo: "/r", Start: []StartEntry{
+				{Name: "rails", Cmd: "rails s"},
+				{Name: "worker", Cmd: "sidekiq"},
+				{Name: "rails", Cmd: "rails s -p 3001"},
+			}},
+		}}
+		err := cfg.validate()
+		want := `project "app": duplicate daemon name "rails"`
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("want error containing %q, got %v", want, err)
+		}
+		if strings.Contains(err.Error(), `"worker"`) {
+			t.Errorf("an unrepeated daemon name must not be reported, got:\n%v", err)
+		}
+	})
+	t.Run("repeated bare entries ok", func(t *testing.T) {
+		cfg := &Config{Projects: map[string]*Project{
+			"app": {Repo: "/r", Start: []StartEntry{
+				{Cmd: "sleep 1"}, {Cmd: "sleep 1"}, {Name: "rails", Cmd: "rails s"},
+			}},
+		}}
+		if err := cfg.validate(); err != nil {
+			t.Errorf("repeated bare run-and-waits rejected: %v", err)
+		}
+	})
+	t.Run("same name across projects ok", func(t *testing.T) {
+		cfg := &Config{Projects: map[string]*Project{
+			"app": {Repo: "/r", Start: []StartEntry{{Name: "rails", Cmd: "rails s"}}},
+			"api": {Repo: "/r", Start: []StartEntry{{Name: "rails", Cmd: "rails s"}}},
+		}}
+		if err := cfg.validate(); err != nil {
+			t.Errorf("same daemon name in different projects rejected: %v", err)
+		}
+	})
+}
+
 func TestValidateColonFreeNamesOK(t *testing.T) {
 	cfg := &Config{Projects: map[string]*Project{
 		"app": {Repo: "/r", Start: []StartEntry{{Cmd: "echo hi: there"}, {Name: "rails", Cmd: "rails s"}}},
