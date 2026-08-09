@@ -51,6 +51,12 @@ func Load(root string) (Registry, error) {
 // Save writes the registry atomically: temp file in the same dir, fsync,
 // rename, fsync the dir. A reader never observes a half-written file, even
 // without the lock, and a completed Save survives a crash.
+//
+// Note the one asymmetry: an error from the closing directory fsync is
+// returned after the rename has already taken effect, so a failed Save may
+// still have replaced the registry — the new content is visible and merely of
+// uncertain durability. Callers should treat a Save error as "state may have
+// changed" and re-read rather than assume the old registry stands.
 func Save(root string, reg Registry) error {
 	data, err := json.MarshalIndent(reg, "", "  ")
 	if err != nil {
