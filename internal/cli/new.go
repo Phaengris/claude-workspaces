@@ -155,6 +155,13 @@ func newNewCmd() *cobra.Command {
 					if !gitx.IsWorkTree(dest) {
 						return nil
 					}
+					// Containment gate before the force-removal (shared with
+					// destroy): even though config validation rejects escaping
+					// paths, nothing here may remove a dir outside the
+					// workspace this invocation created.
+					if err := assertInsideWorkspace(dir, dest); err != nil {
+						return err
+					}
 					return gitx.WorktreeRemove(repo, dest, true)
 				})
 				if err := wsp.EnsureProject(cfg, ws, name); err != nil {
