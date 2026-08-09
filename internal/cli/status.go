@@ -25,12 +25,30 @@ const taskSep = " — "
 // whole configured set, so CheckedOut is load-bearing: a false value means the
 // remaining fields are zero because there is nothing in this workspace to
 // measure, not because git failed.
+// Daemons is a POINTER to a slice for the same reason lsEntry.Projects is: it
+// distinguishes "measured, none configured" (empty array) from "not measured"
+// (absent). Only a CHECKED-OUT project is measured — a project that is not
+// here has no processes to have, and the existing one-line convention for it
+// stays one line.
 type statusProject struct {
-	Name         string `json:"name"`
-	Dir          string `json:"dir"`
-	CheckedOut   bool   `json:"checked_out"`
-	Branch       string `json:"branch"`
-	SetupCurrent bool   `json:"setup_current"`
+	Name         string          `json:"name"`
+	Dir          string          `json:"dir"`
+	CheckedOut   bool            `json:"checked_out"`
+	Branch       string          `json:"branch"`
+	SetupCurrent bool            `json:"setup_current"`
+	Daemons      *[]statusDaemon `json:"daemons,omitempty"`
+}
+
+// statusDaemon is one configured daemon's live state under its project. Name
+// is the DAEMON name, not the `project:daemon` key: the project is the
+// enclosing section in both renderings, so repeating it on every line (and in
+// every JSON object) would be noise. Pid is 0 whenever Running is false —
+// wsp.DaemonState collapses every not-running reason to that, and the human
+// line omits it entirely (see statusDaemonDetail).
+type statusDaemon struct {
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	Pid     int    `json:"pid"`
 }
 
 // statusEntry is the full derived view of one workspace: the registry's own
@@ -120,12 +138,14 @@ func statusOf(cfg *config.Config, ws wsp.Workspace) statusEntry {
 	projects := make([]statusProject, 0, len(cfg.Projects))
 	for _, name := range slices.Sorted(maps.Keys(cfg.Projects)) {
 		if st, ok := states[name]; ok {
+			daemons := statusDaemonsOf(cfg, ws, name)
 			projects = append(projects, statusProject{
 				Name:         st.Name,
 				Dir:          st.Dir,
 				CheckedOut:   true,
 				Branch:       st.Branch,
 				SetupCurrent: st.SetupCurrent,
+				Daemons:      &daemons,
 			})
 			continue
 		}
@@ -143,6 +163,22 @@ func statusOf(cfg *config.Config, ws wsp.Workspace) statusEntry {
 		Adopted:     ws.Alloc.Adopted,
 		Projects:    projects,
 	}
+}
+
+// statusDaemonsOf measures one checked-out project's configured daemons, in
+// LISTED order — start order (spec §7), the sequence `up` follows — rather than
+// sorted: what a reader wants from this block is the stack as it comes up. The
+// result is never nil (an empty, non-nil slice for a project that configures no
+// daemons), which is what makes the JSON key present-but-empty; see
+// statusProject.Daemons.
+func statusDaemonsOf(cfg *config.Config, ws wsp.Workspace, project string) []statusDaemon {
+	ds := wsp.DaemonsOf(cfg, project)
+	out := make([]statusDaemon, 0, len(ds))
+	for _, d := range ds {
+		running, pid := wsp.DaemonState(ws, d)
+		out = append(out, statusDaemon{Name: d.Name, Running: running, Pid: pid})
+	}
+	return out
 }
 
 // printStatus renders the human block. Deliberately NOT ui.Table: the header is
@@ -170,6 +206,14 @@ func printStatus(w io.Writer, entry statusEntry) {
 	fmt.Fprintln(w, "projects:")
 	for _, p := range entry.Projects {
 		fmt.Fprintf(w, "  %s: %s\n", p.Name, statusProjectDetail(p))
+		// Daemons hang off their project line at one extra indent level. Nil
+		// (not checked out) prints nothing at all — see statusProject.Daemons.
+		if p.Daemons == nil {
+			continue
+		}
+		for _, d := range *p.Daemons {
+			fmt.Fprintf(w, "    %s: %s\n", d.Name, statusDaemonDetail(d))
+		}
 	}
 }
 
@@ -207,4 +251,16 @@ func statusProjectDetail(p statusProject) string {
 		setup = "current"
 	}
 	return fmt.Sprintf("checked out (branch %s), setup %s", branch, setup)
+}
+
+// statusDaemonDetail renders what follows "    <name>: " on a daemon line.
+// A running daemon carries the pid, which is the one thing a user acts on
+// (attach, inspect, kill by hand); a stopped one carries nothing — its pid is
+// 0 for every not-running reason (missing, stale or recycled record — see
+// wsp.DaemonState), and "(pid 0)" would read as a real process.
+func statusDaemonDetail(d statusDaemon) string {
+	if !d.Running {
+		return "stopped"
+	}
+	return fmt.Sprintf("running (pid %d)", d.Pid)
 }

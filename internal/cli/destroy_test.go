@@ -78,8 +78,9 @@ func writeRegistry(t *testing.T, root, dir string, adopted bool) {
 	}
 }
 
-// gitInit makes dir a work tree, which is all wsp.ProjectStates asks (it
-// calls `git rev-parse --is-inside-work-tree`). No commit, so no identity
+// gitInit makes dir the TOP of a work tree, which is what wsp.ProjectStates
+// asks (gitx.IsWorkTreeRoot: `git rev-parse --show-toplevel` must equal dir —
+// being merely inside a work tree is not enough). No commit, so no identity
 // config is needed and the host's gitconfig cannot affect the answer.
 func gitInit(t *testing.T, dir string) {
 	t.Helper()

@@ -1,0 +1,111 @@
+# exec: TRUE process replacement under the curated environment.
+#
+# This is the end-to-end pin that closes v1's env-poisoning bug for good: the
+# replaced process's environment is exactly wsp.CommandEnv's curated slice —
+# the execve syscall is handed that slice and nothing else, so parent-env
+# leakage is impossible by construction. printenv observing the resolved,
+# substituted DB_NAME proves the overlay arrived end-to-end; SECRET_X staying
+# invisible proves nothing else did.
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT template substitution).
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+# Real source repos (worktrees need commits to branch from).
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+exec git -C $WORK/root/src/api init -b main
+exec git -C $WORK/root/src/api add README
+exec git -C $WORK/root/src/api commit -m init
+
+exec workspace new T-1 x app
+
+# --- happy path: curated env, substituted, project overlay -------------------
+# testscript sees the REPLACED process's output: printenv here is the exec'd
+# command, its stdout is the script's stdout.
+exec workspace exec T-1 app printenv DB_NAME
+stdout '^app_T-1_dev$'
+exec workspace exec T-1 app printenv APP_VAR
+stdout '^from_app_18200$'
+
+# --- cwd: project given → the worktree root ----------------------------------
+exec workspace exec T-1 app pwd
+stdout '^'$WORK'/root/T-1_x/app$'
+
+# --- no project: cwd = workspace dir, global env only ------------------------
+exec workspace exec T-1 pwd
+stdout '^'$WORK'/root/T-1_x$'
+exec workspace exec T-1 printenv DB_NAME
+stdout '^app_T-1_dev$'
+# APP_VAR is app's project overlay; without a project it must be ABSENT. The
+# positive form — the brackets print, empty — proves both that the command
+# actually ran AND that the var did not exist (a bare `! exec` would also pass
+# if the command never started at all).
+exec workspace exec T-1 sh -c 'echo "[$APP_VAR]"'
+stdout '^\[\]$'
+
+# --- parent-only vars never leak ----------------------------------------------
+# SECRET_X is set in THIS script's env, so the workspace process inherits it;
+# the replaced command must not see it. Positive form again: `[]` on stdout is
+# the command RUNNING and observing an empty env slot — a failure to launch
+# could not fake this.
+env SECRET_X=leak
+exec workspace exec T-1 app sh -c 'echo "[$SECRET_X]"'
+stdout '^\[\]$'
+env SECRET_X=
+
+# --- a first arg that is NOT a configured project is the command --------------
+# "nosuch" looks project-ish but is unconfigured, so it is the command — the
+# failure is command-not-found (exit 1), never project-not-found: exec has no
+# explicit project slot, only the sniff.
+! exec workspace exec T-1 nosuch arg
+stderr 'not found'
+
+# --- a command named like a project needs `--` or a path ----------------------
+# Bare `exec T-1 app` sniffs app as the project and has no command left.
+! exec workspace exec T-1 app
+stderr 'command'
+# A `--` right after the workspace suppresses the sniff: app is the COMMAND
+# here, and no executable named app exists → command-not-found.
+! exec workspace exec T-1 -- app
+stderr 'not found'
+# `--` with a real command still runs in the workspace dir with the global env.
+exec workspace exec T-1 -- pwd
+stdout '^'$WORK'/root/T-1_x$'
+exec workspace exec T-1 -- printenv DB_NAME
+stdout '^app_T-1_dev$'
+
+# --- a `--` anywhere later belongs to the exec'd command -----------------------
+# Only the position right after the workspace is the separator; the command's
+# own `--` must arrive verbatim (`git checkout -- README` would otherwise
+# silently become a branch switch).
+exec workspace exec T-1 app echo one -- two
+stdout '^one -- two$'
+
+# --- flags after the command belong to the command, not to workspace ----------
+exec workspace exec T-1 echo --json
+stdout '^--json$'
+
+# --- project configured but not checked out here → plain error 1 --------------
+! exec workspace exec T-1 api pwd
+stderr 'project "api" is not checked out'
+
+-- config.tmpl --
+values:
+  PORT: { start: 18200, per_workspace: 5 }
+env:
+  DB_NAME: app_${WORKSPACE}_dev
+projects:
+  app:
+    repo: WORKROOT/src/app
+    env:
+      APP_VAR: from_app_${PORT0}
+  api:
+    repo: WORKROOT/src/api
+-- root/src/app/README --
+app source
+-- root/src/api/README --
+api source

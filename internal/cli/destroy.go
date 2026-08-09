@@ -16,18 +16,29 @@ import (
 	"git.internal/cat/claude-workspaces-go/internal/wsp"
 )
 
-// newDestroyCmd builds `workspace destroy <workspace>`: run every checked-out
-// project's teardown commands, then remove the worktrees, the workspace dir,
-// and the allocation.
+// newDestroyCmd builds `workspace destroy <workspace>`: stop every daemon,
+// run every checked-out project's teardown commands, then remove the
+// worktrees, the workspace dir, and the allocation — spec §2's
+// "down + teardown + remove + release".
 //
-// A registry-containment gate runs FIRST, ahead of both phases: the resolved
+// A registry-containment gate runs FIRST, ahead of every phase: the resolved
 // ws.Dir must be strictly inside the workspaces root (adopted workspaces
-// exempted). A registry key is data, and teardown already acts on it — see the
-// gate itself for why "before RemoveAll" was not early enough.
+// exempted). A registry key is data, and both the down phase and teardown
+// already act on it — see the gate itself for why "before RemoveAll" was not
+// early enough.
 //
-// Then two strict phases, because teardown is the part that can fail for user
-// reasons (spec §7):
+// Then three strict phases, because down and teardown are the parts that can
+// fail for user reasons (spec §7):
 //
+//  0. down — the WHOLE workspace's daemons, via the same downWork flow `down`
+//     itself runs (ResolveTargets with no filter). This is not optional
+//     tidiness: destroy deletes the pid records along with the dir, so a
+//     daemon that outlives destroy is invisible AND still holding this index's
+//     ports, which the next workspace on that index then cannot bind. Any stop
+//     failure aborts destroy with the joined errors and NOTHING removed, on
+//     the same convergence rule as teardown below — a daemon that survived
+//     even SIGKILL keeps its pid record (down's caller-removes contract) and
+//     its dir, so a re-run finds it and tries again.
 //  1. teardown — per checked-out project in REVERSE dependency order
 //     (dependents first, the mirror of setup's topo order). Command strings
 //     are substituted with RuntimeVars and run via proc.Run under the curated
@@ -47,10 +58,10 @@ import (
 //     allocation, freeing the index.
 //
 // An ADOPTED workspace (M4 will create these) is a dir the tool did not
-// create, so the tool will not delete it: teardown + release only, worktrees
-// and dir left in place, and the output says so.
-//
-// destroy stops no processes — daemons are M3, nothing is running yet.
+// create, so the tool will not delete it: down + teardown + release only,
+// worktrees and dir left in place, and the output says so. Its daemons are
+// ours — we started them — so they are stopped like any other's; only the
+// REMOVAL is what adoption exempts.
 func newDestroyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "destroy <workspace>",
@@ -119,6 +130,24 @@ func newDestroyCmd() *cobra.Command {
 				if !strictlyInside(rootAbs, dirAbs) {
 					return fmt.Errorf("refusing to remove %s: not strictly inside the workspaces root %s (registry entry looks corrupted)", ws.Dir, rootAbs)
 				}
+			}
+
+			// Phase 0 — down, the whole workspace, before anything is torn
+			// down or removed. nil targets is `down <ws>` with no filter.
+			//
+			// downWork on an EMPTY work list is a silent no-op success: the
+			// "nothing checked out" hint lives in down's own RunE, not in
+			// downWork, so destroying a projectless workspace stays quiet and
+			// down's UX is untouched.
+			work, err := wsp.ResolveTargets(cfg, ws, nil)
+			if err != nil {
+				return err
+			}
+			if err := downWork(cmd, cfg, ws, work); err != nil {
+				// Nothing removed, nothing torn down: a surviving daemon keeps
+				// its pid record, so a re-run converges. Aborting here is also
+				// what keeps teardown from running against a still-live app.
+				return err
 			}
 
 			// Only what is actually checked out participates: ProjectStates is

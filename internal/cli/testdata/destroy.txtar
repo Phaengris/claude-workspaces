@@ -90,6 +90,38 @@ stdout 'left in place'
 exists $WORK/root/A-9_adopt
 ! grep A-9 $WORK/root/.allocations.json
 
+# --- destroy stops daemons FIRST (spec §2: down + teardown + remove + release) -
+# A daemon left running by destroy is invisible: its pid record goes away with
+# the dir, its ports stay bound, and the next workspace on the same index
+# cannot bind them. So destroy runs the whole down flow before teardown.
+#
+# Daemon lifetime discipline (down_restart.txtar's rule): the daemon is
+# `sleep 30`, self-expiring, and the destroy under test is what stops it.
+workroot config-daemon.tmpl root/config.yml
+exec workspace new T-3 daemons app
+exec workspace up T-3 app
+stdout 'started app:sleeper \(pid \d+\)'
+cp $WORK/root/T-3_daemons/.workspace/pids/app:sleeper pid-daemon
+
+exec workspace destroy T-3
+stdout 'stopped app:sleeper \(TERM\)'
+stdout 'project "app": teardown complete'
+stdout 'allocation released \(task T-3\)'
+
+# The recorded leader is confirmed dead — not merely un-recorded.
+! exec sh -c 'kill -0 $(cut -d" " -f1 pid-daemon)'
+! exists $WORK/root/T-3_daemons
+! grep T-3 $WORK/root/.allocations.json
+
+# --- projectless destroy: down's empty-list hint must NOT leak ------------------
+# `down` on nothing prints "nothing checked out" as its no-op-success hint;
+# inside destroy that line is nonsense (the workspace is being removed), so the
+# hint belongs to down's own UX only.
+exec workspace new T-4 empty
+exec workspace destroy T-4
+! stdout 'nothing checked out'
+! exists $WORK/root/T-4_empty
+
 # --- unknown workspace → not found (exit 3, pinned in TestDestroyExitCodes) --
 ! exec workspace destroy NOPE
 stderr 'no workspace matching'
@@ -124,6 +156,21 @@ projects:
     depends: [app]
     teardown:
       - echo ${PROJECT} >> WORKROOT/teardown.log
+-- config-daemon.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    start:
+      - sleeper: sleep 30
+    teardown:
+      - echo ${PROJECT} >> WORKROOT/teardown-daemon.log
+  api:
+    repo: WORKROOT/src/api
+    depends: [app]
+    teardown:
+      - echo ${PROJECT} >> WORKROOT/teardown-daemon.log
 -- adopted-reg.tmpl --
 {"WORKROOT/A-9_adopt": {"index": 7, "task_id": "A-9", "description": "adopted", "created_at": "2026-08-09T00:00:00Z", "adopted": true}}
 -- teardown-want.log --

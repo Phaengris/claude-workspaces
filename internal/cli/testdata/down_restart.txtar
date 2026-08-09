@@ -1,0 +1,118 @@
+# down + restart: confirmed group stop, TERM→KILL escalation, stop: commands,
+# restart converging to running.
+#
+# Fixture:
+#   src/app      — start: [daemon `sleeper: sleep 30`], stop: [touch stopped-marker]
+#   src/stubborn — start: [daemon `trap: …`] that ignores TERM (KILL escalation)
+#
+# Daemon lifetime discipline: every block that starts daemons ends with a
+# `workspace down` (the point of this task); every daemon is ALSO `sleep 30`
+# as a self-expiring backstop, so nothing here can outlive the test run.
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go.
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+# Real source repos (worktrees need commits to branch from).
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+exec git -C $WORK/root/src/stubborn init -b main
+exec git -C $WORK/root/src/stubborn add README
+exec git -C $WORK/root/src/stubborn commit -m init
+
+# --- empty workspace: down/restart on nothing is a no-op success ---------------
+exec workspace new T-1 x
+exec workspace down T-1
+stdout 'nothing checked out'
+exec workspace restart T-1
+stdout 'nothing checked out'
+
+# --- cold whole-project down: stop: commands skipped, loudly --------------------
+# down never runs EnsureProject, so app's worktree must NOT appear — but app
+# configures stop: commands, and those may manage state outside the worktree
+# (docker compose down, …): declining them silently would hide that. One note
+# line, still exit 0, and the marker they would create is naturally absent.
+exec workspace down T-1 app
+stdout 'app: stop commands skipped \(not checked out\)'
+stdout 'app:sleeper already stopped'
+! exists $WORK/root/T-1_x/app
+
+# --- up → down: confirmed TERM stop --------------------------------------------
+# Capture the pid record BEFORE down; after down the pid file is gone and the
+# process is dead — kill -0 against the captured pid must fail.
+exec workspace up T-1 app
+stdout 'started app:sleeper \(pid \d+\)'
+cp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-before
+exec workspace down T-1 app
+stdout 'stopped app:sleeper \(TERM\)'
+! exists $WORK/root/T-1_x/.workspace/pids/app:sleeper
+! exec sh -c 'kill -0 $(cut -d" " -f1 pid-before)'
+
+# Whole-project down ran the project's stop: commands (in the project dir).
+exists $WORK/root/T-1_x/app/stopped-marker
+
+# --- down again: idempotent, exit 0 (alias `stop` exercised here) ---------------
+exec workspace stop T-1 app
+stdout 'app:sleeper already stopped'
+! stdout 'stopped app:sleeper \('
+
+# --- single-DAEMON target must NOT run stop: commands ---------------------------
+# WholeProject is false when only the daemon was named, and the stop: commands
+# are the project's epilogue, not any single daemon's — pin the marker absent.
+rm $WORK/root/T-1_x/app/stopped-marker
+exec workspace up T-1 app
+exec workspace down T-1 sleeper
+stdout 'stopped app:sleeper \(TERM\)'
+! exists $WORK/root/T-1_x/app/stopped-marker
+
+# --- restart: new pid, daemon running after -------------------------------------
+exec workspace up T-1 app
+cp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-old
+exec workspace restart T-1 app
+stdout 'stopped app:sleeper \(TERM\)'
+stdout 'started app:sleeper \(pid \d+\)'
+cp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-new
+! cmp pid-old pid-new
+exec sh -c 'kill -0 $(cut -d" " -f1 pid-new)'
+
+# --- restart from stopped: converge to running -----------------------------------
+# restart is down+up of the SAME set; a daemon that was already stopped starts.
+exec workspace down T-1 app
+exec workspace restart T-1 app
+stdout 'app:sleeper already stopped'
+stdout 'started app:sleeper \(pid \d+\)'
+exec workspace down T-1
+
+# --- KILL escalation (deliberately ONCE in the suite: ~5s wall clock) ------------
+# The daemon command installs `trap '' TERM` directly (Task 1's flat pattern —
+# SIG_IGN survives fork and exec, so it holds down the whole chain), so down
+# burns the full 5s TERM budget before escalating to KILL. The ready file gates
+# the race between our signal and the login shell still initializing (trap not
+# yet installed).
+exec workspace up T-1 stubborn
+stdout 'started stubborn:trap \(pid \d+\)'
+exec sh -c 'for i in $(seq 50); do test -f $WORK/root/T-1_x/stubborn/ready && exit 0; sleep 0.1; done; exit 1'
+exec workspace down T-1 stubborn
+stdout 'stopped stubborn:trap \(KILL\)'
+! exists $WORK/root/T-1_x/.workspace/pids/stubborn:trap
+
+-- config.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    start:
+      - sleeper: sleep 30
+    stop:
+      - touch stopped-marker
+  stubborn:
+    repo: WORKROOT/src/stubborn
+    start:
+      - trap: trap '' TERM; touch ready; sleep 30
+-- root/src/app/README --
+app source
+-- root/src/stubborn/README --
+stubborn source
