@@ -102,6 +102,16 @@ func newNewCmd() *cobra.Command {
 
 			// The registry keys on absolute dirs; root may be relative when it
 			// came from the environment, so normalize before allocating.
+			//
+			// This dir needs no containment gate of its own (destroy's removal
+			// phase has one, because it reads a dir back OUT of the registry).
+			// It is constructed, not read: DirName yields a single path
+			// component — the task id already passed ValidTaskID above (no
+			// separator, no leading dot, so never "." or ".."), and the slug
+			// it may append is [a-z0-9-] only — so Join can add exactly one
+			// level below root, and Abs of that stays under Abs(root). The
+			// untrusted step is the round trip through .allocations.json, not
+			// this one.
 			dir, err := filepath.Abs(filepath.Join(root, wsp.DirName(taskID, desc)))
 			if err != nil {
 				return err

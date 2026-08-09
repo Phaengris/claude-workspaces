@@ -55,6 +55,14 @@ workroot config-bad.tmpl root/config.yml
 exec workspace new T-2 x app api
 ! exec workspace destroy T-2
 stderr 'project "app"'
+
+# app's failure does NOT skip api: the remaining projects still run their
+# teardowns (convergence over strict reverse-topo), so the log gains exactly
+# one line — api's — on top of what the T-1 destroy left.
+stdout 'project "api": teardown complete'
+! stdout 'project "app": teardown complete'
+cmp $WORK/root/teardown.log teardown-after-fail.log
+
 exists $WORK/root/T-2_x/app/.git
 exists $WORK/root/T-2_x/api/.git
 grep T-2 $WORK/root/.allocations.json
@@ -121,6 +129,10 @@ projects:
 -- teardown-want.log --
 api
 app
+-- teardown-after-fail.log --
+api
+app
+api
 -- root/src/app/README --
 app source
 -- root/src/api/README --

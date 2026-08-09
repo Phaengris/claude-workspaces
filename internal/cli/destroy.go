@@ -27,15 +27,20 @@ import (
 //     (dependents first, the mirror of setup's topo order). Command strings
 //     are substituted with RuntimeVars and run via proc.Run under the curated
 //     env, exactly like setup. A project's first failing command stops that
-//     project's teardown; the remaining projects still run theirs. ANY
-//     failure aborts destroy with the joined errors and NOTHING is removed —
-//     teardown commands are expected idempotent (spec §3), so re-running the
-//     same destroy converges on whatever failed.
+//     project's teardown; the remaining projects still run theirs. Running
+//     the rest trades the strict reverse-topo invariant (a dependency's
+//     teardown may now run while a failed dependent is still half up) for
+//     convergence — fewer commands left to re-run, and teardown commands are
+//     expected idempotent (spec §3). ANY failure aborts destroy with the
+//     joined errors and NOTHING is removed, so re-running the same destroy
+//     converges on whatever failed.
 //  2. removal — only after every teardown succeeded: each worktree is removed
 //     (force — destroy discards the working copy; the BRANCH survives, it is
 //     the user's work), gated by assertInsideWorkspace so no configuration
 //     can ever point removal outside the workspace dir; then the workspace
-//     dir itself; then the allocation, freeing the index.
+//     dir itself — gated to be strictly inside the workspaces root, because
+//     a registry key is data, not something to hand os.RemoveAll untrusted;
+//     then the allocation, freeing the index.
 //
 // An ADOPTED workspace (M4 will create these) is a dir the tool did not
 // create, so the tool will not delete it: teardown + release only, worktrees
@@ -117,6 +122,29 @@ func newDestroyCmd() *cobra.Command {
 				return nil
 			}
 
+			// Removal-phase gate: ws.Dir is a raw registry key, and nothing
+			// upstream constrains it to live under the workspaces root — a
+			// hand-edited or corrupted .allocations.json could point it at
+			// ANY directory, and the per-worktree gate below would never fire
+			// for a workspace with no projects checked out. Containment before
+			// ANY force-removal (controller ruling): ws.Dir must be strictly
+			// inside the root. Both sides through filepath.Abs first —
+			// config.RootDir may be relative (it comes from the environment;
+			// new.go normalizes with Abs for exactly this reason) and
+			// isAncestorOrSame treats mixed relative/absolute inputs as
+			// incomparable.
+			rootAbs, err := filepath.Abs(root)
+			if err != nil {
+				return err
+			}
+			dirAbs, err := filepath.Abs(ws.Dir)
+			if err != nil {
+				return err
+			}
+			if !strictlyInside(rootAbs, dirAbs) {
+				return fmt.Errorf("refusing to remove %s: not strictly inside the workspaces root %s (registry entry looks corrupted)", ws.Dir, rootAbs)
+			}
+
 			for _, name := range ordered {
 				dest := wsp.ProjectDir(ws, cfg, name)
 				if err := assertInsideWorkspace(ws.Dir, dest); err != nil {
@@ -156,8 +184,17 @@ func newDestroyCmd() *cobra.Command {
 // itself — is what keeps a pathological dest from force-removing the
 // workspace dir as if it were a worktree.
 func assertInsideWorkspace(wsDir, dest string) error {
-	if !isAncestorOrSame(wsDir, dest) || filepath.Clean(dest) == filepath.Clean(wsDir) {
+	if !strictlyInside(wsDir, dest) {
 		return fmt.Errorf("refusing to remove %s: not strictly inside workspace dir %s", dest, wsDir)
 	}
 	return nil
+}
+
+// strictlyInside reports whether path is a PROPER descendant of dir —
+// contained component-wise (isAncestorOrSame's filepath.Rel question) and not
+// dir itself. This is the predicate both removal gates share: the worktree
+// gate (dest inside the workspace dir) and destroy's registry gate (the
+// workspace dir inside the workspaces root).
+func strictlyInside(dir, path string) bool {
+	return isAncestorOrSame(dir, path) && filepath.Clean(dir) != filepath.Clean(path)
 }

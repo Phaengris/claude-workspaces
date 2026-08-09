@@ -9,16 +9,24 @@ import (
 	"git.internal/cat/claude-workspaces-go/internal/xerr"
 )
 
-// exitCodeFor drives the same path as Main (Execute + usage classification) for
-// the given args and reports the resulting process exit code, so usage-exit
-// contracts (spec §9) can be asserted without a subprocess.
-func exitCodeFor(t *testing.T, args ...string) int {
+// runCLI drives Root() for the given args with all output discarded and
+// returns the raw error, for tests that need the MESSAGE (what a refusal
+// names) rather than just the resulting code.
+func runCLI(t *testing.T, args ...string) error {
 	t.Helper()
 	root := Root()
 	root.SetArgs(args)
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
-	return xerr.ExitCode(classifyUsageError(root.Execute()))
+	return root.Execute()
+}
+
+// exitCodeFor drives the same path as Main (Execute + usage classification) for
+// the given args and reports the resulting process exit code, so usage-exit
+// contracts (spec §9) can be asserted without a subprocess.
+func exitCodeFor(t *testing.T, args ...string) int {
+	t.Helper()
+	return xerr.ExitCode(classifyUsageError(runCLI(t, args...)))
 }
 
 // TestUsageErrorsExit2 pins Finding 2: parse-layer failures exit 2, not 1.
