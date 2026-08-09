@@ -29,6 +29,10 @@ func newCheckoutCmd() *cobra.Command {
 		// A workspace plus at least one project; fewer is a usage error →
 		// exit 2 (spec §9).
 		Args: usageArgs(cobra.MinimumNArgs(2)),
+		// --json is inherited and deliberately unused: spec §2 scopes it to the
+		// query commands. Accepting and ignoring it keeps `workspace --json
+		// checkout X app` working for a caller that sets the flag globally,
+		// rather than failing on a command with no query result to serialize.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, reg, err := loadRoot()
 			if err != nil {

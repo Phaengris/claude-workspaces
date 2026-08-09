@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,7 +43,7 @@ func TestDestroyExitCodes(t *testing.T) {
 	t.Run("teardown failure", func(t *testing.T) {
 		root := fixtureRoot(t, map[string]string{"config.yml": teardownFailConfig})
 		gitInit(t, filepath.Join(root, "A-1_x", "app"))
-		writeRegistry(t, root, filepath.Join(root, "A-1_x"))
+		writeRegistry(t, root, filepath.Join(root, "A-1_x"), false)
 		t.Setenv("SHELL", "/bin/sh") // proc.Run honours $SHELL; keep it hermetic
 		err := runCLI(t, "destroy", "A-1")
 		if got := xerr.ExitCode(classifyUsageError(err)); got != 1 {
@@ -65,11 +66,13 @@ const teardownFailConfig = `projects:
 
 // writeRegistry writes a one-entry registry into root whose allocation A-1
 // lives at dir. dir is a parameter precisely because the containment test
-// needs it to point somewhere the tool would never have created.
-func writeRegistry(t *testing.T, root, dir string) {
+// needs it to point somewhere the tool would never have created; adopted is
+// one because the containment gate exempts adopted workspaces, which
+// legitimately live outside the root.
+func writeRegistry(t *testing.T, root, dir string, adopted bool) {
 	t.Helper()
-	reg := `{"` + dir + `": {"index": 0, "task_id": "A-1", "description": "x", ` +
-		`"created_at": "2026-08-01T09:00:00Z", "adopted": false}}`
+	reg := fmt.Sprintf(`{%q: {"index": 0, "task_id": "A-1", "description": "x", `+
+		`"created_at": "2026-08-01T09:00:00Z", "adopted": %t}}`, dir, adopted)
 	if err := os.WriteFile(filepath.Join(root, ".allocations.json"), []byte(reg), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -90,21 +93,47 @@ func gitInit(t *testing.T, dir string) {
 	}
 }
 
+// teardownMarkerRoot builds a root whose single project "app" records that its
+// teardown ran by creating marker. A marker file is the only honest way to ask
+// "did teardown run?" — teardown commands are arbitrary user code spawned in a
+// shell, so their side effects, not the tool's output, are the evidence.
+func teardownMarkerRoot(t *testing.T, marker string) string {
+	t.Helper()
+	t.Setenv("SHELL", "/bin/sh") // proc.Run honours $SHELL; keep it hermetic
+	cfg := fmt.Sprintf(`projects:
+  app:
+    repo: /tmp/app-src
+    teardown:
+      - "echo ran > %s"
+`, marker)
+	return fixtureRoot(t, map[string]string{"config.yml": cfg})
+}
+
 // TestDestroyRefusesWorkspaceDirOutsideRoot pins the gate in front of
 // os.RemoveAll(ws.Dir). ws.Dir is a raw registry KEY — a hand-edited or
 // corrupted .allocations.json can name any directory on the machine, and the
 // per-worktree gate never fires for a workspace with nothing checked out, so
 // without this check `destroy` is an arbitrary recursive delete. The fixture
 // is exactly that shape: an allocation pointing at a SIBLING of the
-// workspaces root, no projects checked out.
+// workspaces root.
+//
+// The gate must fire BEFORE the teardown loop, not just before RemoveAll.
+// Teardown is not a read-only preamble: it spawns the user's own commands with
+// cwd and ${WORKSPACE} substitution derived from THE SAME unvalidated registry
+// entry, so running it first means acting on the corrupted path before the
+// corruption is detected. The marker file below is what pins the ordering —
+// asserting the refusal alone would pass with teardown already run.
 func TestDestroyRefusesWorkspaceDirOutsideRoot(t *testing.T) {
 	outside := t.TempDir() // sibling of the root below, not under it
 	canary := filepath.Join(outside, "precious")
 	if err := os.WriteFile(canary, []byte("do not delete"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	root := fixtureRoot(t, map[string]string{"config.yml": projectConfig})
-	writeRegistry(t, root, outside)
+	marker := filepath.Join(outside, "teardown-ran")
+	root := teardownMarkerRoot(t, marker)
+	// A checked-out project is what makes teardown eligible to run at all.
+	gitInit(t, filepath.Join(outside, "app"))
+	writeRegistry(t, root, outside, false)
 
 	err := runCLI(t, "destroy", "A-1")
 	if err == nil {
@@ -117,6 +146,10 @@ func TestDestroyRefusesWorkspaceDirOutsideRoot(t *testing.T) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}
 	}
+	// The gate came first: not one teardown command was spawned.
+	if _, statErr := os.Stat(marker); statErr == nil {
+		t.Error("teardown ran before the containment gate: the gate must precede the teardown loop, not merely the removal")
+	}
 	// Nothing removed: the dir, its contents, and the allocation all survive.
 	if _, statErr := os.Stat(canary); statErr != nil {
 		t.Errorf("%s was removed despite the refusal: %v", canary, statErr)
@@ -127,6 +160,37 @@ func TestDestroyRefusesWorkspaceDirOutsideRoot(t *testing.T) {
 	}
 	if !strings.Contains(string(regBytes), "A-1") {
 		t.Errorf("allocation was released despite the refusal: %s", regBytes)
+	}
+}
+
+// TestDestroyAdoptedOutsideRootStillTearsDown is the other half of the gate's
+// contract, and the reason it cannot simply be "reject anything outside the
+// root": an ADOPTED workspace is a directory the tool did not create, so it
+// legitimately lives anywhere. Teardown and release must still work for it;
+// only the dir itself is left alone. Hoisting the gate must not have swept
+// this case up.
+func TestDestroyAdoptedOutsideRootStillTearsDown(t *testing.T) {
+	outside := t.TempDir()
+	marker := filepath.Join(outside, "teardown-ran")
+	root := teardownMarkerRoot(t, marker)
+	gitInit(t, filepath.Join(outside, "app"))
+	writeRegistry(t, root, outside, true)
+
+	if err := runCLI(t, "destroy", "A-1"); err != nil {
+		t.Fatalf("destroy of an ADOPTED workspace outside the root: %v", err)
+	}
+	if _, statErr := os.Stat(marker); statErr != nil {
+		t.Errorf("adopted workspace: teardown did not run (%v)", statErr)
+	}
+	if _, statErr := os.Stat(outside); statErr != nil {
+		t.Errorf("adopted workspace dir was removed; the tool never deletes dirs it did not create: %v", statErr)
+	}
+	regBytes, readErr := os.ReadFile(filepath.Join(root, ".allocations.json"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if strings.Contains(string(regBytes), "A-1") {
+		t.Errorf("adopted workspace: allocation was not released: %s", regBytes)
 	}
 }
 

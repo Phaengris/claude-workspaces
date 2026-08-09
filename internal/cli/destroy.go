@@ -20,7 +20,12 @@ import (
 // project's teardown commands, then remove the worktrees, the workspace dir,
 // and the allocation.
 //
-// Two strict phases, because teardown is the part that can fail for user
+// A registry-containment gate runs FIRST, ahead of both phases: the resolved
+// ws.Dir must be strictly inside the workspaces root (adopted workspaces
+// exempted). A registry key is data, and teardown already acts on it — see the
+// gate itself for why "before RemoveAll" was not early enough.
+//
+// Then two strict phases, because teardown is the part that can fail for user
 // reasons (spec §7):
 //
 //  1. teardown — per checked-out project in REVERSE dependency order
@@ -38,9 +43,8 @@ import (
 //     (force — destroy discards the working copy; the BRANCH survives, it is
 //     the user's work), gated by assertInsideWorkspace so no configuration
 //     can ever point removal outside the workspace dir; then the workspace
-//     dir itself — gated to be strictly inside the workspaces root, because
-//     a registry key is data, not something to hand os.RemoveAll untrusted;
-//     then the allocation, freeing the index.
+//     dir itself (already cleared by the up-front containment gate); then the
+//     allocation, freeing the index.
 //
 // An ADOPTED workspace (M4 will create these) is a dir the tool did not
 // create, so the tool will not delete it: teardown + release only, worktrees
@@ -53,6 +57,10 @@ func newDestroyCmd() *cobra.Command {
 		Short: "Tear a workspace down: teardown commands, worktrees, dir, allocation",
 		// Exactly one identifier; anything else is a usage error → exit 2 (spec §9).
 		Args: usageArgs(cobra.ExactArgs(1)),
+		// --json is inherited and deliberately unused: spec §2 scopes it to the
+		// query commands. Accepting and ignoring it keeps `workspace --json
+		// destroy X` working for a caller that sets the flag globally, rather
+		// than failing on a command with no query result to serialize.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Not loadRoot: destroy needs the root path itself for
 			// alloc.Release, so the three steps are spelled out (registry
@@ -72,6 +80,45 @@ func newDestroyCmd() *cobra.Command {
 			ws, err := wsp.Resolve(reg, args[0]) // ErrNotFound → exit 3
 			if err != nil {
 				return err
+			}
+
+			// Registry-containment gate, BEFORE anything acts on ws.Dir.
+			// ws.Dir is a raw registry key and nothing upstream constrains it
+			// to live under the workspaces root — a hand-edited or corrupted
+			// .allocations.json could point it at ANY directory.
+			//
+			// This runs ahead of teardown, not just ahead of os.RemoveAll,
+			// because teardown is not a read-only preamble: it spawns the
+			// user's own commands with cwd and ${WORKSPACE} substitution
+			// derived from THIS SAME unvalidated entry. Checking for corruption
+			// only after those commands have run is checking too late — a
+			// corrupt entry must stop destroy before it does anything at all.
+			// (The per-worktree gate further down is a different question —
+			// dest inside ws.Dir — and never fires for a workspace with
+			// nothing checked out.)
+			//
+			// ADOPTED workspaces are exempt: adoption is precisely the case of
+			// a directory the tool did not create, living wherever the user
+			// already had it, so being outside the root is normal there. Their
+			// teardown and release are legitimate, and their dir is never
+			// removed at all.
+			//
+			// Both sides through filepath.Abs first — config.RootDir may be
+			// relative (it comes from the environment; new.go normalizes with
+			// Abs for exactly this reason) and isAncestorOrSame treats mixed
+			// relative/absolute inputs as incomparable.
+			if !ws.Alloc.Adopted {
+				rootAbs, err := filepath.Abs(root)
+				if err != nil {
+					return err
+				}
+				dirAbs, err := filepath.Abs(ws.Dir)
+				if err != nil {
+					return err
+				}
+				if !strictlyInside(rootAbs, dirAbs) {
+					return fmt.Errorf("refusing to remove %s: not strictly inside the workspaces root %s (registry entry looks corrupted)", ws.Dir, rootAbs)
+				}
 			}
 
 			// Only what is actually checked out participates: ProjectStates is
@@ -122,29 +169,8 @@ func newDestroyCmd() *cobra.Command {
 				return nil
 			}
 
-			// Removal-phase gate: ws.Dir is a raw registry key, and nothing
-			// upstream constrains it to live under the workspaces root — a
-			// hand-edited or corrupted .allocations.json could point it at
-			// ANY directory, and the per-worktree gate below would never fire
-			// for a workspace with no projects checked out. Containment before
-			// ANY force-removal (controller ruling): ws.Dir must be strictly
-			// inside the root. Both sides through filepath.Abs first —
-			// config.RootDir may be relative (it comes from the environment;
-			// new.go normalizes with Abs for exactly this reason) and
-			// isAncestorOrSame treats mixed relative/absolute inputs as
-			// incomparable.
-			rootAbs, err := filepath.Abs(root)
-			if err != nil {
-				return err
-			}
-			dirAbs, err := filepath.Abs(ws.Dir)
-			if err != nil {
-				return err
-			}
-			if !strictlyInside(rootAbs, dirAbs) {
-				return fmt.Errorf("refusing to remove %s: not strictly inside the workspaces root %s (registry entry looks corrupted)", ws.Dir, rootAbs)
-			}
-
+			// The registry-containment gate ran up front, before teardown;
+			// what remains here is the per-worktree gate (dest inside ws.Dir).
 			for _, name := range ordered {
 				dest := wsp.ProjectDir(ws, cfg, name)
 				if err := assertInsideWorkspace(ws.Dir, dest); err != nil {
