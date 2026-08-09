@@ -1,20 +1,34 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 )
 
 // usesTemplates reports whether the raw config exercises the template system:
-// a top-level `templates:` block, or any project carrying a `template` or
-// `params` key. Load uses this to decide whether the expand + re-marshal
-// round-trip is needed (it isn't for the no-templates majority, letting strict
-// decode run on the original bytes for exact error positions). `params` alone
-// still routes through expansion so its "params without template" error fires.
+// a non-empty top-level `templates:` block, or any project carrying a
+// `template` or `params` key. Load uses this to decide whether the expand +
+// re-marshal round-trip is needed (it isn't for the no-templates majority,
+// letting strict decode run on the original bytes for exact error positions).
+// `params` alone still routes through expansion so its "params without
+// template" error fires.
+//
+// A `templates:` key that is present but null or empty declares nothing, so it
+// must not cost the caller exact error positions; a malformed non-map value
+// still routes through expansion, which deletes the key and lets strict decode
+// judge the rest of the document.
 func usesTemplates(raw map[string]any) bool {
-	if _, ok := raw["templates"]; ok {
-		return true
+	switch templates := raw["templates"].(type) {
+	case nil:
+		// Absent, or explicitly null: declares no templates.
+	case map[string]any:
+		if len(templates) > 0 {
+			return true
+		}
+	default:
+		return true // not a mapping; let expansion strip it
 	}
 	projects, _ := raw["projects"].(map[string]any)
 	for _, pAny := range projects {
@@ -36,34 +50,42 @@ func usesTemplates(raw map[string]any) bool {
 // before strict typed decoding (spec §4). Load-time `${PARAM}` substitution
 // covers only names declared in the template's params list; runtime tokens
 // (${WORKSPACE}, ${PORT0}, …) pass through untouched.
+//
+// Every project is reported, not just the first one that fails: errors are
+// collected and returned as errors.Join, matching validate's "show the whole
+// list" contract. Within one project the first problem short-circuits — the
+// later checks there would only echo it.
 func expandTemplates(raw map[string]any) error {
 	templates, _ := raw["templates"].(map[string]any)
 	defer delete(raw, "templates")
 
 	projects, _ := raw["projects"].(map[string]any)
-	for name, pAny := range projects {
-		project, ok := pAny.(map[string]any)
+	var errs []error
+	for _, name := range sortedKeys(projects) { // stable order: the message is user-visible
+		project, ok := projects[name].(map[string]any)
 		if !ok {
 			continue // scalar project value; strict decode will reject it with a position
 		}
 		tmplName, usesTemplate := project["template"].(string)
 		if !usesTemplate {
 			if _, hasParams := project["params"]; hasParams {
-				return fmt.Errorf("project %q: params without template", name)
+				errs = append(errs, fmt.Errorf("project %q: params without template", name))
 			}
 			continue
 		}
 		tmpl, ok := templates[tmplName].(map[string]any)
 		if !ok {
-			return fmt.Errorf("project %q: unknown template %q", name, tmplName)
+			errs = append(errs, fmt.Errorf("project %q: unknown template %q", name, tmplName))
+			continue
 		}
 		merged, err := instantiate(name, tmplName, tmpl, project)
 		if err != nil {
-			return err
+			errs = append(errs, err)
+			continue
 		}
 		projects[name] = merged
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // instantiate shallow-merges project keys over template keys and substitutes

@@ -49,3 +49,35 @@ func TestVersionFlag(t *testing.T) {
 		t.Errorf("version output %q should contain default version %q", out.String(), "dev")
 	}
 }
+
+// TestJSONFlagIsPersistent pins the global --json contract: it lives on the
+// root's persistent flag set so every (current and future) query command can
+// read it with cmd.Flags().GetBool("json"), and it defaults to false.
+func TestJSONFlagIsPersistent(t *testing.T) {
+	root := Root()
+	f := root.PersistentFlags().Lookup("json")
+	if f == nil {
+		t.Fatal("root has no persistent --json flag")
+	}
+	if f.Value.Type() != "bool" {
+		t.Errorf("--json type = %q, want bool", f.Value.Type())
+	}
+	if f.DefValue != "false" {
+		t.Errorf("--json default = %q, want false", f.DefValue)
+	}
+	// Every subcommand must inherit it. Note InheritedFlags() is what forces
+	// cobra's lazy parent-pflag merge; without it sub.Flags() has not absorbed
+	// the root's persistent set yet (the merge otherwise happens in ParseFlags
+	// at execution time, which is why GetBool works inside RunE).
+	for _, sub := range root.Commands() {
+		if sub.Name() == "help" || sub.Name() == "completion" {
+			continue
+		}
+		if sub.InheritedFlags().Lookup("json") == nil {
+			t.Errorf("subcommand %q does not inherit --json", sub.Name())
+		}
+		if _, err := sub.Flags().GetBool("json"); err != nil {
+			t.Errorf("subcommand %q cannot read --json: %v", sub.Name(), err)
+		}
+	}
+}

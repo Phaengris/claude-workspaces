@@ -31,9 +31,28 @@ func Root() *cobra.Command {
 	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		return xerr.Wrap(xerr.ErrUsage, err)
 	})
+	// --json is global on purpose: every M1 query command (ls, ports, status,
+	// env, which, cd) honors it, so it is registered once as a persistent flag
+	// rather than per-command. Commands read it with cmd.Flags().GetBool("json")
+	// — cobra's Flags() includes inherited persistent flags — and render via
+	// internal/ui.PrintJSON. A command that grows its own local "json" flag
+	// would shadow this one; don't.
+	root.PersistentFlags().Bool("json", false, "machine-readable output")
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		envx.SanitizeSelf() // undo version-manager activation before anything spawns (spec §6)
 	}
+	// Use-string convention, applied by every command in the tree: <angle
+	// brackets> for a required positional, [square brackets] for an optional one.
+	// So `status [workspace]` takes it or leaves it, `env <workspace> [project]`
+	// and `cd <workspace> [project]` require the workspace, and `ls`/`ports`/
+	// `which`/`doctor` take none. cobra prints these verbatim in help and in
+	// usage errors, so a drifting style is a user-visible inconsistency.
+	root.AddCommand(newLsCmd())
+	root.AddCommand(newPortsCmd())
+	root.AddCommand(newStatusCmd())
+	root.AddCommand(newEnvCmd())
+	root.AddCommand(newWhichCmd())
+	root.AddCommand(newCdCmd())
 	root.AddCommand(newDoctorCmd())
 	return root
 }

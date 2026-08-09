@@ -125,6 +125,39 @@ projects:
 	}
 }
 
+// TestLoadEmptyTemplatesBlockKeepsExactPositions pins the pairing between
+// usesTemplates (an empty/null `templates:` declares nothing, so no round-trip)
+// and decodeStrict (which must therefore tolerate the key still being in the
+// bytes): such a config loads, and a strict-decode error cites the user's own
+// line without the template-expanded caveat.
+func TestLoadEmptyTemplatesBlockKeepsExactPositions(t *testing.T) {
+	for name, tmpl := range map[string]string{"empty": "templates: {}", "null": "templates: ~"} {
+		t.Run(name, func(t *testing.T) {
+			ok := tmpl + "\nprojects:\n  app:\n    repo: /tmp/x\n"
+			cfg, err := Load(writeConfig(t, ok))
+			if err != nil {
+				t.Fatalf("a declared-but-unused templates block must load: %v", err)
+			}
+			if cfg.Projects["app"].Repo != "/tmp/x" {
+				t.Errorf("Repo = %q, want /tmp/x", cfg.Projects["app"].Repo)
+			}
+
+			bad := tmpl + "\nprojects:\n  app:\n    repo: /tmp/x\n    bogus_key: nope\n"
+			wantLine := lineOf(t, bad, "bogus_key")
+			_, err = Load(writeConfig(t, bad))
+			if err == nil {
+				t.Fatal("unknown key must be a strict-decode error")
+			}
+			if marker := fmt.Sprintf("[%d:", wantLine); !strings.Contains(err.Error(), marker) {
+				t.Errorf("error must cite the user's line %d (%q); got: %v", wantLine, marker, err)
+			}
+			if strings.Contains(err.Error(), "template-expanded") {
+				t.Errorf("no expansion happened, so the caveat must be absent; got: %v", err)
+			}
+		})
+	}
+}
+
 func TestRootDirEnvOverride(t *testing.T) {
 	t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", "/custom/root")
 	got, err := RootDir()
