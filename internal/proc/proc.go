@@ -1,7 +1,10 @@
 // Package proc spawns foreground user commands (setup/teardown) under the
 // tool's spawn contract (spec §6): `$SHELL -lc <command>` in the project dir
 // with a CURATED environment assigned to exec.Cmd.Env — total, never the raw
-// parent env. CommandEnv is the ONE place that curated slice is composed.
+// parent env. The curated slice is composed in ONE place — wsp.CommandEnv,
+// which lives above this package because it is built from workspace knowledge
+// (resolved env, task id, index); proc is the pure spawn mechanism and a leaf,
+// so wsp's ensure-chain can call it without an import cycle.
 package proc
 
 import (
@@ -10,10 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
-	"git.internal/cat/claude-workspaces-go/internal/config"
-	"git.internal/cat/claude-workspaces-go/internal/envx"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
 )
 
 // Run executes command via `$SHELL -lc <command>` with cmd.Dir = dir and
@@ -66,19 +65,4 @@ func firstNonEmptyLine(s string) string {
 		}
 	}
 	return ""
-}
-
-// CommandEnv composes the complete curated environment for one spawned
-// command: envx.Curated over os.Environ() with the allowlist extended by
-// cfg.EnvAllow ∪ the named project's EnvAllow, and wsp.ResolvedEnv as the
-// winning overlay. An empty or unknown project contributes no extra
-// allowances — the global env_allow stands alone. This wires config's
-// deferred env_allow merge and is the only composer of spawn environments.
-func CommandEnv(cfg *config.Config, project, taskID string, index int) []string {
-	allow := append([]string(nil), cfg.EnvAllow...)
-	if p := cfg.Projects[project]; p != nil {
-		allow = append(allow, p.EnvAllow...)
-	}
-	overlay := wsp.ResolvedEnv(cfg, taskID, project, index)
-	return envx.Curated(os.Environ(), allow, overlay)
 }

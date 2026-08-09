@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/config"
 	"git.internal/cat/claude-workspaces-go/internal/envx"
 	"git.internal/cat/claude-workspaces-go/internal/proc"
 )
@@ -15,16 +14,10 @@ import (
 // whose syntax differs, and the contract resolves SHELL from the CURRENT
 // process env, so t.Setenv is exactly the knob. Commands assert via file
 // contents, never stdout — `-lc` runs login init, which may write to stdout.
-
-// envValue extracts K from a "K=V" slice; second return reports presence.
-func envValue(env []string, key string) (string, bool) {
-	for _, kv := range env {
-		if v, ok := strings.CutPrefix(kv, key+"="); ok {
-			return v, true
-		}
-	}
-	return "", false
-}
+//
+// The composed-environment tests (allow merging, resolved overlay) live with
+// wsp.CommandEnv; here the env slice is built with envx.Curated directly, so
+// proc's tests exercise only proc's own contract.
 
 func TestRunSuccess(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
@@ -67,8 +60,7 @@ func TestRunEnvIsTotal(t *testing.T) {
 	t.Setenv("SECRET_X", "leak-me-not")
 	t.Setenv("ALLOWED_Y", "visible")
 
-	cfg := &config.Config{EnvAllow: []string{"ALLOWED_Y"}}
-	env := proc.CommandEnv(cfg, "", "T1", 0)
+	env := envx.Curated(os.Environ(), []string{"ALLOWED_Y"}, nil)
 	dir := t.TempDir()
 
 	script := `test -z "$SECRET_X" || printf %s leaked > secret
@@ -138,37 +130,5 @@ func TestRunFailureExitStatusFallback(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "exit status 3") {
 		t.Errorf("error %q does not fall back to the exit status text", err)
-	}
-}
-
-func TestCommandEnvMergesEnvAllow(t *testing.T) {
-	t.Setenv("GLOBAL_VAR", "g")
-	t.Setenv("PROJ_VAR", "p")
-
-	cfg := &config.Config{
-		EnvAllow: []string{"GLOBAL_VAR"},
-		Env:      map[string]string{"DB_NAME": "db_${WORKSPACE}"},
-		Projects: map[string]*config.Project{
-			"api": {EnvAllow: []string{"PROJ_VAR"}},
-		},
-	}
-
-	env := proc.CommandEnv(cfg, "api", "T7", 0)
-	if v, ok := envValue(env, "GLOBAL_VAR"); !ok || v != "g" {
-		t.Errorf("GLOBAL_VAR = %q, %v; want %q via global env_allow", v, ok, "g")
-	}
-	if v, ok := envValue(env, "PROJ_VAR"); !ok || v != "p" {
-		t.Errorf("PROJ_VAR = %q, %v; want %q via project env_allow", v, ok, "p")
-	}
-	if v, ok := envValue(env, "DB_NAME"); !ok || v != "db_T7" {
-		t.Errorf("DB_NAME = %q, %v; want %q from resolved overlay", v, ok, "db_T7")
-	}
-
-	env = proc.CommandEnv(cfg, "unknown", "T7", 0)
-	if v, ok := envValue(env, "GLOBAL_VAR"); !ok || v != "g" {
-		t.Errorf("unknown project: GLOBAL_VAR = %q, %v; want %q (global allow stands alone)", v, ok, "g")
-	}
-	if _, ok := envValue(env, "PROJ_VAR"); ok {
-		t.Error("unknown project: PROJ_VAR present; project env_allow must not apply")
 	}
 }
