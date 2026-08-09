@@ -31,7 +31,7 @@ func TestRunSuccess(t *testing.T) {
 	dir := t.TempDir()
 	env := envx.Curated(os.Environ(), nil, map[string]string{"DB_NAME": "app_T42"})
 
-	if err := proc.Run(dir, `echo -n "$DB_NAME" > out`, env); err != nil {
+	if err := proc.Run(dir, `printf %s "$DB_NAME" > out`, env); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dir, "out"))
@@ -71,9 +71,9 @@ func TestRunEnvIsTotal(t *testing.T) {
 	env := proc.CommandEnv(cfg, "", "T1", 0)
 	dir := t.TempDir()
 
-	script := `test -z "$SECRET_X" || echo -n leaked > secret
-echo -n "$HOME" > home
-echo -n "$ALLOWED_Y" > allowed`
+	script := `test -z "$SECRET_X" || printf %s leaked > secret
+printf %s "$HOME" > home
+printf %s "$ALLOWED_Y" > allowed`
 	if err := proc.Run(dir, script, env); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -94,6 +94,50 @@ echo -n "$ALLOWED_Y" > allowed`
 	}
 	if string(allowed) != "visible" {
 		t.Errorf("child ALLOWED_Y = %q, want %q (env_allow not honored)", allowed, "visible")
+	}
+}
+
+func TestRunNilEnvIsEmpty(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	t.Setenv("SECRET_X", "leak-me-not")
+	dir := t.TempDir()
+
+	// nil env must mean EMPTY, not exec.Cmd's documented "inherit the parent
+	// process env" — inheriting is the exact failure mode proc exists to
+	// prevent. The probe may fail (no PATH), so ignore Run's error and let
+	// the file assertion decide.
+	_ = proc.Run(dir, `test -z "$SECRET_X" || printf %s leaked > secret`, nil)
+
+	if _, err := os.Stat(filepath.Join(dir, "secret")); err == nil {
+		t.Error("SECRET_X leaked into child spawned with nil env: nil must mean empty, not parent env")
+	}
+}
+
+func TestRunFailureStdoutFallback(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	dir := t.TempDir()
+	env := envx.Curated(os.Environ(), nil, map[string]string{"HOME": dir})
+
+	err := proc.Run(dir, `echo oops; exit 1`, env)
+	if err == nil {
+		t.Fatal("Run returned nil for a command exiting 1")
+	}
+	if !strings.Contains(err.Error(), "oops") {
+		t.Errorf("error %q does not fall back to the first stdout line %q", err, "oops")
+	}
+}
+
+func TestRunFailureExitStatusFallback(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	dir := t.TempDir()
+	env := envx.Curated(os.Environ(), nil, map[string]string{"HOME": dir})
+
+	err := proc.Run(dir, `exit 3`, env)
+	if err == nil {
+		t.Fatal("Run returned nil for a command exiting 3")
+	}
+	if !strings.Contains(err.Error(), "exit status 3") {
+		t.Errorf("error %q does not fall back to the exit status text", err)
 	}
 }
 

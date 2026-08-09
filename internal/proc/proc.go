@@ -21,7 +21,10 @@ import (
 // /bin/sh); if SHELL names a missing binary, exec fails naturally and the
 // error carries the OS message — no second-guessing the user's setting.
 // env is the complete child environment; the caller builds it (CommandEnv)
-// and nothing else is inherited. stdout and stderr are captured separately;
+// and nothing else is inherited. A nil env means EMPTY, guarded explicitly:
+// exec.Cmd's documented nil-Env semantics ("inherit the parent process env")
+// are the exact failure mode this package exists to prevent.
+// stdout and stderr are captured separately;
 // on non-zero exit the error contains the first non-empty stderr line
 // (fallback: first non-empty stdout line, fallback: the exit status).
 // No timeout, no retry — foreground commands run to completion.
@@ -29,6 +32,9 @@ func Run(dir, command string, env []string) error {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/sh"
+	}
+	if env == nil {
+		env = []string{} // nil would make exec.Cmd inherit the raw parent env
 	}
 	cmd := exec.Command(shell, "-lc", command)
 	cmd.Dir = dir
