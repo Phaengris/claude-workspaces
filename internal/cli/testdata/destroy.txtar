@@ -1,0 +1,139 @@
+# destroy: teardown in reverse dependency order, then containment-gated
+# worktree removal, workspace dir removal, allocation release.
+#
+# Fixture:
+#   src/app, src/api — api depends on app, so setup order is app,api and
+#   teardown order must be the REVERSE: api first, then app. Both teardowns
+#   append ${PROJECT} to a shared log, so the log records the real execution
+#   order, not just that both ran.
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT template substitution).
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+# Real source repos.
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+exec git -C $WORK/root/src/api init -b main
+exec git -C $WORK/root/src/api add README
+exec git -C $WORK/root/src/api commit -m init
+
+# --- full destroy: reverse-order teardown, removal, release ------------------
+exec workspace new T-1 'fix thing' app api
+exists $WORK/root/T-1_fix-thing/app/.git
+exists $WORK/root/T-1_fix-thing/api/.git
+
+exec workspace destroy T-1
+stdout 'project "api": teardown complete'
+stdout 'project "app": teardown complete'
+stdout 'project "api": worktree removed'
+stdout 'project "app": worktree removed'
+stdout 'allocation released \(task T-1\)'
+
+# Teardown ran dependents-first: api STRICTLY before app.
+cmp $WORK/root/teardown.log teardown-want.log
+
+# Dir gone, allocation gone, worktrees pruned from both source repos.
+! exists $WORK/root/T-1_fix-thing
+! grep T-1 $WORK/root/.allocations.json
+exec git -C $WORK/root/src/app worktree list
+! stdout T-1
+exec git -C $WORK/root/src/api worktree list
+! stdout T-1
+
+# Branches survive destroy (decided table: a branch is the user's work).
+exec git -C $WORK/root/src/app rev-parse --verify refs/heads/T-1
+exec git -C $WORK/root/src/api rev-parse --verify refs/heads/T-1
+
+# --- teardown failure: abort, NOTHING removed ---------------------------------
+# app's teardown is `false`; api's still succeeds first (reverse order), then
+# the failure aborts destroy before any removal.
+workroot config-bad.tmpl root/config.yml
+exec workspace new T-2 x app api
+! exec workspace destroy T-2
+stderr 'project "app"'
+
+# app's failure does NOT skip api: the remaining projects still run their
+# teardowns (convergence over strict reverse-topo), so the log gains exactly
+# one line — api's — on top of what the T-1 destroy left.
+stdout 'project "api": teardown complete'
+! stdout 'project "app": teardown complete'
+cmp $WORK/root/teardown.log teardown-after-fail.log
+
+exists $WORK/root/T-2_x/app/.git
+exists $WORK/root/T-2_x/api/.git
+grep T-2 $WORK/root/.allocations.json
+exec git -C $WORK/root/src/app worktree list
+stdout T-2_x
+exec git -C $WORK/root/src/api worktree list
+stdout T-2_x
+
+# Convergence: drop the failing teardown from config and re-run — the same
+# destroy now completes (teardowns are expected idempotent, spec §3).
+workroot config.tmpl root/config.yml
+exec workspace destroy T-2
+! exists $WORK/root/T-2_x
+! grep T-2 $WORK/root/.allocations.json
+exec git -C $WORK/root/src/app worktree list
+! stdout T-2
+
+# --- adopted workspace: teardown + release only, the dir is kept -------------
+# No adopt command yet (M4); the registry entry is written directly, the way
+# adoption will record it.
+mkdir $WORK/root/A-9_adopt
+workroot adopted-reg.tmpl root/.allocations.json
+exec workspace destroy A-9
+stdout 'left in place'
+exists $WORK/root/A-9_adopt
+! grep A-9 $WORK/root/.allocations.json
+
+# --- unknown workspace → not found (exit 3, pinned in TestDestroyExitCodes) --
+! exec workspace destroy NOPE
+stderr 'no workspace matching'
+
+# --- usage: exactly one positional (exit 2, pinned in TestDestroyExitCodes) --
+! exec workspace destroy
+stderr 'accepts 1 arg'
+
+-- config.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    teardown:
+      - echo ${PROJECT} >> WORKROOT/teardown.log
+  api:
+    repo: WORKROOT/src/api
+    depends: [app]
+    teardown:
+      - echo ${PROJECT} >> WORKROOT/teardown.log
+-- config-bad.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    teardown:
+      - "false"
+  api:
+    repo: WORKROOT/src/api
+    depends: [app]
+    teardown:
+      - echo ${PROJECT} >> WORKROOT/teardown.log
+-- adopted-reg.tmpl --
+{"WORKROOT/A-9_adopt": {"index": 7, "task_id": "A-9", "description": "adopted", "created_at": "2026-08-09T00:00:00Z", "adopted": true}}
+-- teardown-want.log --
+api
+app
+-- teardown-after-fail.log --
+api
+app
+api
+-- root/src/app/README --
+app source
+-- root/src/api/README --
+api source

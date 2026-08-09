@@ -1,0 +1,119 @@
+# checkout: the ensure-chain end to end against real source repos.
+#
+# Fixture:
+#   src/app — good project: setup appends to setup.log (the run-count probe);
+#             an UNTRACKED .env carries SECRET=abc (gitignored in real life,
+#             so it never travels with the worktree — seeding must copy it)
+#   src/api — failing project: setup is `false`
+#   T-1 (#0), T-2 (#1) — two empty workspaces in the registry
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT template substitution).
+wsenv
+workroot allocations.tmpl root/.allocations.json
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/.allocations.json
+! grep WORKROOT root/config.yml
+
+# Real source repos. README is added by name — .env stays untracked.
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+exec git -C $WORK/root/src/api init -b main
+exec git -C $WORK/root/src/api add README
+exec git -C $WORK/root/src/api commit -m init
+
+# --- first checkout: worktree, .env, setup, stamp, WORKSPACE.md ------------
+exec workspace checkout T-1 app
+
+# Worktree on a branch named after the task id.
+exec git -C $WORK/root/T-1/app rev-parse --abbrev-ref HEAD
+stdout '^T-1$'
+
+# .env: seeded from the source repo's untracked .env AND overlaid with the
+# workspace-resolved value (the overlay always wins).
+grep '^SECRET=abc$' $WORK/root/T-1/app/.env
+grep '^DB_NAME=app_T-1_dev$' $WORK/root/T-1/app/.env
+
+# Stamp written; status derives "setup current" from it.
+exists $WORK/root/T-1/.workspace/setup-app.ok
+exec workspace status T-1
+stdout '^  app: checked out \(branch T-1\), setup current$'
+
+# WORKSPACE.md regenerated, listing the checked-out project.
+grep '### app' $WORK/root/T-1/WORKSPACE.md
+
+# Setup ran exactly once.
+exec sh -c 'test "$(wc -l < "$WORK/root/T-1/app/setup.log")" -eq 1'
+
+# --- re-run: idempotent ------------------------------------------------------
+# Worktree exists, stamp current — exit 0 and setup does NOT re-run.
+exec workspace checkout T-1 app
+exec sh -c 'test "$(wc -l < "$WORK/root/T-1/app/setup.log")" -eq 1'
+
+# --- unknown project → not found (exit 3, pinned in TestCheckoutExitCodes) --
+! exec workspace checkout T-1 nope
+stderr 'project "nope" is not configured'
+
+# --- failing setup: join-and-continue ---------------------------------------
+# api sorts before app, so api's failure comes FIRST; app must still be
+# ensured afterward (errors joined, remaining projects continue), api gets no
+# stamp, and WORKSPACE.md is refreshed regardless — api's worktree and .env
+# exist (the chain failed at setup, after both), so both projects are listed.
+! exec workspace checkout T-2 api app
+stderr 'project "api"'
+! exists $WORK/root/T-2/.workspace/setup-api.ok
+exists $WORK/root/T-2/.workspace/setup-app.ok
+exec git -C $WORK/root/T-2/app rev-parse --abbrev-ref HEAD
+stdout '^T-2$'
+grep '### api' $WORK/root/T-2/WORKSPACE.md
+grep '### app' $WORK/root/T-2/WORKSPACE.md
+
+# Re-running the failed checkout converges on the still-broken half only:
+# app's stamp is current, so its setup does not re-run.
+! exec workspace checkout T-2 api app
+exec sh -c 'test "$(wc -l < "$WORK/root/T-2/app/setup.log")" -eq 1'
+
+# --- usage: fewer than two positionals → exit 2 ------------------------------
+! exec workspace checkout T-1
+stderr 'requires at least 2'
+
+-- config.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+env:
+  DB_NAME: ${PROJECT}_${WORKSPACE}_dev
+projects:
+  app:
+    repo: WORKROOT/src/app
+    setup:
+      - echo ran >> setup.log
+  api:
+    repo: WORKROOT/src/api
+    setup:
+      - "false"
+-- allocations.tmpl --
+{
+  "WORKROOT/T-1": {
+    "index": 0,
+    "task_id": "T-1",
+    "description": "",
+    "created_at": "2026-08-09T09:00:00Z",
+    "adopted": false
+  },
+  "WORKROOT/T-2": {
+    "index": 1,
+    "task_id": "T-2",
+    "description": "",
+    "created_at": "2026-08-09T09:05:00Z",
+    "adopted": false
+  }
+}
+-- root/T-1/.keep --
+-- root/T-2/.keep --
+-- root/src/app/README --
+app source
+-- root/src/app/.env --
+SECRET=abc
+-- root/src/api/README --
+api source

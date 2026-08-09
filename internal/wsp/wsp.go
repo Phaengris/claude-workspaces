@@ -113,10 +113,17 @@ type ProjectState struct {
 
 // ProjectStates reports the configured projects that this workspace actually
 // contains, sorted by name. The M1 containment rule is git's own answer:
-// a project is checked out iff gitx.IsWorkTree(ProjectDir(...)). Projects that
-// are configured but not checked out here are simply absent from the result —
-// a workspace is a subset of the configured projects, and listing the rest as
-// empty rows would misreport unrelated config as part of this workspace.
+// a project is checked out iff gitx.IsWorkTreeRoot(ProjectDir(...)). Projects
+// that are configured but not checked out here are simply absent from the
+// result — a workspace is a subset of the configured projects, and listing the
+// rest as empty rows would misreport unrelated config as part of this
+// workspace.
+//
+// ROOT, not merely "inside a work tree": if the workspaces area itself lives
+// inside some enclosing repo, every plain directory under it is inside a work
+// tree, and the looser predicate reported such a directory as checked out —
+// with the ENCLOSING repo's branch. `status` then described a project that
+// does not exist and `destroy` would have run its teardown commands there.
 //
 // Branch is best-effort: a work tree whose branch cannot be read (e.g. an
 // unborn HEAD in a fresh repo) still yields a state, with Branch empty. A
@@ -125,7 +132,7 @@ func ProjectStates(cfg *config.Config, ws Workspace) []ProjectState {
 	var out []ProjectState
 	for _, name := range slices.Sorted(maps.Keys(cfg.Projects)) {
 		dir := ProjectDir(ws, cfg, name)
-		if !gitx.IsWorkTree(dir) {
+		if !gitx.IsWorkTreeRoot(dir) {
 			continue
 		}
 		branch, err := gitx.Branch(dir)
