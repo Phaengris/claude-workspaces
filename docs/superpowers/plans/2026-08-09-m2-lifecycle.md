@@ -68,7 +68,7 @@
 
 **Produces (binding):**
 - `proc.Run(dir, command string, env []string) error` — executes `$SHELL -lc <command>` (SHELL from the CURRENT process env, fallback `/bin/sh`), `cmd.Dir = dir`, `cmd.Env = env` (caller passes the complete curated slice), captures stdout+stderr separately. Non-zero exit → error whose message contains the first non-empty stderr line (fallback: first stdout line, fallback: exit status). nil on success.
-- `proc.CommandEnv(cfg *config.Config, project string, taskID string, index int) []string` — the ONE place composing the spawn env: `envx.Curated(os.Environ(), envAllow, overlay)` with envAllow = cfg.EnvAllow ∪ project's EnvAllow, overlay = `wsp.ResolvedEnv(cfg, taskID, project, index)`. (This wires M0's deferred env_allow merge.)
+- `wsp.CommandEnv(cfg *config.Config, project string, taskID string, index int) []string` (moved from proc in Task 5 — proc already imported wsp for ResolvedEnv, so the ensure-chain calling it from wsp was an import cycle) — the ONE place composing the spawn env: `envx.Curated(os.Environ(), envAllow, overlay)` with envAllow = cfg.EnvAllow ∪ project's EnvAllow, overlay = `wsp.ResolvedEnv(cfg, taskID, project, index)`. (This wires M0's deferred env_allow merge.)
 
 **Tests:** `TestRunSuccess` (touch a file via the command, assert env visible: run `sh -c 'echo $DB_NAME > out'`-style probe with overlay), `TestRunFailureFirstStderrLine` (command printing two stderr lines then exit 1 → error contains line 1 not line 2), `TestRunEnvIsTotal` (secret var in parent process env NOT visible to child; allowlisted HOME visible; env_allow'd var visible), `TestCommandEnvMergesEnvAllow` (global + project env_allow both honored). Run with `-race`.
 
@@ -119,7 +119,7 @@
 **Files:** Create `internal/cli/checkout.go`, `internal/wsp/ensure.go` (+tests), `internal/cli/testdata/checkout.txtar`.
 
 **Produces (binding):**
-- `wsp.EnsureProject(cfg, ws, project string) error` — the ensure-chain, each step idempotent: (1) worktree: dest `wsp.ProjectDir`; if not `gitx.IsWorkTree` → `gitx.WorktreeAdd(repo, dest, taskID, base_branch)`; (2) `.env` via `WriteEnvFile`; (3) setup: if stamp current (SetupHash match) → skip; else run each setup command (string substituted via RuntimeVars) through `proc.Run(dest, cmd, proc.CommandEnv(...))`; all succeed → write stamp (hash + "\n", 0644, mkdir `.workspace`).
+- `wsp.EnsureProject(cfg, ws, project string) error` — the ensure-chain, each step idempotent: (1) worktree: dest `wsp.ProjectDir`; if not `gitx.IsWorkTree` → `gitx.WorktreeAdd(repo, dest, taskID, base_branch)`; (2) `.env` via `WriteEnvFile`; (3) setup: if stamp current (SetupHash match) → skip; else run each setup command (string substituted via RuntimeVars) through `proc.Run(dest, cmd, wsp.CommandEnv(...))` (moved from proc — import cycle); all succeed → write stamp (hash + "\n", 0644, mkdir `.workspace`).
 - `workspace checkout <ws> <project…>` — resolve ws (3), validate projects configured (3), order the *requested* projects by `TopoOrder`, EnsureProject each; failures joined, continue remaining; refresh WORKSPACE.md at the end regardless; exit 1 on any failure. usageArgs ≥2.
 
 **Tests:** txtar with a real source repo (with committed `.env`? no — `.env` is gitignored in real life; put the source `.env` untracked in the fixture repo dir): checkout creates worktree on branch `T-1`, `.env` has seeded+overlay values, stamp written (assert file exists + `workspace status` says `setup current`), WORKSPACE.md lists the project; re-run checkout → idempotent (second run exits 0; setup NOT re-run — pin via a setup command that appends to a log file, assert single line); config-change → stamp stale → re-checkout re-runs setup (append second line); failing setup (`false`) → exit 1, no stamp, error names project; unknown project → exit 3.
@@ -186,5 +186,5 @@ func (u undoStack) run() error { // LIFO, collect all errors
 ## Self-review notes
 
 - Spec coverage (M2 slice): §2 new/checkout/destroy rows incl. transactional note; §3 stamps written per rule; §4 .env seeding + runtime substitution in setup/teardown; §5 WORKSPACE.md/CLAUDE.md; §6 curated env at every spawn (proc.Run sole spawn path) + env_allow wiring; §7 spawn contract, topo order, reverse teardown.
-- Type consistency: proc.Run/CommandEnv signatures used in Tasks 5/6/7; EnsureProject in 5/6; TopoOrder in 5/7; WorktreeAdd/Remove in 1/5/6/7.
+- Type consistency: proc.Run and wsp.CommandEnv (moved from proc — import cycle) signatures used in Tasks 5/6/7; EnsureProject in 5/6; TopoOrder in 5/7; WorktreeAdd/Remove in 1/5/6/7.
 - Deliberate M2 simplifications: no daemons anywhere (M3); `destroy` doesn't stop processes (none exist yet); `checkout` refreshes WORKSPACE.md wholesale (regeneration-safe by §5 design).

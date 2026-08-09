@@ -2,6 +2,9 @@
 // allocation registry, the filesystem, and git. The read side stores nothing;
 // the writers (write.go) only ever emit files that are themselves projections
 // of that derived state, so regenerating one can never lose information.
+// Since M2 the package also owns the mutating side of that reality: it
+// composes the curated spawn environment (CommandEnv) and runs setup commands
+// through proc as part of the checkout ensure-chain (ensure.go).
 package wsp
 
 import (

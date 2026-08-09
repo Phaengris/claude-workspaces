@@ -28,9 +28,14 @@ func ensureFixture(t *testing.T, setup []string) (*config.Config, wsp.Workspace)
 	if err := os.MkdirAll(wsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.Config{Projects: map[string]*config.Project{
-		"app": {Repo: src, Setup: setup},
-	}}
+	cfg := &config.Config{
+		// A token-bearing value so tests can observe the resolved overlay
+		// (app_T-1_dev) inside a spawned setup command.
+		Env: map[string]string{"DB_NAME": "app_${WORKSPACE}_dev"},
+		Projects: map[string]*config.Project{
+			"app": {Repo: src, Setup: setup},
+		},
+	}
 	return cfg, wsp.Workspace{Dir: wsDir, Alloc: alloc.Allocation{Index: 0, TaskID: "T-1"}}
 }
 
@@ -99,6 +104,48 @@ func TestEnsureProjectStaleStampRerunsSetup(t *testing.T) {
 	dest := wsp.ProjectDir(ws, cfg, "app")
 	if got := setupLogLines(t, dest); got != 2 {
 		t.Errorf("setup.log has %d lines after stale-stamp re-run, want 2", got)
+	}
+}
+
+// TestEnsureProjectSetupEnvAndSubst pins the two seams of the setup step a
+// refactor could silently drop while every other test stays green:
+//
+//   - the spawned process env is CommandEnv's CURATED slice — the resolved
+//     overlay is visible ($DB_NAME), a parent-only var is NOT ($SECRET_X;
+//     swapping the env for os.Environ() must fail here);
+//   - the command STRING is substituted via RuntimeVars before the shell sees
+//     it — ${WORKSPACE} in a setup command becomes the task id (dropping the
+//     Subst call leaves the shell to expand an unset variable to "", because
+//     runtime tokens are substitution inputs, never env vars).
+func TestEnsureProjectSetupEnvAndSubst(t *testing.T) {
+	cfg, ws := ensureFixture(t, []string{
+		`printf %s "$DB_NAME" > env-probe`,
+		`test -z "$SECRET_X" || printf %s leaked > secret-probe`,
+		`printf %s ${WORKSPACE} > subst-probe`,
+	})
+	t.Setenv("SECRET_X", "leak-me-not")
+
+	if err := wsp.EnsureProject(cfg, ws, "app"); err != nil {
+		t.Fatalf("EnsureProject: %v", err)
+	}
+	dest := wsp.ProjectDir(ws, cfg, "app")
+	probe := func(name string) string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(dest, name))
+		if err != nil {
+			t.Fatalf("reading %s: %v", name, err)
+		}
+		return string(data)
+	}
+
+	if got := probe("env-probe"); got != "app_T-1_dev" {
+		t.Errorf("env-probe = %q, want %q (setup must see CommandEnv's resolved overlay)", got, "app_T-1_dev")
+	}
+	if got := probe("subst-probe"); got != "T-1" {
+		t.Errorf("subst-probe = %q, want %q (${WORKSPACE} must be substituted in the command string)", got, "T-1")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "secret-probe")); err == nil {
+		t.Error("SECRET_X leaked into setup: the spawn env must be curated, never the parent env")
 	}
 }
 
