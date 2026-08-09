@@ -1,5 +1,7 @@
 // Package wsp derives everything about a workspace from reality: the
-// allocation registry, the filesystem, and git. Nothing here mutates (M1).
+// allocation registry, the filesystem, and git. The read side stores nothing;
+// the writers (write.go) only ever emit files that are themselves projections
+// of that derived state, so regenerating one can never lose information.
 package wsp
 
 import (
