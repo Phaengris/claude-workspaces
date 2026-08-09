@@ -179,13 +179,33 @@ func Alive(pid int, starttime uint64) bool {
 // pid-file path and NEVER touches the pid file: the CALLER removes it after
 // StopGroup returns success (confirmed death) — that keeps file layout
 // knowledge out of proc and lets a failed stop leave the record intact.
+//
+// Safety: signals are sent only when pid IS its group's leader (pgid == pid)
+// — StartDaemon guarantees that for every daemon we start (Setpgid). A
+// non-leader pid means the pid file is stale and the pid recycled (the
+// starttime-0 degradation path cannot detect that itself), and signaling
+// Getpgid's answer would hit an unrelated group: StopGroup errors instead,
+// having signaled nothing.
+//
+// Limitation: the returned signal means the recorded LEADER is confirmed
+// gone, not that every group member is — a member that ignores TERM can
+// outlive a leader that exits on it (foreman-style trees). Group-emptiness
+// polling (kill(-pgid, 0)) is deliberately NOT done: it counts zombies, so
+// it would hang the in-process-parent case the zombie rule in Alive exists
+// for. Callers reporting "stopped (TERM)" are promising leader death only.
 func StopGroup(pid int, starttime uint64) (signal string, err error) {
 	if !Alive(pid, starttime) {
 		return "", nil
 	}
 	pgid, err := unix.Getpgid(pid)
 	if err != nil {
-		return "", nil // vanished between the Alive check and here
+		if errors.Is(err, unix.ESRCH) {
+			return "", nil // vanished between the Alive check and here
+		}
+		return "", fmt.Errorf("getpgid(%d): %w", pid, err)
+	}
+	if pgid != pid {
+		return "", fmt.Errorf("refusing to signal: pid %d is not a group leader — pid file may be stale", pid)
 	}
 	if err := unix.Kill(-pgid, unix.SIGTERM); err != nil {
 		if errors.Is(err, unix.ESRCH) {

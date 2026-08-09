@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -203,6 +205,49 @@ func TestStopGroupKillEscalation(t *testing.T) {
 	}
 	if proc.Alive(pid, starttime) {
 		t.Error("Alive = true after KILL escalation")
+	}
+}
+
+func TestStopGroupRefusesNonLeader(t *testing.T) {
+	// The starttime-0 degradation path skips the identity check, so a
+	// recycled pid can read alive; StopGroup must then NOT trust Getpgid and
+	// signal a stranger's group. Every daemon we start is its own group
+	// leader (Setpgid), so pgid != pid proves the pid file is stale —
+	// StopGroup must error and signal NOTHING. The victim group here is a
+	// sacrificial leader+member pair (NOT the test's own group, so watching
+	// the buggy behavior fail cannot nuke the harness).
+	leader := exec.Command("sleep", "30")
+	leader.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // own group, pgid == pid
+	if err := leader.Start(); err != nil {
+		t.Fatalf("starting leader: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = unix.Kill(-leader.Process.Pid, unix.SIGKILL)
+		_ = leader.Wait()
+	})
+	member := exec.Command("sleep", "30")
+	member.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: leader.Process.Pid} // joins leader's group as NON-leader
+	if err := member.Start(); err != nil {
+		t.Fatalf("starting member: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = member.Process.Kill()
+		_ = member.Wait()
+	})
+
+	sig, err := proc.StopGroup(member.Process.Pid, 0)
+	if err == nil {
+		t.Fatalf("StopGroup(non-leader, starttime 0) = (%q, nil), want refusal error", sig)
+	}
+	if !strings.Contains(err.Error(), "not a group leader") {
+		t.Errorf("refusal error %q does not name the cause (not a group leader)", err)
+	}
+	// Nothing may have been signaled: both processes still run.
+	if !proc.Alive(member.Process.Pid, 0) {
+		t.Error("non-leader member was signaled; StopGroup must touch nothing on refusal")
+	}
+	if !proc.Alive(leader.Process.Pid, 0) {
+		t.Error("group leader was signaled; StopGroup must touch nothing on refusal")
 	}
 }
 
