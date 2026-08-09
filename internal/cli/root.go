@@ -53,6 +53,7 @@ func Root() *cobra.Command {
 	root.AddCommand(newEnvCmd())
 	root.AddCommand(newWhichCmd())
 	root.AddCommand(newCdCmd())
+	root.AddCommand(newNewCmd())
 	root.AddCommand(newCheckoutCmd())
 	root.AddCommand(newDoctorCmd())
 	return root
