@@ -28,7 +28,9 @@ import (
 //     its daemons do not start) but not the others;
 //  3. daemons in listed order: already running → note + skip, leaving the
 //     pid record untouched (idempotence, the decided rule); otherwise start
-//     via proc.StartDaemon and report the new pid.
+//     via proc.StartDaemon and report the new pid. `started` means SPAWNED
+//     and recorded, not healthy — a daemon that exits immediately surfaces
+//     in its .err.log and reads as not running from then on.
 //
 // Commands run with the command STRING substituted (RuntimeVars) and the
 // process env from CommandEnv — the same rendering as setup commands.
@@ -78,6 +80,14 @@ func newUpCmd() *cobra.Command {
 					errs = append(errs, err) // already prefixed `project "<name>": …`
 				}
 			}
+			// up checks projects out (EnsureProject creates worktrees), so
+			// WORKSPACE.md must be refreshed like checkout/new do — ensure.go
+			// makes that the caller's job. Refreshed REGARDLESS of failures:
+			// a half-succeeded up has changed what is checked out, and the
+			// file must describe reality, not the happy path.
+			if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {
+				errs = append(errs, err)
+			}
 			return errors.Join(errs...) // nil when everything succeeded
 		},
 	}
@@ -123,7 +133,9 @@ func upProject(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, w wsp.T
 			os.MkdirAll(filepath.Dir(pidPath), 0o755),
 			os.MkdirAll(filepath.Dir(logPath), 0o755),
 		); err != nil {
-			return fail(err) // no dirs means no daemon can start: abort the project
+			// No dirs means no daemon can start: abort the project — but
+			// keep whatever daemon failures were already collected.
+			return errors.Join(append(errs, fail(err))...)
 		}
 		if err := proc.StartDaemon(dir, wsp.Subst(d.Cmd, vars), env,
 			logPath, wsp.ErrLogPath(ws, d), pidPath); err != nil {

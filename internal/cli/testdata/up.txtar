@@ -54,8 +54,16 @@ stdout 'app:sleeper already running \(pid \d+\)'
 cmp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-before
 
 # Run-and-waits DO re-run on every up of the whole project (spec §7): the
-# probe file was consumed above, and up put it back.
+# probe file was consumed above, and up put it back. Setup did NOT re-run —
+# the stamp gates it across invocations.
 exists $WORK/root/T-1_x/app/prestart-ran
+exec sh -c 'test "$(wc -l < "$WORK/root/T-1_x/app/setup.log")" -eq 1'
+
+# --- no targets: the whole workspace ------------------------------------------
+# app is T-1's only checked-out project, so bare `up T-1` converges it: the
+# running daemon is skipped, exit 0.
+exec workspace up T-1
+stdout 'app:sleeper already running \(pid \d+\)'
 
 # --- single-daemon target from cold ------------------------------------------
 # A bare daemon name unique across configured projects resolves to app:sleeper,
@@ -68,6 +76,10 @@ stdout 'started app:sleeper \(pid \d+\)'
 exists $WORK/root/T-2_y/.workspace/setup-app.ok
 exists $WORK/root/T-2_y/.workspace/pids/app:sleeper
 ! exists $WORK/root/T-2_y/app/prestart-ran
+
+# up changed what is checked out, so it refreshed WORKSPACE.md like
+# checkout/new do — the file must list app, not "(none checked out)".
+grep '### app' $WORK/root/T-2_y/WORKSPACE.md
 
 # --- run-and-wait failure aborts the project's daemons ------------------------
 # bad's `false` fails before its daemon: exit 1, project-prefixed error, and
