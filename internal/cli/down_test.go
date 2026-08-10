@@ -2,12 +2,21 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
+
+	"git.internal/cat/claude-workspaces-go/internal/alloc"
+	"git.internal/cat/claude-workspaces-go/internal/proc"
+	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"git.internal/cat/claude-workspaces-go/internal/xerr"
 )
 
 // TestDownRestartExitCodes pins the codes down_restart.txtar can only assert
@@ -108,7 +117,7 @@ projects:
 // (key → content) already written. No project is checked out — the config-driven
 // work list is therefore empty, which is exactly the situation where the pids
 // directory is the only inventory there is.
-func unlistedFixture(t *testing.T, records map[string]string) string {
+func unlistedFixture(t *testing.T, records map[string]string) (root string, ws wsp.Workspace) {
 	t.Helper()
 	const cfg = `values:
   PORT: { start: 5000, per_workspace: 10 }
@@ -118,23 +127,57 @@ projects:
     start:
       - one: sleep 30
 `
-	root := fixtureRoot(t, map[string]string{"config.yml": cfg})
-	wsDir := filepath.Join(root, "A-1_x")
-	pids := filepath.Join(wsDir, ".workspace", "pids")
-	if err := os.MkdirAll(pids, 0o755); err != nil {
+	root = fixtureRoot(t, map[string]string{"config.yml": cfg})
+	ws = wsp.Workspace{
+		Dir:   filepath.Join(root, "A-1_x"),
+		Alloc: alloc.Allocation{TaskID: "A-1", Description: "d", Index: 0},
+	}
+	if err := os.MkdirAll(wsp.PidsDir(ws), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	reg := `{"` + wsDir + `": {"index": 0, "task_id": "A-1", ` +
+	reg := `{"` + ws.Dir + `": {"index": 0, "task_id": "A-1", ` +
 		`"description": "d", "created_at": "2026-08-01T09:00:00Z", "adopted": false}}`
 	if err := os.WriteFile(filepath.Join(root, ".allocations.json"), []byte(reg), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for key, content := range records {
-		if err := os.WriteFile(filepath.Join(pids, key), []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(wsp.PidsDir(ws), key), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	return root
+	return root, ws
+}
+
+// startRecord starts a REAL daemon in ws under the given key and returns its
+// (pid, starttime) — the only honest way to exercise the LIVE half of the
+// enumeration: a hand-written record can only ever be dead or corrupt, and
+// pointing a live record at some borrowed pid risks aiming StopGroup at this
+// very test process. The command is `sleep 30`, so nothing can outlive the run
+// even if the stop under test fails, and the cleanup stops the group anyway.
+func startRecord(t *testing.T, ws wsp.Workspace, key string) (int, uint64) {
+	t.Helper()
+	project, name, _ := strings.Cut(key, ":")
+	d := wsp.Daemon{Project: project, Name: name}
+	for _, dir := range []string{wsp.PidsDir(ws), filepath.Dir(wsp.LogPath(ws, d))} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// PATH only: StartDaemon takes the TOTAL env, and `sleep` has to be findable.
+	env := []string{"PATH=" + os.Getenv("PATH")}
+	if err := proc.StartDaemon(ws.Dir, "sleep 30", env,
+		wsp.LogPath(ws, d), wsp.ErrLogPath(ws, d), wsp.PidPath(ws, d)); err != nil {
+		t.Fatal(err)
+	}
+	pid, starttime, err := proc.ReadPidFile(wsp.PidPath(ws, d))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = proc.StopGroup(pid, starttime) })
+	if !proc.Alive(pid, starttime) {
+		t.Fatalf("daemon recorded as %s died before the test began", key)
+	}
+	return pid, starttime
 }
 
 // downLines runs the given command and returns its stdout lines.
@@ -164,53 +207,61 @@ func downLines(t *testing.T, args ...string) []string {
 // workspace is stopped afterwards, and only the directory can make that promise
 // good.
 //
-// Records here are DEAD (a mismatched starttime) and CORRUPT, so they exercise
-// the enumeration and the dedupe without any process: the live case needs a real
-// daemon and lives in down_restart.txtar (signaling a hand-written record risks
-// aiming at this very test process).
+// The row is scoped to LIVE keys, and the subtests pin both halves of that: a
+// live unlisted daemon is stopped and its record removed; a dead or corrupt one
+// is passed over in silence and left for gc.
 func TestDownEnumeratesPidsDir(t *testing.T) {
 	// pid 1 exists (kill(1,0) is EPERM at worst) but its starttime cannot be
 	// this, so the record reads dead — no signal is ever sent.
 	const dead = "1 99999999999\n"
 
-	t.Run("unlisted keys get the stop treatment", func(t *testing.T) {
-		unlistedFixture(t, map[string]string{"gone:ghost": dead, "gone:corrupt": "garbage\n"})
+	t.Run("a LIVE unlisted key is stopped and its record removed", func(t *testing.T) {
+		_, ws := unlistedFixture(t, nil)
+		pid, starttime := startRecord(t, ws, "gone:ghost")
 		got := downLines(t, "down", "A-1")
-		want := []string{"gone:corrupt already stopped", "gone:ghost already stopped"}
+		want := []string{"stopped gone:ghost (TERM)"}
 		if !slices.Equal(got, want) {
-			t.Errorf("down A-1 printed %q, want %q (pids-dir enumeration, ReadDir order)", got, want)
+			t.Errorf("down A-1 printed %q, want %q (pids-dir enumeration)", got, want)
+		}
+		if proc.Alive(pid, starttime) {
+			t.Error("the unlisted daemon is still running after down")
+		}
+		if _, err := os.Stat(filepath.Join(wsp.PidsDir(ws), "gone:ghost")); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("pid file survived a confirmed stop: %v", err)
 		}
 	})
 
-	t.Run("a config-known key is treated once, not twice", func(t *testing.T) {
-		unlistedFixture(t, map[string]string{"api:one": dead})
-		// api is configured but NOT checked out, so the config-driven work list
-		// is empty and the record is reached by the enumeration alone — one
-		// line either way, never one per pass.
+	t.Run("dead and corrupt unlisted records stay silent", func(t *testing.T) {
+		_, ws := unlistedFixture(t, map[string]string{"gone:ghost": dead, "gone:corrupt": "garbage\n"})
 		got := downLines(t, "down", "A-1")
-		want := []string{"api:one already stopped"}
-		if !slices.Equal(got, want) {
-			t.Errorf("down A-1 printed %q, want %q (no double treatment)", got, want)
+		// Nothing was addressed, so the hint is the only honest output — and a
+		// stray file in the directory must never earn an `already stopped` line.
+		if len(got) != 1 || !strings.Contains(got[0], "nothing checked out") {
+			t.Errorf("down A-1 printed %q, want just the checkout hint", got)
+		}
+		for _, key := range []string{"gone:ghost", "gone:corrupt"} {
+			if _, err := os.Stat(filepath.Join(wsp.PidsDir(ws), key)); err != nil {
+				t.Errorf("%s was removed; reaping stale records is gc's job: %v", key, err)
+			}
 		}
 	})
 
-	t.Run("an EXPLICIT target stays config-resolved", func(t *testing.T) {
-		unlistedFixture(t, map[string]string{"gone:ghost": dead})
+	t.Run("an EXPLICIT target never enumerates", func(t *testing.T) {
+		_, ws := unlistedFixture(t, nil)
+		pid, starttime := startRecord(t, ws, "gone:ghost")
 		// The grammar is unchanged: naming `api` acts on api's daemons and
-		// nothing else, however much else the directory records.
+		// nothing else, however much else the directory records — and a LIVE
+		// record makes that assertion bite (a dead one would be silent anyway).
 		got := downLines(t, "down", "A-1", "api")
 		want := []string{"api:one already stopped"}
 		if !slices.Equal(got, want) {
 			t.Errorf("down A-1 api printed %q, want %q (explicit targets never enumerate)", got, want)
 		}
-	})
-
-	t.Run("records addressed means no nothing-checked-out hint", func(t *testing.T) {
-		unlistedFixture(t, map[string]string{"gone:ghost": dead})
-		for _, line := range downLines(t, "down", "A-1") {
-			if strings.Contains(line, "nothing checked out") {
-				t.Errorf("hint printed alongside addressed records: %q", line)
-			}
+		if !proc.Alive(pid, starttime) {
+			t.Error("a named target stopped an unlisted daemon nobody named")
+		}
+		if _, err := os.Stat(filepath.Join(wsp.PidsDir(ws), "gone:ghost")); err != nil {
+			t.Errorf("an unnamed daemon's record was removed: %v", err)
 		}
 	})
 
@@ -223,10 +274,14 @@ func TestDownEnumeratesPidsDir(t *testing.T) {
 	})
 
 	t.Run("restart's down half enumerates too", func(t *testing.T) {
-		unlistedFixture(t, map[string]string{"gone:ghost": dead})
+		_, ws := unlistedFixture(t, nil)
+		pid, starttime := startRecord(t, ws, "gone:ghost")
 		got := downLines(t, "restart", "A-1")
-		if !slices.Contains(got, "gone:ghost already stopped") {
-			t.Errorf("restart A-1 printed %q, want the unlisted record addressed", got)
+		if !slices.Contains(got, "stopped gone:ghost (TERM)") {
+			t.Errorf("restart A-1 printed %q, want the unlisted daemon stopped", got)
+		}
+		if proc.Alive(pid, starttime) {
+			t.Error("restart left the unlisted daemon running")
 		}
 		// Nothing config-known is checked out, so the up half starts nothing —
 		// and it could not start `gone:ghost` in any case (see newRestartCmd).
@@ -234,6 +289,100 @@ func TestDownEnumeratesPidsDir(t *testing.T) {
 			if strings.HasPrefix(line, "started ") {
 				t.Errorf("restart started %q; the up half can only start config-known daemons", line)
 			}
+		}
+	})
+}
+
+// TestDownUnlistedSkipsCoveredKeys pins the dedupe guard, and it is pinned HERE,
+// on the helper, with a LIVE record — the only shape in which the guard is
+// observable. Once dead records are silent, a stale covered key looks identical
+// with and without the guard, and a live covered key is normally gone from the
+// directory by the time the enumeration lists it (downWork removed the record on
+// a confirmed stop). What remains is the case the guard exists for: a record
+// downWork OWNS that is still live and still recorded — a stop that failed, or
+// one that raced — where enumerating it again would signal the same process a
+// second time in one run and report the same daemon twice. downUnlisted is
+// therefore called directly with a work list that covers the key, which is
+// exactly the state downWork leaves behind.
+func TestDownUnlistedSkipsCoveredKeys(t *testing.T) {
+	_, ws := unlistedFixture(t, nil)
+	pid, starttime := startRecord(t, ws, "api:one")
+
+	work := []wsp.TargetWork{{
+		Project:      "api",
+		WholeProject: true,
+		Daemons:      []wsp.Daemon{{Project: "api", Name: "one", Cmd: "sleep 30"}},
+	}}
+	cmd := &cobra.Command{}
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	addressed, err := downUnlisted(cmd, ws, work)
+	if err != nil {
+		t.Fatalf("downUnlisted: %v", err)
+	}
+	if addressed != 0 {
+		t.Errorf("downUnlisted addressed %d records, want 0: api:one belongs to the work list", addressed)
+	}
+	if out.String() != "" {
+		t.Errorf("downUnlisted printed %q for a covered key; downWork already reported it", out.String())
+	}
+	if !proc.Alive(pid, starttime) {
+		t.Error("downUnlisted stopped a daemon the work list owns — the same process would be signaled twice in one down")
+	}
+	if _, err := os.Stat(wsp.PidPath(ws, wsp.Daemon{Project: "api", Name: "one"})); err != nil {
+		t.Errorf("downUnlisted removed a covered record: %v", err)
+	}
+}
+
+// TestDownRecordsUnreadable pins the refuse-on-doubt half of the enumeration: a
+// pids directory that cannot be LISTED leaves what is running unknown, so it is
+// an error rather than an assumed quiet — and `restart` additionally refuses its
+// UP half, because starting daemons beside processes we cannot see would double
+// whatever holds this workspace's ports. A failed STOP is not this case: it is a
+// known daemon in a known state, and restart's up half still runs (documented on
+// newRestartCmd).
+func TestDownRecordsUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read any directory; the permission gate cannot be staged")
+	}
+	deny := func(t *testing.T, ws wsp.Workspace) {
+		t.Helper()
+		if err := os.Chmod(wsp.PidsDir(ws), 0o300); err != nil { // -wx: listable no more
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(wsp.PidsDir(ws), 0o755) }) // let TempDir clean up
+	}
+
+	t.Run("down reports it", func(t *testing.T) {
+		_, ws := unlistedFixture(t, nil)
+		deny(t, ws)
+		err := runCLI(t, "down", "A-1")
+		if err == nil {
+			t.Fatal("down succeeded with an unreadable pids directory")
+		}
+		if !strings.Contains(err.Error(), "daemon records") {
+			t.Errorf("error %q does not name the unreadable daemon records", err)
+		}
+		if got := xerr.ExitCode(classifyUsageError(err)); got != 1 {
+			t.Errorf("exit code = %d, want 1", got)
+		}
+	})
+
+	t.Run("restart refuses its up half", func(t *testing.T) {
+		_, ws := unlistedFixture(t, nil)
+		deny(t, ws)
+		err := runCLI(t, "restart", "A-1")
+		if err == nil {
+			t.Fatal("restart succeeded with an unreadable pids directory")
+		}
+		if !strings.Contains(err.Error(), "not starting anything") {
+			t.Errorf("error %q does not say the up half was refused", err)
+		}
+		// upWork always rewrites WORKSPACE.md, so its absence is proof the up
+		// half never ran.
+		if _, err := os.Stat(filepath.Join(ws.Dir, "WORKSPACE.md")); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("the up half ran anyway (WORKSPACE.md written): %v", err)
 		}
 	})
 }

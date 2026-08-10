@@ -150,6 +150,20 @@ stdout 'stopped app:sleeper \(TERM\)'
 ! exists $WORK/root/T-2_y/app/stopped-marker
 ! exec sh -c 'kill -0 $(cut -d" " -f1 pid-unlisted2)'
 
+# --- destroy's phase 0 uses the same inventory -----------------------------------
+# destroy deletes the pid records along with the dir and frees the index, so a
+# config-drifted daemon that survived phase 0 would be invisible AND still
+# holding this index's ports, with nothing left on disk for a re-run to find it
+# by. Phase 0 is therefore the no-target down in full, directory included.
+workroot config.tmpl root/config.yml
+exec workspace up T-2 app
+cp $WORK/root/T-2_y/.workspace/pids/app:sleeper pid-unlisted3
+workroot config2.tmpl root/config.yml
+exec workspace destroy T-2
+stdout 'stopped app:sleeper \(TERM\)'
+! exists $WORK/root/T-2_y
+! exec sh -c 'kill -0 $(cut -d" " -f1 pid-unlisted3)'
+
 -- config.tmpl --
 values:
   PORT: { start: 5000, per_workspace: 10 }

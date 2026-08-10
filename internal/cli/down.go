@@ -54,11 +54,14 @@ import (
 // rename a daemon, drop it from `start:`, or delete its project from config, and
 // the record — plus the process it names, still holding this index's ports —
 // becomes invisible to every config-driven walk. So the config-resolved work
-// runs first (ordered, epilogues and all), and then downUnlisted gives every
-// REMAINING on-disk key the same stop treatment and the same output lines. Only
-// the treatment is extended: `stop:` epilogues stay config-gated exactly as
-// before, because an epilogue belongs to a configured project and there is no
-// project here to run one for.
+// runs first (ordered, epilogues and all), and then downUnlisted stops every
+// REMAINING on-disk key that is actually RUNNING, with the same lines. Two
+// deliberate limits on that extension: a dead or corrupt unlisted record is
+// passed over in SILENCE (it names no daemon anyone could stop — it is gc's
+// garbage, not down's work, and announcing every stray file in the directory
+// would bury the lines that matter); and `stop:` epilogues stay config-gated
+// exactly as before, because an epilogue belongs to a configured project and
+// there is no project here to run one for.
 //
 // An EXPLICITLY named target is still resolved through the config alone (grammar
 // unchanged): a name the user typed must mean what config says it means, and
@@ -107,20 +110,29 @@ func newDownCmd() *cobra.Command {
 	}
 }
 
-// downAll is the NO-TARGET down shared by `down` and `restart`'s down half: the
-// config-resolved work first (downWork's order, epilogues included), then every
-// record left in the pids directory (downUnlisted). It reports whether anything
-// at all was addressed — a configured project or an on-disk key — which is what
-// tells the caller whether the nothing-checked-out hint would be true.
+// errRecordsUnreadable marks the ONE failure in this file that must not be
+// papered over: the pids directory could not be LISTED, so what is running in
+// this workspace is unknown. Callers that were about to do something around
+// those processes match it with errors.Is and refuse (restart's up half does;
+// destroy's phase 0 aborts on any error, which covers it) — "I cannot tell what
+// runs here" must never be acted on as "nothing runs here".
+var errRecordsUnreadable = errors.New("reading daemon records")
+
+// downAll is the NO-TARGET down shared by `down`, `restart`'s down half and
+// `destroy`'s phase 0: the config-resolved work first (downWork's order,
+// epilogues included), then every RUNNING record left in the pids directory
+// (downUnlisted). It reports whether anything at all was addressed — a
+// configured project or a live on-disk key — which is what tells the caller
+// whether the nothing-checked-out hint would be true.
 func downAll(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, work []wsp.TargetWork) (acted bool, err error) {
 	downErr := downWork(cmd, cfg, ws, work)
 	addressed, unlistedErr := downUnlisted(cmd, ws, work)
 	return len(work) > 0 || addressed > 0, errors.Join(downErr, unlistedErr)
 }
 
-// downUnlisted gives the stop treatment to every daemon record in the pids
-// DIRECTORY that the config-resolved work list does not already cover, in
-// wsp.PidFileKeys' sorted order, and reports how many records it addressed.
+// downUnlisted stops every RUNNING daemon record in the pids DIRECTORY that the
+// config-resolved work list does not already cover, in wsp.PidFileKeys' sorted
+// order, and reports how many it addressed.
 //
 // Those keys are exactly the ones no config-driven walk can see: a daemon
 // renamed or dropped from `start:`, a project deleted from the config, a project
@@ -130,13 +142,23 @@ func downAll(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, work []ws
 // the known graph is unwound first, and what remains is unwound in a stable
 // (alphabetical) sequence rather than an arbitrary one.
 //
-// An unreadable pids directory is an ERROR, never an assumed quiet: "I cannot
-// tell what runs here" must not be reported as "nothing runs here" by a command
-// whose whole promise is that nothing does.
+// LIVE records only, and this is the scope of the decided row: a record that is
+// missing, corrupt, or names a dead or recycled pid is skipped SILENTLY and left
+// on disk. It names nothing anyone could stop (the Liveness row), reaping it is
+// gc's job, and any file that finds its way into the directory would otherwise
+// earn a bogus `.DS_Store already stopped` line — noise that would also make the
+// nothing-checked-out hint lie by counting as "something addressed". The
+// config-resolved half still announces `already stopped` for every daemon it was
+// asked about: there the user named it (or its project), so its state is the
+// answer to a question actually posed.
+//
+// A pids directory that cannot be LISTED is an error wrapping
+// errRecordsUnreadable, never an assumed quiet. Per-record read failures are not
+// errors, only silence — see above.
 func downUnlisted(cmd *cobra.Command, ws wsp.Workspace, work []wsp.TargetWork) (addressed int, err error) {
 	keys, err := wsp.PidFileKeys(ws)
 	if err != nil {
-		return 0, fmt.Errorf("reading daemon records: %w", err)
+		return 0, fmt.Errorf("%w: %w", errRecordsUnreadable, err)
 	}
 	covered := map[string]bool{}
 	for _, w := range work {
@@ -148,10 +170,19 @@ func downUnlisted(cmd *cobra.Command, ws wsp.Workspace, work []wsp.TargetWork) (
 	var errs []error
 	for _, key := range keys {
 		if covered[key] {
-			continue // downWork already handled it; one line per daemon, ever
+			// downWork owns this key: it has already printed the daemon's line
+			// and, if the stop FAILED, deliberately left the record in place for
+			// a retry. Signaling it a second time here would report the same
+			// daemon twice and hit the process again in the same run.
+			continue
+		}
+		pidPath := filepath.Join(wsp.PidsDir(ws), key)
+		pid, starttime, live := liveRecord(pidPath)
+		if !live {
+			continue // gc's garbage, not down's work (see above)
 		}
 		addressed++
-		if err := stopRecord(out, filepath.Join(wsp.PidsDir(ws), key), key); err != nil {
+		if err := stopLiveRecord(out, pidPath, key, pid, starttime); err != nil {
 			errs = append(errs, fmt.Errorf("unlisted daemon %s: %w", key, err))
 		}
 	}
@@ -167,20 +198,38 @@ func downUnlisted(cmd *cobra.Command, ws wsp.Workspace, work []wsp.TargetWork) (
 // and returns only what went WRONG, unprefixed: the caller knows whether to say
 // `project "x": <key>: …` or `unlisted daemon <key>: …`.
 //
-// The record is read ONCE, and that single read answers the liveness question
-// wsp.DaemonState asks (ReadPidFile + proc.Alive) while also yielding the
-// (pid, starttime) pair the stop itself needs. Asking DaemonState first would
-// read the file a second time and open a window between the two reads — the
-// race the previous shape had to carry an extra branch for. Every unusable
-// record — missing, corrupt, naming a dead or recycled pid — is `already
-// stopped` and is LEFT on disk: nothing here can name a process anyone could
-// stop (the decided Liveness row), and reaping such records is gc's job.
+// Every unusable record — missing, corrupt, naming a dead or recycled pid — is
+// `already stopped` and is LEFT on disk: nothing here can name a process anyone
+// could stop (the decided Liveness row), and reaping such records is gc's job.
 func stopRecord(out io.Writer, pidPath, key string) error {
-	pid, starttime, err := proc.ReadPidFile(pidPath)
-	if err != nil || !proc.Alive(pid, starttime) {
+	pid, starttime, live := liveRecord(pidPath)
+	if !live {
 		fmt.Fprintf(out, "%s already stopped\n", key)
 		return nil
 	}
+	return stopLiveRecord(out, pidPath, key, pid, starttime)
+}
+
+// liveRecord reads one daemon record and answers wsp.DaemonState's question —
+// does this file name a still-running process? — while ALSO handing back the
+// (pid, starttime) pair a stop needs. That pairing is the point: the record is
+// read ONCE, so no window opens between "is it alive?" and "signal it", and the
+// answer cannot be built from a file that changed in between. Not live is
+// (0, 0, false) for every reason at once (no file, corrupt, dead, recycled) —
+// callers that must distinguish them do not exist.
+func liveRecord(pidPath string) (pid int, starttime uint64, live bool) {
+	pid, starttime, err := proc.ReadPidFile(pidPath)
+	if err != nil || !proc.Alive(pid, starttime) {
+		return 0, 0, false
+	}
+	return pid, starttime, true
+}
+
+// stopLiveRecord stops a record already known (by liveRecord, in the same
+// breath) to name a live process: StopGroup, then remove the file, then the
+// line. Split from stopRecord so downUnlisted can decide for itself what a
+// non-live record means — there, silence.
+func stopLiveRecord(out io.Writer, pidPath, key string, pid int, starttime uint64) error {
 	signal, err := proc.StopGroup(pid, starttime)
 	if err != nil {
 		return err // failed stop: leave the pid record for a retry
