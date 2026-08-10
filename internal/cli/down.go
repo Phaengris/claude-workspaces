@@ -3,8 +3,10 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -46,13 +48,30 @@ import (
 // down`, say), and silently declining user-configured cleanup would hide that.
 // One note line, still exit 0.
 //
+// WITH NO EXPLICIT TARGET, the inventory is the pids DIRECTORY, not the config
+// (the decided "down unlisted keys" row). `down <ws>` promises the workspace is
+// stopped afterwards, and a pid file is named after the key `up` wrote it under:
+// rename a daemon, drop it from `start:`, or delete its project from config, and
+// the record — plus the process it names, still holding this index's ports —
+// becomes invisible to every config-driven walk. So the config-resolved work
+// runs first (ordered, epilogues and all), and then downUnlisted gives every
+// REMAINING on-disk key the same stop treatment and the same output lines. Only
+// the treatment is extended: `stop:` epilogues stay config-gated exactly as
+// before, because an epilogue belongs to a configured project and there is no
+// project here to run one for.
+//
+// An EXPLICITLY named target is still resolved through the config alone (grammar
+// unchanged): a name the user typed must mean what config says it means, and
+// silently widening `down <ws> api` to keys config never mentions would act on
+// processes nobody named.
+//
 // Failure policy is up's join-and-continue: resolution fails up front
 // (unknown name → exit 3, nothing acted on); once stopping begins, one
 // daemon's or project's failure does not abandon the rest — errors are
-// collected, each prefixed `project "x": `, and the joined error exits 1.
-// An empty work list (no targets, nothing checked out) is a no-op SUCCESS
-// with the shared checkout hint (up's convention: `down` promises "stopped
-// afterwards", and an empty set already complies).
+// collected, each prefixed `project "x": ` (or `unlisted daemon <key>: `), and
+// the joined error exits 1. Nothing to do at all — no targets, nothing checked
+// out, no records on disk — is a no-op SUCCESS with the shared checkout hint
+// (up's convention: an empty set already complies with "stopped afterwards").
 func newDownCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "down <workspace> [target...]",
@@ -69,17 +88,117 @@ func newDownCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			work, err := wsp.ResolveTargets(cfg, ws, args[1:])
+			targets := args[1:]
+			work, err := wsp.ResolveTargets(cfg, ws, targets)
 			if err != nil {
 				return err // carries its own kind: 3 unknown, 2 malformed, 1 ambiguous
 			}
-			if len(work) == 0 {
-				hintNothingCheckedOut(cmd, ws)
-				return nil
+			if len(targets) > 0 {
+				// Named targets always resolve to something (ResolveTargets
+				// errors otherwise), so there is no empty case to hint about.
+				return downWork(cmd, cfg, ws, work)
 			}
-			return downWork(cmd, cfg, ws, work)
+			acted, err := downAll(cmd, cfg, ws, work)
+			if !acted && err == nil {
+				hintNothingCheckedOut(cmd, ws)
+			}
+			return err
 		},
 	}
+}
+
+// downAll is the NO-TARGET down shared by `down` and `restart`'s down half: the
+// config-resolved work first (downWork's order, epilogues included), then every
+// record left in the pids directory (downUnlisted). It reports whether anything
+// at all was addressed — a configured project or an on-disk key — which is what
+// tells the caller whether the nothing-checked-out hint would be true.
+func downAll(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, work []wsp.TargetWork) (acted bool, err error) {
+	downErr := downWork(cmd, cfg, ws, work)
+	addressed, unlistedErr := downUnlisted(cmd, ws, work)
+	return len(work) > 0 || addressed > 0, errors.Join(downErr, unlistedErr)
+}
+
+// downUnlisted gives the stop treatment to every daemon record in the pids
+// DIRECTORY that the config-resolved work list does not already cover, in
+// wsp.PidFileKeys' sorted order, and reports how many records it addressed.
+//
+// Those keys are exactly the ones no config-driven walk can see: a daemon
+// renamed or dropped from `start:`, a project deleted from the config, a project
+// whose worktree was removed by hand (so ProjectStates no longer lists it). They
+// are stopped AFTER everything config-resolved, because config order encodes
+// dependencies and these keys carry no order at all — putting them last means
+// the known graph is unwound first, and what remains is unwound in a stable
+// (alphabetical) sequence rather than an arbitrary one.
+//
+// An unreadable pids directory is an ERROR, never an assumed quiet: "I cannot
+// tell what runs here" must not be reported as "nothing runs here" by a command
+// whose whole promise is that nothing does.
+func downUnlisted(cmd *cobra.Command, ws wsp.Workspace, work []wsp.TargetWork) (addressed int, err error) {
+	keys, err := wsp.PidFileKeys(ws)
+	if err != nil {
+		return 0, fmt.Errorf("reading daemon records: %w", err)
+	}
+	covered := map[string]bool{}
+	for _, w := range work {
+		for _, d := range w.Daemons {
+			covered[d.Key()] = true
+		}
+	}
+	out := cmd.OutOrStdout()
+	var errs []error
+	for _, key := range keys {
+		if covered[key] {
+			continue // downWork already handled it; one line per daemon, ever
+		}
+		addressed++
+		if err := stopRecord(out, filepath.Join(wsp.PidsDir(ws), key), key); err != nil {
+			errs = append(errs, fmt.Errorf("unlisted daemon %s: %w", key, err))
+		}
+	}
+	return addressed, errors.Join(errs...)
+}
+
+// stopRecord applies the stop treatment to ONE daemon record — the shared body
+// of every stop in the tool, addressed by pid-file PATH and display KEY rather
+// than by a wsp.Daemon, because the no-target down must also stop keys no
+// config-derived Daemon value exists for (see downUnlisted).
+//
+// It prints the line the user reads (`already stopped` / `stopped <key> (SIG)`)
+// and returns only what went WRONG, unprefixed: the caller knows whether to say
+// `project "x": <key>: …` or `unlisted daemon <key>: …`.
+//
+// The record is read ONCE, and that single read answers the liveness question
+// wsp.DaemonState asks (ReadPidFile + proc.Alive) while also yielding the
+// (pid, starttime) pair the stop itself needs. Asking DaemonState first would
+// read the file a second time and open a window between the two reads — the
+// race the previous shape had to carry an extra branch for. Every unusable
+// record — missing, corrupt, naming a dead or recycled pid — is `already
+// stopped` and is LEFT on disk: nothing here can name a process anyone could
+// stop (the decided Liveness row), and reaping such records is gc's job.
+func stopRecord(out io.Writer, pidPath, key string) error {
+	pid, starttime, err := proc.ReadPidFile(pidPath)
+	if err != nil || !proc.Alive(pid, starttime) {
+		fmt.Fprintf(out, "%s already stopped\n", key)
+		return nil
+	}
+	signal, err := proc.StopGroup(pid, starttime)
+	if err != nil {
+		return err // failed stop: leave the pid record for a retry
+	}
+	// Confirmed not alive (freshly killed, or the "" no-op: it vanished
+	// between the liveness check and the signal) — either way the record is now
+	// stale, and removing it is THIS caller's contractual job. Already-gone is
+	// fine: someone else finishing the removal is still the promised end state
+	// (convergence over a spurious exit 1).
+	if err := os.Remove(pidPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("removing pid file: %w", err)
+	}
+	if signal == "" {
+		fmt.Fprintf(out, "%s already stopped\n", key)
+		return nil
+	}
+	fmt.Fprintf(out, "stopped %s (%s)\n", key, signal)
+	return nil
 }
 
 // downWork stops an already-resolved work list: downProject per entry in
@@ -108,44 +227,9 @@ func downProject(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, w wsp
 	var errs []error
 	for i := len(w.Daemons) - 1; i >= 0; i-- {
 		d := w.Daemons[i]
-		if running, _ := wsp.DaemonState(ws, d); !running {
-			fmt.Fprintf(cmd.OutOrStdout(), "%s already stopped\n", d.Key())
-			continue
-		}
-		pidPath := wsp.PidPath(ws, d)
-		pid, starttime, err := proc.ReadPidFile(pidPath)
-		if err != nil {
-			// DaemonState just read this file successfully, so reaching here
-			// takes a race. The file VANISHING is the daemon converging to
-			// stopped on its own (or a concurrent down) — the state down
-			// promises, so success, not error. Corruption is still reported:
-			// with no (pid, starttime) there is nothing safe to signal.
-			if errors.Is(err, fs.ErrNotExist) {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s already stopped\n", d.Key())
-				continue
-			}
+		if err := stopRecord(cmd.OutOrStdout(), wsp.PidPath(ws, d), d.Key()); err != nil {
 			errs = append(errs, fail(fmt.Errorf("%s: %w", d.Key(), err)))
-			continue
 		}
-		signal, err := proc.StopGroup(pid, starttime)
-		if err != nil {
-			errs = append(errs, fail(fmt.Errorf("%s: %w", d.Key(), err)))
-			continue // failed stop: leave the pid record for a retry
-		}
-		// Confirmed not alive (freshly killed, or the "" no-op: it vanished
-		// between the liveness check and the signal) — either way the record
-		// is now stale, and removing it is THIS caller's contractual job.
-		// Already-gone is fine: someone else finishing the removal is still
-		// the promised end state (convergence over a spurious exit 1).
-		if err := os.Remove(pidPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			errs = append(errs, fail(fmt.Errorf("%s: removing pid file: %w", d.Key(), err)))
-			continue
-		}
-		if signal == "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "%s already stopped\n", d.Key())
-			continue
-		}
-		fmt.Fprintf(cmd.OutOrStdout(), "stopped %s (%s)\n", d.Key(), signal)
 	}
 
 	if w.WholeProject {

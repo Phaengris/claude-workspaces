@@ -110,6 +110,46 @@ exec workspace down T-1 stubborn
 stdout 'stopped stubborn:trap \(KILL\)'
 ! exists $WORK/root/T-1_x/.workspace/pids/stubborn:trap
 
+# --- a LIVE daemon whose key left the config is still stopped -------------------
+# The decided "down unlisted keys" row, with the only fixture that can prove it:
+# a REAL daemon, started while its project was configured, whose project is then
+# dropped from the config. Its pid file keeps the key `up` wrote it under, no
+# config-driven walk can see that key any more — and the process is still alive,
+# holding this workspace's ports. `down <ws>` promises the workspace is stopped
+# afterwards, so the pids DIRECTORY is the inventory, not the config.
+#
+# T-2 is used (not T-1) so the whole-workspace down here cannot rope in the
+# stubborn daemon and pay the 5s KILL budget a second time.
+exec workspace new T-2 y
+
+# restart first, while app is still startable: its down half enumerates the same
+# directory, and its up half can only start what the config DEFINES — nothing
+# can re-launch a daemon whose definition is gone.
+exec workspace up T-2 app
+stdout 'started app:sleeper \(pid \d+\)'
+cp $WORK/root/T-2_y/.workspace/pids/app:sleeper pid-unlisted
+workroot config2.tmpl root/config.yml
+! grep 'src/app' root/config.yml
+exec workspace restart T-2
+stdout 'stopped app:sleeper \(TERM\)'
+! stdout 'started app:sleeper'
+! exists $WORK/root/T-2_y/.workspace/pids/app:sleeper
+! exec sh -c 'kill -0 $(cut -d" " -f1 pid-unlisted)'
+
+# ... and plain `down` does the same, with no checkout hint (records WERE
+# addressed) and no stop: epilogue — those stay config-gated, and the config no
+# longer claims this project at all, so its marker must not appear.
+workroot config.tmpl root/config.yml
+exec workspace up T-2 app
+cp $WORK/root/T-2_y/.workspace/pids/app:sleeper pid-unlisted2
+workroot config2.tmpl root/config.yml
+exec workspace down T-2
+stdout 'stopped app:sleeper \(TERM\)'
+! stdout 'nothing checked out'
+! exists $WORK/root/T-2_y/.workspace/pids/app:sleeper
+! exists $WORK/root/T-2_y/app/stopped-marker
+! exec sh -c 'kill -0 $(cut -d" " -f1 pid-unlisted2)'
+
 -- config.tmpl --
 values:
   PORT: { start: 5000, per_workspace: 10 }
@@ -128,3 +168,11 @@ projects:
 app source
 -- root/src/stubborn/README --
 stubborn source
+-- config2.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  stubborn:
+    repo: WORKROOT/src/stubborn
+    start:
+      - trap: trap '' TERM; touch ready; sleep 30

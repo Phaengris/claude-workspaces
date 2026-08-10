@@ -26,6 +26,16 @@ import (
 // `already running` and leaves it alone — the failure surfaces once, from the
 // down half, and exits 1.
 //
+// THE HALVES ARE NOT SYMMETRIC with no explicit target, and cannot be: the down
+// half is the real no-target down, so it stops every key recorded in the pids
+// DIRECTORY, config-known or not (downAll — the decided "down unlisted keys"
+// row); the up half can only start what the config DEFINES, since a daemon's
+// command lives in `start:` and nothing else records it. So restarting a
+// workspace whose config dropped a daemon STOPS that daemon and does not bring
+// it back — the honest reading of "converge to running": what config no longer
+// defines has no running state to converge to. Restore the config entry (or use
+// `up`) to start it again.
+//
 // No alias: `down` has `stop` as its synonym, but restart is not a synonym of
 // anything.
 func newRestartCmd() *cobra.Command {
@@ -43,17 +53,28 @@ func newRestartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			work, err := wsp.ResolveTargets(cfg, ws, args[1:])
+			targets := args[1:]
+			work, err := wsp.ResolveTargets(cfg, ws, targets)
 			if err != nil {
 				return err // carries its own kind: 3 unknown, 2 malformed, 1 ambiguous
 			}
-			if len(work) == 0 {
+			// Locals in both branches make the sequencing unmistakable: the
+			// down half runs to completion before the up half begins, whatever
+			// it returned.
+			if len(targets) > 0 {
+				// Named targets always resolve to something, and the down half
+				// is the config-resolved one — the grammar is unchanged.
+				downErr := downWork(cmd, cfg, ws, work)
+				upErr := upWork(cmd, cfg, ws, work)
+				return errors.Join(downErr, upErr)
+			}
+			acted, downErr := downAll(cmd, cfg, ws, work)
+			if !acted && downErr == nil {
+				// Nothing checked out AND nothing recorded on disk: there is
+				// neither anything to stop nor anything to start.
 				hintNothingCheckedOut(cmd, ws)
 				return nil
 			}
-			// Locals make the sequencing unmistakable: the down half runs to
-			// completion before the up half begins, whatever it returned.
-			downErr := downWork(cmd, cfg, ws, work)
 			upErr := upWork(cmd, cfg, ws, work)
 			return errors.Join(downErr, upErr)
 		},

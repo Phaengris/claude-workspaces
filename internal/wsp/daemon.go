@@ -1,8 +1,11 @@
 package wsp
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -98,6 +101,37 @@ func StopCommands(cfg *config.Config, project string) []string {
 // ran `up` has no such directory, which is simply "no records".
 func PidsDir(ws Workspace) string {
 	return filepath.Join(ws.Dir, stampDirName, "pids")
+}
+
+// PidFileKeys lists the daemon keys RECORDED in this workspace: the file names
+// directly inside PidsDir, in os.ReadDir's sorted order, which is what keeps
+// every caller's output stable. A missing directory yields no keys and no error
+// (a workspace that never ran `up`); any other read failure IS an error, and
+// deliberately not folded into "empty" — a caller about to stop, destroy or
+// release something must be able to refuse rather than assume quiet.
+// Subdirectories are skipped: nothing writes any, and a directory is not a pid
+// file.
+//
+// This is the inventory PidsDir's comment describes, and the reason it is here
+// rather than beside any one command: `down`/`restart` (the no-target stop),
+// `gc` (reap + the destroy gate), `release` and `doctor` all need the SAME
+// answer, and every one of them is wrong if it asks the config instead.
+func PidFileKeys(ws Workspace) ([]string, error) {
+	entries, err := os.ReadDir(PidsDir(ws))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		keys = append(keys, e.Name())
+	}
+	return keys, nil
 }
 
 // PidPath is where the daemon's `<pid> <starttime>` record lives:

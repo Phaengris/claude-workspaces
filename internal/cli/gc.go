@@ -147,7 +147,7 @@ func newGCCmd() *cobra.Command {
 			// Pass 2 — reap stale pid files: every record IN THE PIDS
 			// DIRECTORY, whatever key it carries (see the doc comment).
 			for _, ws := range survivors {
-				keys, err := pidFileKeys(ws)
+				keys, err := wsp.PidFileKeys(ws)
 				if err != nil {
 					errs = append(errs, fmt.Errorf("workspace %s: %w", ws.Name(), err))
 					continue
@@ -216,18 +216,28 @@ func newGCCmd() *cobra.Command {
 				return nil
 			}
 			fmt.Fprintf(out, "gc: %d released, %d reaped, %d destroyed\n", released, reaped, destroyed)
-			if joined := errors.Join(errs...); joined != nil {
-				// %v, not %w: deliberately sever the unwrap chain so no
-				// kinded inner error can dictate the batch's exit code —
-				// a batch failure is a plain error, exit 1 (doc comment).
-				return fmt.Errorf("%v", joined)
-			}
-			return nil
+			return flattenBatch(errors.Join(errs...))
 		},
 	}
 	cmd.Flags().BoolVarP(&destroyDirs, "destroy-dirs", "d", false,
 		"also destroy tool-created workspaces that are fully merged, have no uncommitted changes, and run no daemon")
 	return cmd
+}
+
+// flattenBatch turns a batch's joined per-workspace errors into a PLAIN error
+// — same text, no unwrap chain — and keeps nil as nil.
+//
+// %v, not %w, deliberately: a kinded error raised inside one workspace's work
+// (an xerr.ErrNotFound from some inner resolution, say) would otherwise make
+// errors.Is match on the whole batch and hand the command that kind's exit code.
+// Per-workspace codes are meaningless once several workspaces' failures are one
+// error, so a batch failure is exit 1 and nothing else — gc's documented failure
+// policy, pinned by TestFlattenBatchSeversKinds.
+func flattenBatch(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%v", err)
 }
 
 // allMerged reports whether EVERY checked-out project's branch <task_id> is
@@ -274,7 +284,7 @@ func allMerged(cfg *config.Config, ws wsp.Workspace, states []wsp.ProjectState) 
 // which is exactly what DaemonState's Liveness row already says, and pass 2
 // treats such a record as the garbage it is.
 func anyDaemonRunning(ws wsp.Workspace) (bool, error) {
-	keys, err := pidFileKeys(ws)
+	keys, err := wsp.PidFileKeys(ws)
 	if err != nil {
 		return false, err
 	}
@@ -285,29 +295,6 @@ func anyDaemonRunning(ws wsp.Workspace) (bool, error) {
 		}
 	}
 	return false, nil
-}
-
-// pidFileKeys lists the daemon keys recorded in this workspace: the file names
-// directly inside wsp.PidsDir, sorted (os.ReadDir's own order), which is what
-// keeps gc's reap output stable. A missing directory yields no keys and no
-// error. Subdirectories are skipped — nothing writes any, and a directory is
-// not a pid file.
-func pidFileKeys(ws wsp.Workspace) ([]string, error) {
-	entries, err := os.ReadDir(wsp.PidsDir(ws))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	keys := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		keys = append(keys, e.Name())
-	}
-	return keys, nil
 }
 
 // anyDirty reports whether any of the checked-out worktrees holds

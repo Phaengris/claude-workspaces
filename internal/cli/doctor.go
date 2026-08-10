@@ -231,7 +231,7 @@ func doctorObserve(root string, cfg *config.Config, reg alloc.Registry) []doctor
 	// whose dir is actually there.
 	configured := configuredDaemonKeys(cfg)
 	for _, ws := range live {
-		keys, err := pidFileKeys(ws)
+		keys, err := wsp.PidFileKeys(ws)
 		if err != nil {
 			// "Cannot tell" is a finding, never folded into "nothing runs here":
 			// an unreadable pids dir hides exactly the records this section exists

@@ -237,9 +237,35 @@ func buildClaudeArgv(rest []string, skipPerms, noResume, hasHistory bool) []stri
 // Any failure to look (no HOME, no dir, unreadable) is "no history" — the
 // probe only ever decides whether --continue is worth injecting, and a fresh
 // session is the safe degradation.
+//
+// TWO paths are probed, in this order: the dir AS WRITTEN (what the registry
+// records and what every other command uses), then its EvalSymlinks-resolved
+// form when that differs. Claude Code encodes the path it actually ran in, and
+// which of the two that is depends on how the session was started — a
+// workspaces root reached through a symlink (a linked or relocated
+// claude-workspaces dir) yields history under the resolved spelling while
+// ws.Dir keeps the as-written one, and a session started from the real path
+// yields the opposite. Probing one spelling only would silently drop
+// --continue for the other, so both are asked and either answer counts.
+// As-written comes FIRST: it is the identity the tool itself uses, so it is the
+// likelier hit and the one whose success costs no extra syscalls. A resolution
+// failure (dangling link, permissions) simply leaves the second probe unasked —
+// the same safe degradation as everything else here.
 func hasConversation(home, wsDir string) bool {
-	dir := filepath.Join(home, ".claude", "projects", encodeClaudeProjectDir(wsDir))
-	entries, err := os.ReadDir(dir)
+	if conversationRecorded(home, wsDir) {
+		return true
+	}
+	resolved, err := filepath.EvalSymlinks(wsDir)
+	if err != nil || resolved == wsDir {
+		return false // nothing new to probe (deduped when identical)
+	}
+	return conversationRecorded(home, resolved)
+}
+
+// conversationRecorded is one probe: does ~/.claude/projects/<encoded dir>/
+// hold at least one *.jsonl entry?
+func conversationRecorded(home, dir string) bool {
+	entries, err := os.ReadDir(filepath.Join(home, ".claude", "projects", encodeClaudeProjectDir(dir)))
 	if err != nil {
 		return false
 	}

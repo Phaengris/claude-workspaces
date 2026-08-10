@@ -205,6 +205,66 @@ func TestHasConversation(t *testing.T) {
 			t.Error("a .jsonl file must count as a conversation")
 		}
 	})
+	// --- the symlink fallback (M5 debt row) ---------------------------------
+	// Claude Code records history under the encoding of the path IT was told to
+	// run in, and that is whatever cwd it resolved — so a workspace root reached
+	// through a symlink (a moved/linked claude-workspaces dir, the common case
+	// on this developer's machines) records under the RESOLVED path while the
+	// registry, and hence ws.Dir, keeps the as-written one. Probing only one of
+	// the two silently loses --continue; the probe tries both.
+	symlinkFixture := func(t *testing.T) (home, asWritten, resolved string) {
+		t.Helper()
+		home = t.TempDir()
+		base := t.TempDir()
+		real := filepath.Join(base, "real", "T-1_x")
+		if err := os.MkdirAll(real, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Join(base, "real"), filepath.Join(base, "link")); err != nil {
+			t.Fatal(err)
+		}
+		asWritten = filepath.Join(base, "link", "T-1_x")
+		resolved, err := filepath.EvalSymlinks(asWritten)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resolved == asWritten {
+			t.Fatalf("fixture is not exercising the fallback: %q resolves to itself", asWritten)
+		}
+		return home, asWritten, resolved
+	}
+	writeConv := func(t *testing.T, home, dir string) {
+		t.Helper()
+		enc := filepath.Join(home, ".claude", "projects", encodeClaudeProjectDir(dir))
+		if err := os.MkdirAll(enc, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(enc, "abc.jsonl"), []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("history under the symlink-RESOLVED path counts", func(t *testing.T) {
+		home, asWritten, resolved := symlinkFixture(t)
+		writeConv(t, home, resolved)
+		if !hasConversation(home, asWritten) {
+			t.Error("history recorded under the resolved path must be found for the as-written dir")
+		}
+	})
+	t.Run("history under the AS-WRITTEN path still counts", func(t *testing.T) {
+		home, asWritten, _ := symlinkFixture(t)
+		writeConv(t, home, asWritten)
+		if !hasConversation(home, asWritten) {
+			t.Error("the as-written encoding must remain the first thing probed")
+		}
+	})
+	t.Run("neither encoding: still no history", func(t *testing.T) {
+		home, asWritten, _ := symlinkFixture(t)
+		if hasConversation(home, asWritten) {
+			t.Error("a symlinked dir with no history anywhere must have no conversation")
+		}
+	})
+
 	t.Run("a DIFFERENT workspace's history does not count", func(t *testing.T) {
 		home := t.TempDir()
 		other := filepath.Join(home, ".claude", "projects", "-root-T-2-other")

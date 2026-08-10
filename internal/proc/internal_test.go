@@ -23,26 +23,39 @@ func statLine(comm, state string, filler int, starttime string) string {
 // read failure, because Alive compares it and would call a recycled pid live.
 // Callers degrade to pid-only liveness on error (documented), so the error
 // itself is the contract.
+//
+// Each case also pins WHAT the message says about the shape, because the
+// diagnosis is the only thing a reader of a log has: a line with too few
+// fields must be reported as a COUNT, while a state field wider than one byte
+// must be reported as a field WIDTH — the field count of such a line is
+// perfectly fine, and saying "20 fields after ')'" about it would send the
+// reader looking for the wrong defect (M5 debt row).
 func TestParseStatMalformed(t *testing.T) {
-	cases := map[string]string{
-		"empty":                 "",
-		"no close paren":        "1234 sleep S 0 0 0",
-		"comm never closed":     "1234 (sleep S 0 0 0",
-		"nothing after paren":   "1234 (sleep)",
-		"too few fields":        statLine("sleep", "S", 17, "999"), // 19 after ')'
-		"one field short":       statLine("sleep", "S", 18, ""),    // trailing space: 19 tokens
-		"multi-byte state":      statLine("sleep", "SS", 18, "999"),
-		"non-numeric starttime": statLine("sleep", "S", 18, "12x"),
-		"negative starttime":    statLine("sleep", "S", 18, "-1"),
+	cases := map[string]struct {
+		stat string
+		want string // substring the diagnosis must carry
+	}{
+		"empty":                 {"", "no ')'"},
+		"no close paren":        {"1234 sleep S 0 0 0", "no ')'"},
+		"comm never closed":     {"1234 (sleep S 0 0 0", "no ')'"},
+		"nothing after paren":   {"1234 (sleep)", "0 fields"},
+		"too few fields":        {statLine("sleep", "S", 17, "999"), "19 fields"}, // 19 after ')'
+		"one field short":       {statLine("sleep", "S", 18, ""), "19 fields"},    // trailing space: 19 tokens
+		"multi-byte state":      {statLine("sleep", "SS", 18, "999"), `state field "SS" is not a single byte`},
+		"non-numeric starttime": {statLine("sleep", "S", 18, "12x"), "starttime"},
+		"negative starttime":    {statLine("sleep", "S", 18, "-1"), "starttime"},
 	}
-	for name, stat := range cases {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			state, starttime, err := parseStat(stat)
+			state, starttime, err := parseStat(tc.stat)
 			if err == nil {
-				t.Fatalf("parseStat(%q) = (%q, %d, nil), want an error", stat, state, starttime)
+				t.Fatalf("parseStat(%q) = (%q, %d, nil), want an error", tc.stat, state, starttime)
 			}
 			if !strings.Contains(err.Error(), "malformed stat") {
 				t.Errorf("error %q does not identify the malformed stat line", err)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q does not diagnose the shape; want it to mention %q", err, tc.want)
 			}
 			if state != 0 || starttime != 0 {
 				t.Errorf("parseStat returned (%q, %d) alongside its error; a rejected line must yield nothing usable", state, starttime)
