@@ -124,12 +124,24 @@ exec workspace release $WORK/foreign
 stdout '^released foreign \(#0 freed\)$'
 exists $WORK/foreign/app/.env
 ! grep '/foreign"' $WORK/root/.allocations.json
+
+# Re-releasing an explicit dir is still success (exit 0, idempotent), but the
+# line NAMES the directory: an explicit path is matched exactly, so a bare
+# "already released" would read as a claim about the workspace the user meant
+# when they may simply have pointed at a subdirectory of it.
 exec workspace release $WORK/foreign
-stdout '^already released$'
+stdout '^no allocation for '$WORK'/foreign$'
+
+# A subdirectory of a still-allocated workspace: an explicit path never climbs
+# to its parent, so nothing is released — and the line says which directory had
+# no allocation rather than implying the workspace itself is untracked.
+exec workspace release $WORK/root/T-1_x/.workspace
+stdout '^no allocation for '$WORK'/root/T-1_x/.workspace$'
+grep 'T-1' $WORK/root/.allocations.json
 
 # A dir that was never allocated at all — same idempotent answer, no disk touch.
 exec workspace release $WORK/never-existed
-stdout '^already released$'
+stdout '^no allocation for '$WORK'/never-existed$'
 ! exists $WORK/never-existed
 
 # Index 0 is free again, so re-adopting takes it back (gap-filling NextIndex).

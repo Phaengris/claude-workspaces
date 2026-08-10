@@ -124,6 +124,18 @@ stderr 'description'
 ! grep 'T-9' $WORK/root/.allocations.json
 ! exists $WORK/no-claude-usage.log
 
+# --- create: a description that NAMES a project is called out too --------------
+# The same mistake on the create path (`launch <id> <project>` with the
+# description forgotten) is just as invisible: T-9 would be created described as
+# "api", with api NOT checked out. The grammar still does not bend — the word IS
+# the description — but the note makes the reading explicit.
+env CLAUDE_SHIM_LOG=$WORK/claude-create-note.log
+exec workspace launch T-9 api
+stdout 'workspace T-9_api created'
+stdout 'note: "api" is in the description slot'
+stdout 'or use checkout'
+! exists $WORK/root/T-9_api/api
+
 # --- create-phase failure: rolled back, no session ----------------------------
 # bad's setup is `false`, so `new`'s transaction undoes itself: no dir, no
 # allocation — and claude is NOT launched onto a broken environment.

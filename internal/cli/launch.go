@@ -3,9 +3,11 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
+	"git.internal/cat/claude-workspaces-go/internal/config"
 	"git.internal/cat/claude-workspaces-go/internal/wsp"
 	"git.internal/cat/claude-workspaces-go/internal/xerr"
 )
@@ -42,7 +44,9 @@ import (
 // notice: it names the workspace that actually got used, which is the only fact
 // a mismatched description could have confused. The grammar does not change
 // between the paths either: positional 2 is ALWAYS the description slot, so
-// extra projects follow it in both.
+// extra projects follow it in both — and because that is exactly the slot a
+// forgotten description makes a project name land in, BOTH paths print
+// noteProjectInDescriptionSlot's line when it does.
 //
 // DisableFlagParsing, as `claude` (spec §8) — the same three costs handled the
 // same way (hand-written arg checks, -h answered here, a leading flag-looking
@@ -88,21 +92,7 @@ func newLaunchCmd() *cobra.Command {
 			switch {
 			case err == nil:
 				fmt.Fprintf(out, "using existing workspace %s\n", ws.Name())
-				// The one description the silent-ignore rule must NOT stay
-				// silent about: a supplied description that exactly names a
-				// configured project is almost certainly `launch <id>
-				// <project>` typed with the description slot forgotten — and
-				// the user would otherwise get a session with that project
-				// still not checked out and nothing on screen saying so. The
-				// grammar does not bend (positional 2 is the description); the
-				// note just makes the drop visible.
-				if len(positional) > 1 {
-					if _, isProject := cfg.Projects[positional[1]]; isProject {
-						fmt.Fprintf(out, "note: %q is in the description slot and was ignored"+
-							" — projects go after a description (launch <id> <desc> <project…>)"+
-							" or use checkout\n", positional[1])
-					}
-				}
+				noteProjectInDescriptionSlot(out, cfg, positional, "was ignored")
 				if len(positional) > 2 {
 					if err := checkoutWork(cfg, ws, positional[2:]); err != nil {
 						return err
@@ -117,6 +107,11 @@ func newLaunchCmd() *cobra.Command {
 				if ws, err = newWork(cmd, cfg, root, taskID, positional[1], positional[2:]); err != nil {
 					return err
 				}
+				// Same mistake, same note, different consequence: here the
+				// project name BECAME the description (nothing was dropped),
+				// and the project is still not checked out. Emitted after
+				// newWork so a rolled-back creation says nothing.
+				noteProjectInDescriptionSlot(out, cfg, positional, "became this workspace's description")
 			default:
 				return err // an ambiguous task id: plain error, exit 1
 			}
@@ -139,6 +134,30 @@ func newLaunchCmd() *cobra.Command {
 			return runClaudeSession(cfg, ws, skipPerms, noResume, claudeArgs)
 		},
 	}
+}
+
+// noteProjectInDescriptionSlot prints the one description-slot mistake launch
+// must not handle silently: positional 2 exactly names a CONFIGURED project, so
+// the command was almost certainly `launch <id> <project>` typed with the
+// description forgotten. Either way the project is NOT checked out, and without
+// this line the user gets a Claude session in a workspace missing the very thing
+// they named, with nothing on screen saying why.
+//
+// It fires on BOTH paths — the grammar does not bend on either (positional 2 is
+// always the description slot), only the consequence differs, which is what
+// `fate` spells out: on reuse the word was ignored, on create it became the
+// workspace's description. Nothing is printed when there is no second positional
+// or when it names no configured project; an ordinary description is ordinary.
+func noteProjectInDescriptionSlot(out io.Writer, cfg *config.Config, positional []string, fate string) {
+	if len(positional) < 2 {
+		return
+	}
+	if _, isProject := cfg.Projects[positional[1]]; !isProject {
+		return
+	}
+	fmt.Fprintf(out, "note: %q is in the description slot and %s"+
+		" — projects go after a description (launch <id> <desc> <project…>)"+
+		" or use checkout\n", positional[1], fate)
 }
 
 // splitPassthrough splits args at the FIRST literal `--`: pre is launch's own

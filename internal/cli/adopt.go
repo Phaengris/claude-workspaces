@@ -67,6 +67,9 @@ func newAdoptCmd() *cobra.Command {
 		Short: "Adopt an existing directory as a workspace (allocate in place, never create)",
 		// At most one positional; more is a usage error → exit 2 (spec §9).
 		Args: usageArgs(cobra.MaximumNArgs(1)),
+		// --json is inherited and deliberately unused: spec §2 scopes it to the
+		// query commands. Accepting and ignoring it keeps `workspace --json
+		// adopt` working for a caller that sets the flag globally.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, cfg, reg, err := loadRootDir()
 			if err != nil {
