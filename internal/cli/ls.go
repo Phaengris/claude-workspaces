@@ -176,17 +176,26 @@ func lsRow(e lsEntry) []string {
 // ErrConfig kind (exit 4); a registry that cannot be read is a plain error
 // (exit 1) prefixed so the message names its source.
 func loadRoot() (*config.Config, alloc.Registry, error) {
+	_, cfg, reg, err := loadRootDir()
+	return cfg, reg, err
+}
+
+// loadRootDir is loadRoot for the callers that also need the ROOT itself —
+// `launch`, whose create path hands it to newWork (allocation writes there).
+// Same preamble, same error kinds; loadRoot is the two-thirds view of it, so
+// there is only ever one load order.
+func loadRootDir() (string, *config.Config, alloc.Registry, error) {
 	root, err := config.RootDir()
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 	cfg, err := config.Load(root)
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 	reg, err := alloc.Load(root)
 	if err != nil {
-		return nil, nil, fmt.Errorf("registry: %w", err)
+		return "", nil, nil, fmt.Errorf("registry: %w", err)
 	}
-	return cfg, reg, nil
+	return root, cfg, reg, nil
 }

@@ -308,6 +308,26 @@ func TestClaudeMissingBinary(t *testing.T) {
 	}
 }
 
+// TestClaudeSessionSurvivesSIGINT pins the signal wrap (Task 1 review ruling):
+// while the child owns the terminal, the shell delivers Ctrl-C to the whole
+// foreground group — parent included — and a parent that dies mid-session
+// leaves the tty to a still-running claude. The shim aims SIGINT at ITS parent
+// (this test binary, which is the `workspace` process here) and then keeps
+// running; a session that returns cleanly proves the parent absorbed it.
+//
+// HAZARD, deliberate: if the wrap regresses, the signal takes its default
+// action and kills the TEST BINARY — a loud, unmistakable failure rather than a
+// silent one. That is why the pin is here and not in a txtar script.
+func TestClaudeSessionSurvivesSIGINT(t *testing.T) {
+	// Builtins only: claudeFixture's PATH holds the shim and nothing else, so
+	// the post-signal dwell (long enough for delivery, short enough not to
+	// matter) is a shell loop rather than `sleep`.
+	claudeFixture(t, "#!/bin/sh\nkill -INT $PPID\ni=0\nwhile [ $i -lt 200000 ]; do i=$((i+1)); done\nexit 0\n")
+	if err := runCLI(t, "claude", "T-1"); err != nil {
+		t.Fatalf("session must survive a Ctrl-C aimed at the parent: %v", err)
+	}
+}
+
 // TestClaudeUsageAndResolve pins the DisableFlagParsing edges: with cobra's
 // parser off, no Args validator runs and no flag error can fire, so OUR arg
 // check must classify a missing workspace as usage (exit 2), and an unknown

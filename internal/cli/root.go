@@ -64,6 +64,7 @@ func Root() *cobra.Command {
 	root.AddCommand(newDestroyCmd())
 	root.AddCommand(newDoctorCmd())
 	root.AddCommand(newClaudeCmd())
+	root.AddCommand(newLaunchCmd())
 	return root
 }
 
