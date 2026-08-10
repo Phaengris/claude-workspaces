@@ -4,9 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
-	"slices"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -28,17 +27,19 @@ import (
 //     workspace's index. A workspace released here takes no further part in
 //     the passes below.
 //
-//  2. reap — for every surviving workspace, every configured daemon of EVERY
-//     configured project, checked out or not: a pid file that exists but does
-//     not name a live process is removed, one `reaped stale pid file
-//     <ws>/<project:daemon>` line each. All configured projects, because a
-//     pid file lives under <ws>/.workspace/pids and can outlive its
-//     project's worktree — a dead pid is stale garbage regardless of whether
-//     the checkout still exists (and pass 3's daemon gate already scans the
-//     same full set). "Not live" includes a CORRUPT pid file — DaemonState
-//     already treats corrupt as not running (the decided Liveness row), and
-//     a record nothing can act on is exactly the garbage this pass exists to
-//     collect. A LIVE daemon's record is untouchable.
+//  2. reap — for every surviving workspace, every pid file in its
+//     <ws>/.workspace/pids DIRECTORY: one that does not name a live process is
+//     removed, one `reaped stale pid file <ws>/<project:daemon>` line each. The
+//     directory, not the config's daemon list: a pid file is named after the key
+//     `up` wrote it under, so a daemon renamed, dropped from `start:`, or whose
+//     project left the config leaves a record no config-driven walk can even
+//     see — and that record is precisely the garbage most in need of collecting
+//     (pass 3's daemon gate reads the same directory, for the mirror-image
+//     reason). "Not live" includes a CORRUPT or unreadable pid file — a record
+//     nothing can act on cannot name a daemon anyone could stop, which is the
+//     decided Liveness row exactly. A LIVE daemon's record is untouchable. An
+//     unreadable pids DIRECTORY is a per-workspace error (below), not a licence
+//     to assume it is empty.
 //
 //  3. destroy (only with --destroy-dirs) — a surviving workspace is destroyed
 //     via destroyWork (the full down + teardown + remove + release flow the
@@ -55,11 +56,14 @@ import (
 //     already removed reads as empty here and is skipped — finish it with
 //     `workspace destroy` (or destroy --force), the "I mean it" path for
 //     anything without evidence;
-//     - no daemon of ANY configured project is running in it. All configured
-//     projects, not just checked-out ones: a pid file can outlive its
-//     project's worktree, and if it still names a live process that
-//     process holds this index's ports — destroying around it would strand
-//     it invisibly, the exact failure destroy's phase-0 exists to prevent;
+//     - NOTHING recorded in its pids directory is still running
+//     (anyDaemonRunning). Every record found on disk, not the configured
+//     daemons: a pid file outlives its project's worktree and its own
+//     config entry, and while it still names a live process that process
+//     holds this index's ports — destroying around it would strand it
+//     invisibly, the exact failure destroy's phase-0 exists to prevent. An
+//     unanswerable gate (unreadable pids dir) is an error and a skip, never
+//     an assumed quiet;
 //     - every checked-out project's branch <task_id> is fully merged into
 //     that project's base_branch — gitx.IsMerged, where an empty
 //     base_branch falls back to the source repo's own HEAD branch
@@ -106,6 +110,9 @@ func newGCCmd() *cobra.Command {
 		Short: "Collect garbage: vanished allocations, stale pid files, merged workspaces",
 		// No positionals: gc always works on the whole registry (spec §2).
 		Args: usageArgs(cobra.NoArgs),
+		// --json is inherited and deliberately unused: spec §2 scopes it to the
+		// query commands. Accepting and ignoring it keeps `workspace --json gc`
+		// working for a caller that sets the flag globally.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, cfg, reg, err := loadRootDir()
 			if err != nil {
@@ -137,28 +144,30 @@ func newGCCmd() *cobra.Command {
 				}
 			}
 
-			// Pass 2 — reap stale pid files, every configured project's
-			// daemons (a dead pid is stale whether or not the checkout
-			// still exists; see the doc comment).
+			// Pass 2 — reap stale pid files: every record IN THE PIDS
+			// DIRECTORY, whatever key it carries (see the doc comment).
 			for _, ws := range survivors {
-				for _, name := range slices.Sorted(maps.Keys(cfg.Projects)) {
-					for _, d := range wsp.DaemonsOf(cfg, name) {
-						pidPath := wsp.PidPath(ws, d)
-						pid, starttime, err := proc.ReadPidFile(pidPath)
-						if errors.Is(err, fs.ErrNotExist) {
-							continue // no record, nothing to reap
-						}
-						if err == nil && proc.Alive(pid, starttime) {
-							continue // live daemon: untouchable
-						}
-						// Dead or corrupt — both are stale records.
-						if rmErr := os.Remove(pidPath); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
-							errs = append(errs, fmt.Errorf("workspace %s: %w", ws.Name(), rmErr))
-							continue
-						}
-						reaped++
-						fmt.Fprintf(out, "reaped stale pid file %s/%s\n", ws.Name(), d.Key())
+				keys, err := pidFileKeys(ws)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("workspace %s: %w", ws.Name(), err))
+					continue
+				}
+				for _, key := range keys {
+					pidPath := filepath.Join(wsp.PidsDir(ws), key)
+					pid, starttime, err := proc.ReadPidFile(pidPath)
+					if errors.Is(err, fs.ErrNotExist) {
+						continue // vanished under us, nothing to reap
 					}
+					if err == nil && proc.Alive(pid, starttime) {
+						continue // live daemon: untouchable
+					}
+					// Dead or corrupt — both are stale records.
+					if rmErr := os.Remove(pidPath); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+						errs = append(errs, fmt.Errorf("workspace %s: %w", ws.Name(), rmErr))
+						continue
+					}
+					reaped++
+					fmt.Fprintf(out, "reaped stale pid file %s/%s\n", ws.Name(), key)
 				}
 			}
 
@@ -174,7 +183,14 @@ func newGCCmd() *cobra.Command {
 					if len(states) == 0 {
 						continue // empty workspace: no merge evidence, survives
 					}
-					if anyDaemonRunning(cfg, ws) {
+					running, err := anyDaemonRunning(ws)
+					if err != nil {
+						// The gate could not be answered: report and skip.
+						// An unreadable pids dir is not evidence of quiet.
+						errs = append(errs, fmt.Errorf("workspace %s: %w", ws.Name(), err))
+						continue
+					}
+					if running {
 						continue
 					}
 					if !allMerged(cfg, ws, states) {
@@ -238,20 +254,60 @@ func allMerged(cfg *config.Config, ws wsp.Workspace, states []wsp.ProjectState) 
 	return true
 }
 
-// anyDaemonRunning reports whether any configured project's daemon is alive
-// in this workspace. ALL configured projects, not just checked-out ones: pid
-// files live under <ws>/.workspace/pids and can outlive their project's
-// worktree, and a live process found through one still holds this index's
-// ports — gc must not destroy the workspace out from under it.
-func anyDaemonRunning(cfg *config.Config, ws wsp.Workspace) bool {
-	for _, name := range slices.Sorted(maps.Keys(cfg.Projects)) {
-		for _, d := range wsp.DaemonsOf(cfg, name) {
-			if running, _ := wsp.DaemonState(ws, d); running {
-				return true
-			}
+// anyDaemonRunning reports whether ANY daemon record in this workspace still
+// names a live process — the shared "something is running here" gate, used by
+// gc's destroy pass and by `release`.
+//
+// It enumerates wsp.PidsDir, NOT the config. The config only knows the daemons
+// configured RIGHT NOW, and a pid file is named after the key `up` wrote it
+// under: rename a daemon, drop it from `start:`, or remove its project, and its
+// record becomes invisible to any config-driven walk while the process it names
+// keeps holding this workspace's ports. Both callers are about to do something
+// irreversible around that process (delete the directory, free the index), so
+// the inventory has to be the one place that cannot lie: the directory itself.
+//
+// A missing pids directory is "nothing runs here" (a workspace that never ran
+// `up`), not an error. Any OTHER failure to read the directory IS an error, and
+// deliberately not folded into either answer: "cannot tell" must reach the
+// caller so it can refuse rather than guess quiet. Per-file failures are not
+// errors, though — an unreadable or corrupt record cannot name a live process,
+// which is exactly what DaemonState's Liveness row already says, and pass 2
+// treats such a record as the garbage it is.
+func anyDaemonRunning(ws wsp.Workspace) (bool, error) {
+	keys, err := pidFileKeys(ws)
+	if err != nil {
+		return false, err
+	}
+	for _, key := range keys {
+		pid, starttime, err := proc.ReadPidFile(filepath.Join(wsp.PidsDir(ws), key))
+		if err == nil && proc.Alive(pid, starttime) {
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
+}
+
+// pidFileKeys lists the daemon keys recorded in this workspace: the file names
+// directly inside wsp.PidsDir, sorted (os.ReadDir's own order), which is what
+// keeps gc's reap output stable. A missing directory yields no keys and no
+// error. Subdirectories are skipped — nothing writes any, and a directory is
+// not a pid file.
+func pidFileKeys(ws wsp.Workspace) ([]string, error) {
+	entries, err := os.ReadDir(wsp.PidsDir(ws))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		keys = append(keys, e.Name())
+	}
+	return keys, nil
 }
 
 // anyDirty reports whether any of the checked-out worktrees holds

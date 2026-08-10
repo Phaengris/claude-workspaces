@@ -1,7 +1,13 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
+
+	"git.internal/cat/claude-workspaces-go/internal/proc"
+	"git.internal/cat/claude-workspaces-go/internal/wsp"
 )
 
 // TestGCExitCodes pins the codes gc.txtar can only assert as "non-zero" or
@@ -31,5 +37,56 @@ func TestGCExitCodes(t *testing.T) {
 				t.Errorf("%v exit code = %d, want %d (spec §9)", tc.args, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestAnyDaemonRunningEnumeratesPidsDir pins the shared daemon gate's source of
+// truth: the pids DIRECTORY, not the config. A daemon renamed or removed from
+// config while running leaves a pid file under a key nothing configured can
+// name, and the process it names still holds the workspace's ports — so
+// `gc -d` must not destroy around it and `release` must not free its index.
+// Reading the config could never see that file; reading the directory always
+// does.
+//
+// The live case uses THIS test process (its real starttime, the pid-only
+// degradation where /proc is unavailable) rather than spawning anything, so the
+// liveness answer is deterministic and nothing outlives the test.
+func TestAnyDaemonRunningEnumeratesPidsDir(t *testing.T) {
+	ws := wsp.Workspace{Dir: t.TempDir()}
+	pids := wsp.PidsDir(ws)
+
+	// No pids directory at all: nothing runs here, and that is not an error —
+	// a workspace that never ran `up` has no such directory.
+	if running, err := anyDaemonRunning(ws); running || err != nil {
+		t.Errorf("no pids dir = (%v, %v), want (false, nil)", running, err)
+	}
+
+	if err := os.MkdirAll(pids, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(key, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(pids, key), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A dead record and a corrupt one, both under keys no config knows: neither
+	// is a running daemon (corrupt reads as dead, the decided Liveness row).
+	write("gone:ghost", "1 99999999999\n")
+	write("gone:corrupt", "garbage\n")
+	if running, err := anyDaemonRunning(ws); running || err != nil {
+		t.Errorf("dead + corrupt records = (%v, %v), want (false, nil)", running, err)
+	}
+
+	// A LIVE process under an unconfigured key blocks both callers.
+	self := os.Getpid()
+	st, err := proc.Starttime(self)
+	if err != nil {
+		st = 0 // no /proc: the documented pid-only degradation
+	}
+	write("gone:live", strconv.Itoa(self)+" "+strconv.FormatUint(st, 10)+"\n")
+	if running, err := anyDaemonRunning(ws); !running || err != nil {
+		t.Errorf("live record under an unconfigured key = (%v, %v), want (true, nil)", running, err)
 	}
 }

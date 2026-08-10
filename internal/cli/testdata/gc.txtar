@@ -153,6 +153,47 @@ grep T-7 $WORK/root/.allocations.json
 stdout '^skipped T-6_dirty \(uncommitted changes\)$'
 exists $WORK/root/T-6_dirty/app/scratch
 
+# --- pid files under keys the CONFIG no longer knows ---------------------------
+# A daemon renamed (or its project dropped) while running leaves a pid file
+# whose key nothing configured can name. Both the reap pass and the daemon gate
+# enumerate the pids DIRECTORY, so such a record is never invisible: dead ones
+# are collected, and a live one still holds this index's ports.
+exec workspace new T-8 unlisted app
+exec workspace up T-8 app:sleeper
+stdout 'started app:sleeper \(pid \d+\)'
+cp stale-pid $WORK/root/T-8_unlisted/.workspace/pids/vanished:ghost
+
+# The config loses app's daemon names AND project boom (so T-7_fail reads as an
+# empty workspace and cannot fail this run's teardown): app:sleeper is now a
+# live process under an unconfigured key.
+workroot config-renamed.tmpl root/config.yml
+
+# Pass 2 reaps the DEAD unlisted record and leaves the LIVE one alone.
+exec workspace gc
+stdout '^reaped stale pid file T-8_unlisted/vanished:ghost$'
+! exists $WORK/root/T-8_unlisted/.workspace/pids/vanished:ghost
+exists $WORK/root/T-8_unlisted/.workspace/pids/app:sleeper
+
+# Pass 3 must not destroy T-8: its branch is trivially merged and its worktree
+# clean, so the live unlisted daemon is the ONLY thing saving it.
+exec workspace gc -d
+! stdout 'destroyed T-8_unlisted'
+exists $WORK/root/T-8_unlisted/app/.git
+grep T-8 $WORK/root/.allocations.json
+
+# release refuses too, for the same reason: freeing the index while a process
+# holds its ports would make the daemon unaddressable and the index reusable.
+! exec workspace release $WORK/root/T-8_unlisted
+stderr 'workspace down T-8_unlisted'
+grep T-8 $WORK/root/.allocations.json
+
+# Cleanup: restore the config so `down` can name the daemon again.
+workroot config.tmpl root/config.yml
+exec workspace down T-8
+stdout 'stopped app:sleeper \(TERM\)'
+exec workspace release $WORK/root/T-8_unlisted
+stdout '^released T-8_unlisted \(#\d+ freed\)$'
+
 # --- usage: gc takes no positionals (exit 2, pinned in TestGCExitCodes) --------
 ! exec workspace gc extra
 stderr 'unknown command|accepts'
@@ -166,6 +207,14 @@ projects:
     start:
       - sleeper: sleep 30
       - ghost: sleep 30
+-- config-renamed.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    start:
+      - renamed: sleep 30
 -- config-fail.tmpl --
 values:
   PORT: { start: 5000, per_workspace: 10 }

@@ -3,8 +3,12 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"git.internal/cat/claude-workspaces-go/internal/proc"
+	"git.internal/cat/claude-workspaces-go/internal/wsp"
 )
 
 // mkdirIn creates <parent>/<name> and returns it, for the adopt cases whose
@@ -174,6 +178,14 @@ func TestReleaseExitCodes(t *testing.T) {
 			},
 			want: 0,
 		},
+		"a daemon is still running": {
+			args: func(t *testing.T, root string) []string {
+				dir := filepath.Join(root, "A-1_x")
+				writeLivePidFile(t, dir, "gone:live")
+				return []string{"release", dir}
+			},
+			want: 1,
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -183,6 +195,58 @@ func TestReleaseExitCodes(t *testing.T) {
 				t.Errorf("%v exit code = %d, want %d (spec §9)", args, got, tc.want)
 			}
 		})
+	}
+}
+
+// writeLivePidFile records THIS test process (with its real starttime, or the
+// documented pid-only degradation where /proc is unavailable) as the daemon
+// `key` of the workspace at dir — a deterministically LIVE daemon record with
+// nothing spawned and nothing to clean up.
+func writeLivePidFile(t *testing.T, dir, key string) string {
+	t.Helper()
+	pids := wsp.PidsDir(wsp.Workspace{Dir: dir})
+	if err := os.MkdirAll(pids, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	self := os.Getpid()
+	st, err := proc.Starttime(self)
+	if err != nil {
+		st = 0
+	}
+	path := filepath.Join(pids, key)
+	content := strconv.Itoa(self) + " " + strconv.FormatUint(st, 10) + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// TestReleaseRefusesWhileDaemonsRun pins Finding 1 of the M4 whole-branch
+// review: release drops the index, and an index whose ports a live process
+// still holds must not be freed — after the release the daemon would be
+// unaddressable (`down` cannot resolve an unallocated workspace) and the index
+// re-allocatable underneath it. The refusal names the workspace and the command
+// that fixes it, and it leaves the allocation alone.
+func TestReleaseRefusesWhileDaemonsRun(t *testing.T) {
+	root := registryRoot(t)
+	dir := filepath.Join(root, "A-1_x")
+	writeLivePidFile(t, dir, "gone:live")
+
+	err := runCLI(t, "release", dir)
+	if err == nil {
+		t.Fatal("release with a running daemon succeeded; it must refuse")
+	}
+	for _, want := range []string{"A-1_x", "workspace down A-1_x"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+	data, readErr := os.ReadFile(filepath.Join(root, ".allocations.json"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(data), "A-1") {
+		t.Errorf("refused release dropped the allocation anyway: %s", data)
 	}
 }
 
