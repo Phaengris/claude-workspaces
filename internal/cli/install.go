@@ -203,7 +203,8 @@ func printInstallEpilogue(out io.Writer, home string, lay installLayout) {
 	fmt.Fprintf(out, `
 next steps — install edits no settings.json and no rc file; these are yours:
 
-hook: add to %s:
+hook: merge into %s (only the SessionStart entry is new — keep
+whatever else the file already has):
 
   {
     "hooks": {
@@ -221,7 +222,7 @@ bash: add to ~/.bashrc:
 zsh: add to ~/.zshrc:
 
   . %q
-  fpath=(%s $fpath)
+  fpath=(%q $fpath)
   autoload -U compinit && compinit
 
 fish: nothing to add — the wrapper and completions autoload.
@@ -279,8 +280,11 @@ func copyBinary(src, dst string) (skipped bool, err error) {
 // writeFileAtomic writes data to path via temp-file-and-rename (parents
 // created): a reader — or a crash — never observes a half-written file, and
 // an existing file keeps its old content until the new one is complete. The
-// alloc registry's Save is the pattern; install pays the same fsync because
-// these files are what the user's shell and Claude Code will load next.
+// alloc registry's Save is the pattern, minus one deliberate omission: no
+// directory fsync after the rename. Save pays it because the registry is the
+// tool's only persistent state and a rename lost to a crash is data loss;
+// here a lost rename just means re-running `workspace install`, and the
+// file-level sync above already rules out torn content at the final path.
 func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

@@ -91,6 +91,7 @@ grep 'USER-EDITED-KEEP' $HOME/claude-workspaces/config.yml
 stdout 'left untouched:'
 stdout 'claude-workspaces'
 stdout 'settings\.json'
+stdout 'now-empty tool directories'
 
 # A second uninstall has nothing to act on — and says so, exit 0.
 exec workspace uninstall
