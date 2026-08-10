@@ -1,15 +1,35 @@
-# doctor on a valid config reports OK and the project list, sorted.
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
-exec workspace doctor
-stdout 'config: OK'
-stdout 'projects \(2\): app-a, app-b'
-stdout 'values: PORT = 10 per workspace from 5000'
+# doctor on a valid, HEALTHY root: the config report, then `no findings`.
+#
+# Every configured repo exists here and the registry is empty, so no check has
+# anything to report — the clean case (`doctor: no findings`, exit 0). The
+# finding classes themselves live in doctor_findings.txtar.
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT/WORKDIR substitution).
+wsenv
+mkdir $WORK/root/src/app-a
+mkdir $WORK/root/src/app-b
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
 
--- root/config.yml --
+exec workspace doctor
+stdout '^config: OK$'
+stdout '^projects \(2\): app-a, app-b$'
+stdout '^values: PORT = 10 per workspace from 5000$'
+stdout '^doctor: no findings$'
+
+# --json on a clean root: config ok, and BOTH arrays present-but-empty (a
+# consumer never has to distinguish absent from empty).
+exec workspace doctor --json
+stdout '"config": "ok"'
+stdout '"findings": \[\]'
+stdout '"informational": \[\]'
+
+-- config.tmpl --
 values:
   PORT: { start: 5000, per_workspace: 10 }
 projects:
   app-b:
-    repo: /tmp/does-not-need-to-exist-in-m0
+    repo: WORKROOT/src/app-b
   app-a:
-    repo: /tmp/also-fine
+    repo: WORKROOT/src/app-a

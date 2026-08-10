@@ -54,15 +54,19 @@ func cmdWsenv(ts *testscript.TestScript, neg bool, args []string) {
 }
 
 // cmdWorkroot copies src to dst substituting the literal WORKROOT with
-// $WORK/root. Registry and config fixtures need absolute paths, txtar file
-// bodies are extracted verbatim (no env expansion), so path-bearing fixtures
-// ship as templates and are instantiated here.
+// $WORK/root and the literal WORKDIR with $WORK itself. Registry and config
+// fixtures need absolute paths, txtar file bodies are extracted verbatim (no env
+// expansion), so path-bearing fixtures ship as templates and are instantiated
+// here. WORKDIR exists for the fixtures that must name a path OUTSIDE the root
+// (doctor's out-of-root allocations); the two tokens do not overlap, so the
+// substitution order is irrelevant.
 func cmdWorkroot(ts *testscript.TestScript, neg bool, args []string) {
 	if neg || len(args) != 2 {
 		ts.Fatalf("usage: workroot <src-template> <dst>")
 	}
 	data := ts.ReadFile(args[0])
 	out := strings.ReplaceAll(data, "WORKROOT", ts.Getenv("WORK")+"/root")
+	out = strings.ReplaceAll(out, "WORKDIR", ts.Getenv("WORK"))
 	if err := os.WriteFile(ts.MkAbs(args[1]), []byte(out), 0o644); err != nil {
 		ts.Fatalf("workroot: %v", err)
 	}
