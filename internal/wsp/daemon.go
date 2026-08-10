@@ -86,12 +86,26 @@ func StopCommands(cfg *config.Config, project string) []string {
 	return p.Stop
 }
 
+// PidsDir is the directory holding one pid file per daemon that has ever run in
+// this workspace, `<ws.Dir>/.workspace/pids`. It is exported because it is the
+// only complete inventory of the workspace's daemon records: a pid file is named
+// after the daemon's key at the time `up` wrote it, so a daemon RENAMED or
+// removed from config leaves a record no amount of config-walking can find,
+// while the process it names still holds this workspace's ports. Anything
+// deciding "is something running here?" or "which records are stale?" must
+// enumerate this directory rather than iterate the config (gc's reap pass and
+// the shared daemon gate both do). It may not exist — a workspace that never
+// ran `up` has no such directory, which is simply "no records".
+func PidsDir(ws Workspace) string {
+	return filepath.Join(ws.Dir, stampDirName, "pids")
+}
+
 // PidPath is where the daemon's `<pid> <starttime>` record lives:
 // `<ws.Dir>/.workspace/pids/<project>:<daemon>`. One file per daemon, and the
 // ONLY thing recorded about it — a daemon exists iff this file names a live
 // process (spec §3). Creating the parent directory is the caller's job (`up`).
 func PidPath(ws Workspace, d Daemon) string {
-	return filepath.Join(ws.Dir, stampDirName, "pids", d.Key())
+	return filepath.Join(PidsDir(ws), d.Key())
 }
 
 // LogPath is the daemon's stdout log, `<ws.Dir>/.workspace/logs/<key>.log`.

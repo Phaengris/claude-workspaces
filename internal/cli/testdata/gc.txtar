@@ -1,0 +1,240 @@
+# gc: batch garbage collection over the whole registry.
+#
+# Pass 1 releases allocations whose dir vanished; pass 2 reaps stale pid files
+# of checked-out projects (a live daemon's record is untouchable); pass 3, only
+# under --destroy-dirs, destroys tool-created workspaces whose every
+# checked-out branch is merged into its base and which run no daemon. The
+# survival matrix is the point of this script — one root holding, at the same
+# time: a vanished dir, a live daemon beside a stale pid file, a merged
+# workspace, an unmerged one, an adopted one, an empty one, and a merged but
+# DIRTY one. Only the vanished allocation, the stale pid file and the clean
+# merged workspace may be collected; everything else SURVIVES, and each
+# survival is pinned.
+#
+# Daemon lifetime discipline (down_restart.txtar's rule): the daemon is
+# `sleep 30`, self-expiring, so nothing here can outlive the test run.
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT template substitution).
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+# Real source repo (worktrees need a commit to branch from). It gitignores
+# .env, as real projects do: checkout writes .env INTO the worktree, so in a
+# repo that does not ignore it every workspace reads dirty — to `ls -g`'s
+# star exactly as to gc's dirty gate (one predicate, gitx.Stats.Dirty), and
+# then only the explicit `workspace destroy` can ever collect anything.
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README .gitignore
+exec git -C $WORK/root/src/app commit -m init
+
+# --- empty root: truly nothing to do ------------------------------------------
+exec workspace gc
+stdout '^nothing to collect$'
+
+# --- fixture: the whole matrix in one root -------------------------------------
+# (1) vanished dir: the allocation stays in the registry, the dir is gone.
+exec workspace new T-1 vanished
+rm $WORK/root/T-1_vanished
+
+# (2) live workspace: one RUNNING daemon plus one hand-written stale pid file.
+# The stale record names pid 1 (which always exists) with an impossible
+# starttime, so liveness is deterministically false — no timing games.
+exec workspace new T-2 live app
+exec workspace up T-2 app:sleeper
+stdout 'started app:sleeper \(pid \d+\)'
+cp stale-pid $WORK/root/T-2_live/.workspace/pids/app:ghost
+
+# (3) merged: real work on branch T-3, merged into main in the SOURCE repo.
+exec workspace new T-3 merged app
+exec git -C $WORK/root/T-3_merged/app commit --allow-empty -m work
+exec git -C $WORK/root/src/app merge T-3
+
+# (4) unmerged: real work on branch T-4, NOT merged anywhere.
+exec workspace new T-4 unmerged app
+exec git -C $WORK/root/T-4_unmerged/app commit --allow-empty -m work
+
+# (5) adopted: its checked-out branch A-9 points AT main, so it reads as fully
+# merged and nothing runs in it — Adopted=true is the only thing saving it.
+mkdir $WORK/side/A-9
+exec git -C $WORK/root/src/app worktree add -b A-9 $WORK/side/A-9/app main
+exec workspace adopt $WORK/side/A-9
+stdout 'adopted A-9'
+
+# (6) empty: tool-created, nothing checked out — no merge evidence exists.
+exec workspace new T-5 empty
+
+# (7) dirty: branch T-6 has no commits of its own (trivially merged) and no
+# daemon runs — everything says collectable EXCEPT an untracked file in the
+# worktree. gc -d must skip it loudly: merged covers only committed work,
+# and a batch sweep never discards a working copy (plan-owner ruling).
+exec workspace new T-6 dirty app
+cp stale-pid $WORK/root/T-6_dirty/app/scratch
+
+# --- gc without --destroy-dirs: release + reap only, never destroy -------------
+exec workspace gc
+stdout '^released T-1_vanished \(dir vanished\)$'
+stdout '^reaped stale pid file T-2_live/app:ghost$'
+! stdout '^destroyed'
+stdout '^gc: 1 released, 1 reaped, 0 destroyed$'
+
+! grep T-1_vanished $WORK/root/.allocations.json
+! exists $WORK/root/T-2_live/.workspace/pids/app:ghost
+exists $WORK/root/T-2_live/.workspace/pids/app:sleeper
+
+# Idempotent: a second run finds nothing left to collect.
+exec workspace gc
+stdout '^nothing to collect$'
+
+# --- gc --destroy-dirs: the survival matrix -------------------------------------
+exec workspace gc -d
+stdout '^destroyed T-3_merged \(merged\)$'
+stdout 'project "app": worktree removed'
+stdout '^skipped T-6_dirty \(uncommitted changes\)$'
+stdout '^gc: 0 released, 0 reaped, 1 destroyed$'
+
+# Destroyed: merged, daemonless, tool-created — the one collectable workspace.
+! exists $WORK/root/T-3_merged
+! grep T-3 $WORK/root/.allocations.json
+
+# Survives: unmerged work (branch T-4 has a commit main does not).
+exists $WORK/root/T-4_unmerged/app/.git
+grep T-4 $WORK/root/.allocations.json
+
+# Survives: running daemon. T-2's branch IS merged (it points at an ancestor
+# of main), so the live daemon is the only thing saving it — and gc must not
+# have stopped it either.
+exists $WORK/root/T-2_live/app/.git
+grep T-2 $WORK/root/.allocations.json
+cp $WORK/root/T-2_live/.workspace/pids/app:sleeper pid-live
+exec sh -c 'kill -0 $(cut -d" " -f1 pid-live)'
+
+# Survives: adopted (merged and daemonless; adoption alone protects the dir).
+exists $WORK/side/A-9/app
+grep A-9 $WORK/root/.allocations.json
+
+# Survives: empty workspace (nothing checked out → no merge evidence).
+exists $WORK/root/T-5_empty
+grep T-5 $WORK/root/.allocations.json
+
+# Survives LOUDLY: dirty (the `skipped … (uncommitted changes)` line above).
+# Merged and daemonless, but the untracked file is unsaved work — the only
+# gate that earns a skip line.
+exists $WORK/root/T-6_dirty/app/scratch
+grep T-6 $WORK/root/.allocations.json
+
+# --- join-and-continue: one workspace's failure doesn't stop the batch ---------
+# Config gains project "boom", whose teardown always fails. T-7 checks it out;
+# its branch has no commits of its own, so it reads as merged (nothing to
+# lose). T-2's daemon is stopped, making T-2 merged-and-daemonless too. gc -d
+# now finds two collectable workspaces, hits T-7's teardown failure (T-2_live
+# sorts first, so T-2 is already gone), keeps going, and exits non-zero with a
+# summary that counts only what succeeded.
+exec workspace down T-2
+workroot config-fail.tmpl root/config.yml
+exec git -C $WORK/root/src/boom init -b main
+exec git -C $WORK/root/src/boom add README .gitignore
+exec git -C $WORK/root/src/boom commit -m init
+exec workspace new T-7 fail boom
+
+! exec workspace gc -d
+stderr 'project "boom"'
+stdout '^destroyed T-2_live \(merged\)$'
+stdout '^gc: 0 released, 0 reaped, 1 destroyed$'
+! exists $WORK/root/T-2_live
+! grep T-2 $WORK/root/.allocations.json
+
+# The failed workspace is left intact for a retry: dir, worktree, allocation.
+exists $WORK/root/T-7_fail/boom/.git
+grep T-7 $WORK/root/.allocations.json
+
+# The dirty one still survives this run too (and still says why).
+stdout '^skipped T-6_dirty \(uncommitted changes\)$'
+exists $WORK/root/T-6_dirty/app/scratch
+
+# --- pid files under keys the CONFIG no longer knows ---------------------------
+# A daemon renamed (or its project dropped) while running leaves a pid file
+# whose key nothing configured can name. Both the reap pass and the daemon gate
+# enumerate the pids DIRECTORY, so such a record is never invisible: dead ones
+# are collected, and a live one still holds this index's ports.
+exec workspace new T-8 unlisted app
+exec workspace up T-8 app:sleeper
+stdout 'started app:sleeper \(pid \d+\)'
+cp stale-pid $WORK/root/T-8_unlisted/.workspace/pids/vanished:ghost
+
+# The config loses app's daemon names AND project boom (so T-7_fail reads as an
+# empty workspace and cannot fail this run's teardown): app:sleeper is now a
+# live process under an unconfigured key.
+workroot config-renamed.tmpl root/config.yml
+
+# Pass 2 reaps the DEAD unlisted record and leaves the LIVE one alone.
+exec workspace gc
+stdout '^reaped stale pid file T-8_unlisted/vanished:ghost$'
+! exists $WORK/root/T-8_unlisted/.workspace/pids/vanished:ghost
+exists $WORK/root/T-8_unlisted/.workspace/pids/app:sleeper
+
+# Pass 3 must not destroy T-8: its branch is trivially merged and its worktree
+# clean, so the live unlisted daemon is the ONLY thing saving it.
+exec workspace gc -d
+! stdout 'destroyed T-8_unlisted'
+exists $WORK/root/T-8_unlisted/app/.git
+grep T-8 $WORK/root/.allocations.json
+
+# release refuses too, for the same reason: freeing the index while a process
+# holds its ports would make the daemon unaddressable and the index reusable.
+! exec workspace release $WORK/root/T-8_unlisted
+stderr 'workspace down T-8_unlisted'
+grep T-8 $WORK/root/.allocations.json
+
+# Cleanup: restore the config so `down` can name the daemon again.
+workroot config.tmpl root/config.yml
+exec workspace down T-8
+stdout 'stopped app:sleeper \(TERM\)'
+exec workspace release $WORK/root/T-8_unlisted
+stdout '^released T-8_unlisted \(#\d+ freed\)$'
+
+# --- usage: gc takes no positionals (exit 2, pinned in TestGCExitCodes) --------
+! exec workspace gc extra
+stderr 'unknown command|accepts'
+
+-- config.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    start:
+      - sleeper: sleep 30
+      - ghost: sleep 30
+-- config-renamed.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    start:
+      - renamed: sleep 30
+-- config-fail.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    start:
+      - sleeper: sleep 30
+      - ghost: sleep 30
+  boom:
+    repo: WORKROOT/src/boom
+    teardown:
+      - "false"
+-- stale-pid --
+1 99999999999
+-- root/src/app/README --
+app source
+-- root/src/app/.gitignore --
+.env
+-- root/src/boom/README --
+boom source
+-- root/src/boom/.gitignore --
+.env

@@ -318,3 +318,112 @@ func TestStatsForEmpty(t *testing.T) {
 		t.Errorf("empty input must yield empty map, got %+v", stats)
 	}
 }
+
+// gitIn runs one git command in dir with the hermetic identity env, failing
+// the test on error — the fixture-building helper for the merge/prune tests
+// below (mkRepo's inline `run` generalized to any dir).
+func gitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git -C %s %v: %v\n%s", dir, args, err, out)
+	}
+}
+
+// TestIsMerged pins gc's destroy gate: true only when the branch's tip is an
+// ancestor of the base. Every failure mode — missing branch, missing base,
+// missing repo — must read as FALSE, because the caller (gc --destroy-dirs)
+// treats true as permission to delete a workspace.
+func TestIsMerged(t *testing.T) {
+	repo := mkRepo(t, "main")
+	gitIn(t, repo, "checkout", "-b", "done-work")
+	gitIn(t, repo, "commit", "--allow-empty", "-m", "work")
+	gitIn(t, repo, "checkout", "main")
+	gitIn(t, repo, "merge", "done-work")
+	gitIn(t, repo, "checkout", "-b", "open-work")
+	gitIn(t, repo, "commit", "--allow-empty", "-m", "more")
+	gitIn(t, repo, "checkout", "main")
+	// A branch with no commits of its own: its tip IS main's tip, and an
+	// ancestor-or-same check answers true — correct for gc, there is no
+	// unmerged work to lose.
+	gitIn(t, repo, "branch", "fresh")
+	// A TAG with the same name as a branch: git's ambiguous-refname
+	// resolution prefers refs/tags/ over refs/heads/, so an unqualified
+	// "shadowed" would resolve to the tag at main's tip and read "merged"
+	// while the BRANCH holds an unmerged commit — the destructive flip
+	// IsMerged's refs/heads/ qualification exists to prevent.
+	gitIn(t, repo, "checkout", "-b", "shadowed")
+	gitIn(t, repo, "commit", "--allow-empty", "-m", "not merged anywhere")
+	gitIn(t, repo, "checkout", "main")
+	gitIn(t, repo, "tag", "shadowed")
+
+	cases := map[string]struct {
+		repo, branch, base string
+		want               bool
+	}{
+		"merged":             {repo, "done-work", "main", true},
+		"unmerged":           {repo, "open-work", "main", false},
+		"no own commits":     {repo, "fresh", "main", true},
+		"missing branch":     {repo, "nope", "main", false},
+		"tag shadows branch": {repo, "shadowed", "main", false},
+		"missing base":       {repo, "done-work", "nope", false},
+		"missing repo":       {filepath.Join(t.TempDir(), "gone"), "done-work", "main", false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := gitx.IsMerged(tc.repo, tc.branch, tc.base); got != tc.want {
+				t.Errorf("IsMerged(%s, %q, %q) = %t, want %t", tc.repo, tc.branch, tc.base, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDefaultBranch pins the base-branch fallback gc uses when a project has
+// no base_branch configured: the source repo's own HEAD branch. A detached
+// HEAD or a non-repo has no default branch and must error (gc then treats the
+// workspace as NOT merged — never destroy on an unanswerable question).
+func TestDefaultBranch(t *testing.T) {
+	repo := mkRepo(t, "trunk")
+	if got, err := gitx.DefaultBranch(repo); err != nil || got != "trunk" {
+		t.Errorf("DefaultBranch = %q, %v; want trunk", got, err)
+	}
+	if _, err := gitx.DefaultBranch(t.TempDir()); err == nil {
+		t.Error("DefaultBranch on a non-repo must error")
+	}
+	gitIn(t, repo, "checkout", "--detach")
+	if _, err := gitx.DefaultBranch(repo); err == nil {
+		t.Error("DefaultBranch on a detached HEAD must error")
+	}
+}
+
+// TestWorktreePrune pins destroy --force's epilogue: after a worktree's dir
+// is gone without git's involvement, prune drops the stale administrative
+// entry from the source repo. A missing repo errors (the caller downgrades
+// that to a warning — best-effort by contract).
+func TestWorktreePrune(t *testing.T) {
+	repo := mkRepo(t, "main")
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := gitx.WorktreeAdd(repo, wt, "T-9", ""); err != nil {
+		t.Fatalf("WorktreeAdd: %v", err)
+	}
+	if err := os.RemoveAll(wt); err != nil {
+		t.Fatal(err)
+	}
+	if err := gitx.WorktreePrune(repo); err != nil {
+		t.Fatalf("WorktreePrune: %v", err)
+	}
+	out, err := exec.Command("git", "-C", repo, "worktree", "list").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), wt) {
+		t.Errorf("stale worktree survived prune:\n%s", out)
+	}
+
+	if err := gitx.WorktreePrune(filepath.Join(t.TempDir(), "gone")); err == nil {
+		t.Error("WorktreePrune on a missing repo must error")
+	}
+}

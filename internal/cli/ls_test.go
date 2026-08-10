@@ -84,3 +84,30 @@ func TestLsRowFormat(t *testing.T) {
 		t.Errorf("lsRow with -g and no projects = %q, want 4 cells", got)
 	}
 }
+
+// TestLsRowAdoptedMarker pins how adoption shows up in human output: appended
+// to the DESCRIPTION cell, not as a fifth column — the -g project cells start
+// at index 4 and must keep doing so, and `status` reuses this same row. An
+// adopted workspace has no description of its own (adopt takes none), so the
+// common case is the marker alone.
+func TestLsRowAdoptedMarker(t *testing.T) {
+	cases := map[string]struct {
+		entry lsEntry
+		want  string
+	}{
+		"adopted, no description":   {entry: lsEntry{Adopted: true}, want: "(adopted)"},
+		"adopted, with description": {entry: lsEntry{Description: "side work", Adopted: true}, want: "side work (adopted)"},
+		"not adopted":               {entry: lsEntry{Description: "side work"}, want: "side work"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := lsRow(tc.entry)
+			if len(got) != 4 {
+				t.Fatalf("lsRow = %q, want 4 cells", got)
+			}
+			if got[3] != tc.want {
+				t.Errorf("description cell = %q, want %q", got[3], tc.want)
+			}
+		})
+	}
+}

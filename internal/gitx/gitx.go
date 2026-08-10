@@ -134,6 +134,52 @@ func WorktreeAdd(repo, dest, branch, base string) error {
 	return err
 }
 
+// IsMerged reports whether branch is fully merged into base in the repo at
+// repo — `merge-base --is-ancestor refs/heads/<branch> <base>`: every commit
+// of the branch is reachable from base, so deleting the branch's worktree
+// loses no work. A branch whose tip IS base's tip (no commits of its own) is
+// merged by this definition, which is the right answer for the caller: there
+// is nothing to lose.
+//
+// The branch side is fully qualified as refs/heads/ on purpose: git's
+// ambiguous-refname resolution prefers TAGS over heads, so a tag named like
+// the branch (a task-id tag, say) sitting at base's tip would answer
+// "merged" while the BRANCH still holds unmerged commits — and the caller
+// would destroy them. BranchExists asks with the same qualification. base
+// stays unqualified: it is the user's own base_branch config (or
+// DefaultBranch's output, which is a real branch name), the same loosely
+// resolved value WorktreeAdd branched from — and a base that fails to
+// resolve only ever reads FALSE, the safe direction.
+//
+// ANY error — branch missing, base missing, repo missing, git absent — is
+// simply FALSE. The one caller is gc --destroy-dirs, which reads true as
+// permission to destroy a workspace; an unanswerable question must never
+// grant that permission.
+func IsMerged(repo, branch, base string) bool {
+	_, err := git(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, base)
+	return err == nil
+}
+
+// DefaultBranch returns the branch the repo's own HEAD names (`symbolic-ref
+// --short HEAD`) — the base gc falls back to when a project configures no
+// base_branch, mirroring WorktreeAdd's "base empty → branch from HEAD" rule
+// so the two ends of a workspace's life agree on what the branch grew from.
+// A detached HEAD (or a non-repo) has no such branch and errors; gc treats
+// that as "not merged", never as license to destroy.
+func DefaultBranch(repo string) (string, error) {
+	return git(repo, "symbolic-ref", "--short", "HEAD")
+}
+
+// WorktreePrune drops stale worktree bookkeeping from the repo at repo —
+// administrative entries whose working tree no longer exists. destroy --force
+// runs it, best-effort, after removing a workspace whose worktrees git itself
+// refused to remove (moved repo, corrupted marker): the dirs are gone either
+// way, and pruning is what frees their names and branch locks for reuse.
+func WorktreePrune(repo string) error {
+	_, err := git(repo, "worktree", "prune")
+	return err
+}
+
 // WorktreeRemove removes the linked worktree at dest. Without force git
 // refuses when the worktree holds modified or untracked files; force
 // discards them. The branch the worktree had checked out is never deleted.

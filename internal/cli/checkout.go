@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"git.internal/cat/claude-workspaces-go/internal/config"
 	"git.internal/cat/claude-workspaces-go/internal/wsp"
 	"git.internal/cat/claude-workspaces-go/internal/xerr"
 )
@@ -42,38 +43,50 @@ func newCheckoutCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			// Validate every name before touching anything, deduplicating as
-			// we go (checkout a a must not do the work twice). The message
-			// matches env/cd: exit 3 covers the project half of an identifier
-			// exactly as it covers an unknown workspace.
-			seen := make(map[string]bool, len(args)-1)
-			names := make([]string, 0, len(args)-1)
-			for _, name := range args[1:] {
-				if _, ok := cfg.Projects[name]; !ok {
-					return xerr.Wrap(xerr.ErrNotFound, fmt.Errorf("project %q is not configured", name))
-				}
-				if !seen[name] {
-					seen[name] = true
-					names = append(names, name)
-				}
-			}
-
-			ordered, err := wsp.TopoOrder(cfg, names)
-			if err != nil {
-				return err
-			}
-
-			var errs []error
-			for _, name := range ordered {
-				if err := wsp.EnsureProject(cfg, ws, name); err != nil {
-					errs = append(errs, err) // already prefixed `project "<name>": …`
-				}
-			}
-			if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {
-				errs = append(errs, err)
-			}
-			return errors.Join(errs...) // nil when everything succeeded
+			return checkoutWork(cfg, ws, args[1:])
 		},
 	}
+}
+
+// checkoutWork is checkout's body: resolve the named projects, run the
+// ensure-chain for each in dependency order (join-and-continue), refresh
+// WORKSPACE.md regardless. Shared with `launch`, whose reuse path checks extra
+// projects out into an existing workspace — exactly this operation, and it must
+// not fork into a second implementation.
+func checkoutWork(cfg *config.Config, ws wsp.Workspace, names []string) error {
+	ordered, err := resolveProjectNames(cfg, names)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, name := range ordered {
+		if err := wsp.EnsureProject(cfg, ws, name); err != nil {
+			errs = append(errs, err) // already prefixed `project "<name>": …`
+		}
+	}
+	if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...) // nil when everything succeeded
+}
+
+// resolveProjectNames validates the named projects before ANY of them is acted
+// on, deduplicates (`checkout a a` must not do the work twice) and returns them
+// in dependency order. An unconfigured name is exit 3 with env/cd's message:
+// that code covers the project half of an identifier exactly as it covers an
+// unknown workspace. Shared by checkout, new and launch — the "nothing happens
+// until every name is known" promise is the same in all three.
+func resolveProjectNames(cfg *config.Config, names []string) ([]string, error) {
+	seen := make(map[string]bool, len(names))
+	uniq := make([]string, 0, len(names))
+	for _, name := range names {
+		if _, ok := cfg.Projects[name]; !ok {
+			return nil, xerr.Wrap(xerr.ErrNotFound, fmt.Errorf("project %q is not configured", name))
+		}
+		if !seen[name] {
+			seen[name] = true
+			uniq = append(uniq, name)
+		}
+	}
+	return wsp.TopoOrder(cfg, uniq)
 }

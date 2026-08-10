@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -97,36 +98,134 @@ func TestLogsProjectTargetNamesCandidates(t *testing.T) {
 	}
 }
 
-// TestTailStart pins the byte offset the tail is cut at, including the two
-// edges that make a naive implementation wrong: the newline TERMINATING the
-// last line is not a line boundary of its own (so the last line is not counted
-// twice), and asking for more lines than exist yields the whole buffer rather
-// than an out-of-range cut.
-func TestTailStart(t *testing.T) {
+// TestTailScan pins the byte offset the tail is cut at, including the edges
+// that make a naive implementation wrong: the newline TERMINATING the last
+// line is not a line boundary of its own (so the last line is not counted
+// twice), asking for more lines than a buffer holds reports "not found" plus
+// how many were seen (that count is what carries across chunks), and a buffer
+// that is NOT the file's end has no terminating newline to discount.
+func TestTailScan(t *testing.T) {
 	const log = "line1\nline2\nline3\n"
 	cases := map[string]struct {
-		in   string
-		n    int
-		want int // offset into in
+		in       string
+		n        int
+		atEnd    bool
+		wantCut  int // offset into in, -1 when fewer than n boundaries exist
+		wantSeen int
 	}{
-		"last one":            {in: log, n: 1, want: 12},
-		"last two":            {in: log, n: 2, want: 6},
-		"exactly all":         {in: log, n: 3, want: 0},
-		"more than there are": {in: log, n: 50, want: 0},
+		"last one": {in: log, n: 1, atEnd: true, wantCut: 12, wantSeen: 1},
+		"last two": {in: log, n: 2, atEnd: true, wantCut: 6, wantSeen: 2},
+		// Three lines have only TWO boundaries once the terminating newline is
+		// discounted: the first line starts where the buffer does, which is not
+		// a boundary this scan can see — so "all of it" reports not-found, and
+		// the caller keeps reading backwards until the file runs out.
+		"exactly all":         {in: log, n: 3, atEnd: true, wantCut: -1, wantSeen: 2},
+		"more than there are": {in: log, n: 50, atEnd: true, wantCut: -1, wantSeen: 2},
 		// No terminating newline: the final partial line still counts as a line.
-		"unterminated last line": {in: "a\nb", n: 1, want: 2},
-		"empty":                  {in: "", n: 5, want: 0},
-		// -n 0 is "no history": legal, and useful with -f.
-		"none requested": {in: log, n: 0, want: len(log)},
-		"negative":       {in: log, n: -1, want: len(log)},
+		"unterminated last line": {in: "a\nb", n: 1, atEnd: true, wantCut: 2, wantSeen: 1},
+		"empty":                  {in: "", n: 5, atEnd: true, wantCut: -1, wantSeen: 0},
+		// Interior chunk: every newline in it starts a line, the trailing one
+		// included — the discount belongs to the file's end alone.
+		"interior chunk":              {in: log, n: 1, atEnd: false, wantCut: 18, wantSeen: 1},
+		"interior chunk, two":         {in: log, n: 2, atEnd: false, wantCut: 12, wantSeen: 2},
+		"interior chunk, no boundary": {in: "abc", n: 1, atEnd: false, wantCut: -1, wantSeen: 0},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if got := tailStart([]byte(tc.in), tc.n); got != tc.want {
-				t.Errorf("tailStart(%q, %d) = %d, want %d", tc.in, tc.n, got, tc.want)
+			cut, seen := tailScan([]byte(tc.in), tc.n, tc.atEnd)
+			if cut != tc.wantCut || seen != tc.wantSeen {
+				t.Errorf("tailScan(%q, %d, %v) = (%d, %d), want (%d, %d)",
+					tc.in, tc.n, tc.atEnd, cut, seen, tc.wantCut, tc.wantSeen)
 			}
 		})
 	}
+}
+
+// referenceTail is the obvious, slow, whole-file implementation of "last n
+// lines": split on newlines and keep the tail. It exists to be compared
+// against, so readTail's backwards chunked walk — which never holds the whole
+// file and carries its line count from chunk to chunk — has an independent
+// definition of right, not just its own past output frozen into a golden file.
+func referenceTail(content string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	body, trailing := content, ""
+	if strings.HasSuffix(body, "\n") {
+		body, trailing = body[:len(body)-1], "\n"
+	}
+	lines := strings.Split(body, "\n")
+	if n < len(lines) {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n") + trailing
+}
+
+// TestReadTailMatchesReference is the multi-chunk pin for the chunked walk.
+// readTail reads BACKWARDS in 64KiB chunks, so every interesting case is about
+// what happens ACROSS a chunk boundary: a tail longer than one chunk, lines so
+// sparse that a whole chunk contains no boundary at all, a file with no
+// newline anywhere, and a newline sitting exactly on the boundary. All are
+// compared byte-for-byte with referenceTail, and the returned size — the
+// offset a follow resumes from — must always be the whole file.
+func TestReadTailMatchesReference(t *testing.T) {
+	const chunk = 64 << 10
+	line := func(i int) string { return fmt.Sprintf("line %04d %s\n", i, strings.Repeat("x", 300)) }
+	var manyLines strings.Builder // ~95KiB over several chunks
+	for i := range 300 {
+		manyLines.WriteString(line(i))
+	}
+	var sparse strings.Builder // 3 lines of ~80KiB: one line spans chunks
+	for i := range 3 {
+		sparse.WriteString(strings.Repeat(fmt.Sprintf("%d", i), 80<<10) + "\n")
+	}
+
+	fixtures := map[string]string{
+		"empty":               "",
+		"small":               "line1\nline2\nline3\n",
+		"no trailing newline": strings.Repeat("a", chunk+7) + "\nsecond line, unterminated",
+		"many lines":          manyLines.String(),
+		"sparse newlines":     sparse.String(),
+		"no newline at all":   strings.Repeat("z", 3*chunk+11),
+		// A newline as the last byte of the first chunk read (the file's LAST
+		// chunk), and another as the first byte of the previous one: the two
+		// off-by-ones a chunk-carrying scan can hide.
+		"newline on the boundary": strings.Repeat("p", chunk-1) + "\n" + strings.Repeat("q", chunk) + "\n",
+		// A newline as the last byte of an INTERIOR chunk — the case that
+		// separates "this chunk ends the file" from "this chunk ends here":
+		// treating an interior chunk as the end discounts a real boundary and
+		// returns one line too many. Chunks are cut from the END of the file,
+		// so a size of exactly 2 chunks puts this newline at index chunk-1.
+		"newline ends an interior chunk": strings.Repeat("a", chunk-1) + "\n" + strings.Repeat("b", chunk-1) + "\n",
+	}
+	for name, content := range fixtures {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "app:x.log")
+			write(t, path, content)
+			for _, n := range []int{0, 1, 2, 3, 50, 1000} {
+				got, size, err := readTail(path, n)
+				if err != nil {
+					t.Fatalf("readTail(n=%d): %v", n, err)
+				}
+				if size != int64(len(content)) {
+					t.Errorf("readTail(n=%d) size = %d, want %d (the follow offset is the whole file)", n, size, len(content))
+				}
+				if want := referenceTail(content, n); string(got) != want {
+					t.Errorf("readTail(n=%d) = %d bytes, want the reference's %d\n got tail: %q\nwant tail: %q",
+						n, len(got), len(want), lastBytes(string(got), 40), lastBytes(want, 40))
+				}
+			}
+		})
+	}
+}
+
+// lastBytes trims a mismatch report to something readable — these fixtures run
+// to hundreds of kilobytes.
+func lastBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return "…" + s[len(s)-n:]
 }
 
 // TestFollowLogs pins -f at the unit level, deliberately: `workspace logs -f`

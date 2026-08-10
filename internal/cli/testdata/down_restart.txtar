@@ -39,6 +39,18 @@ stdout 'app: stop commands skipped \(not checked out\)'
 stdout 'app:sleeper already stopped'
 ! exists $WORK/root/T-1_x/app
 
+# --- plain directory at the project path: STILL not checked out -----------------
+# The epilogue gate asks git (IsWorkTreeRoot), not the filesystem — "checked
+# out" means top-of-worktree everywhere. A bare directory left at the project
+# path (an interrupted checkout, a stray mkdir) is not a checkout, and running
+# the project's stop: commands inside it would run them against something that
+# is not the project: same note, same exit 0, and the marker stays absent.
+mkdir $WORK/root/T-1_x/app
+exec workspace down T-1 app
+stdout 'app: stop commands skipped \(not checked out\)'
+! exists $WORK/root/T-1_x/app/stopped-marker
+rm $WORK/root/T-1_x/app
+
 # --- up → down: confirmed TERM stop --------------------------------------------
 # Capture the pid record BEFORE down; after down the pid file is gone and the
 # process is dead — kill -0 against the captured pid must fail.

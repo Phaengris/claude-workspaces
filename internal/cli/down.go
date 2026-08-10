@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"git.internal/cat/claude-workspaces-go/internal/config"
+	"git.internal/cat/claude-workspaces-go/internal/gitx"
 	"git.internal/cat/claude-workspaces-go/internal/proc"
 	"git.internal/cat/claude-workspaces-go/internal/wsp"
 )
@@ -36,12 +37,14 @@ import (
 // does not trigger `up`'s run-and-waits.
 //
 // down never runs EnsureProject: stopping must not create worktrees. A
-// targeted project that was never checked out simply has nothing running and
-// no dir to run `stop:` commands in — its epilogue is skipped, not failed
-// (erroring would break restart-from-cold), but skipped LOUDLY when stop
-// commands are actually configured: they may manage state outside the
-// worktree (a `docker compose down`, say), and silently declining
-// user-configured cleanup would hide that. One note line, still exit 0.
+// targeted project that is not CHECKED OUT — gitx.IsWorkTreeRoot, the same
+// question every other command asks, so a missing dir and a dir that is merely
+// a dir answer alike — simply has nothing running and nowhere the `stop:`
+// commands belong: its epilogue is skipped, not failed (erroring would break
+// restart-from-cold), but skipped LOUDLY when stop commands are actually
+// configured: they may manage state outside the worktree (a `docker compose
+// down`, say), and silently declining user-configured cleanup would hide that.
+// One note line, still exit 0.
 //
 // Failure policy is up's join-and-continue: resolution fails up front
 // (unknown name → exit 3, nothing acted on); once stopping begins, one
@@ -93,11 +96,12 @@ func downWork(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, work []w
 }
 
 // downProject stops one resolved project: daemons in reverse listed order,
-// then — when the whole project was targeted and its dir exists — the `stop:`
-// epilogue. The returned error is project-prefixed and may join several
-// daemons' failures; one daemon's failed stop never blocks its siblings (they
-// are independent processes), and the epilogue still runs — `stop:` commands
-// exist to clean up, which matters most when something already went wrong.
+// then — when the whole project was targeted and git reports its dir checked
+// out — the `stop:` epilogue. The returned error is project-prefixed and may
+// join several daemons' failures; one daemon's failed stop never blocks its
+// siblings (they are independent processes), and the epilogue still runs —
+// `stop:` commands exist to clean up, which matters most when something
+// already went wrong.
 func downProject(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, w wsp.TargetWork) error {
 	fail := func(err error) error { return fmt.Errorf("project %q: %w", w.Project, err) }
 
@@ -147,7 +151,7 @@ func downProject(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, w wsp
 	if w.WholeProject {
 		stops := wsp.StopCommands(cfg, w.Project)
 		dir := wsp.ProjectDir(ws, cfg, w.Project)
-		if _, statErr := os.Stat(dir); statErr != nil {
+		if !gitx.IsWorkTreeRoot(dir) {
 			// Not checked out: nothing to run the epilogue in, and down must
 			// not create worktrees. Note the skip when there WAS something to
 			// skip; a project without stop commands loses nothing, so silence.

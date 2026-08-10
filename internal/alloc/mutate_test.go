@@ -180,3 +180,40 @@ func TestAllocateConcurrent(t *testing.T) {
 		t.Errorf("persisted indices should be {0,1}, got %v", reg)
 	}
 }
+
+// TestAllocateAdopted pins the ONE thing that separates the two constructors:
+// the Adopted flag on the persisted allocation. Everything else — index
+// derivation, the uniqueness rules, the lock — is the shared body, so an
+// adopted allocation must collide with a plain one exactly as two plain ones
+// would (destroy and gc read that flag to decide whether the directory is the
+// tool's to delete, so a wrong default is a data-loss bug, not a cosmetic one).
+func TestAllocateAdopted(t *testing.T) {
+	root := t.TempDir()
+	a, err := alloc.AllocateAdopted(root, "/elsewhere/T-9", "T-9", "", testNow)
+	if err != nil {
+		t.Fatalf("AllocateAdopted: %v", err)
+	}
+	want := alloc.Allocation{Index: 0, TaskID: "T-9", CreatedAt: testNow, Adopted: true}
+	if a != want {
+		t.Errorf("AllocateAdopted returned %+v, want %+v", a, want)
+	}
+	reg, err := alloc.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := reg["/elsewhere/T-9"]; got != want {
+		t.Errorf("persisted %+v, want %+v", got, want)
+	}
+
+	// Plain Allocate keeps its false: the two constructors must not share a
+	// mutable default.
+	b := mustAllocate(t, root, "/ws/T-1", "T-1", "")
+	if b.Adopted {
+		t.Error("Allocate produced an adopted allocation")
+	}
+	// The uniqueness rules span both: the same task id from the other
+	// constructor is still a collision.
+	if _, err := alloc.Allocate(root, "/ws/T-9", "T-9", "", testNow); err == nil {
+		t.Error("Allocate reused an ADOPTED allocation's task id; uniqueness must span both constructors")
+	}
+}

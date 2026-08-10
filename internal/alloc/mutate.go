@@ -17,7 +17,30 @@ import (
 //
 // now is the RFC 3339 creation timestamp, supplied by the caller so commands
 // stay testable and a single run stamps one consistent time.
+//
+// The allocation is NOT adopted: this is the constructor for a directory the
+// tool created and may therefore delete. See AllocateAdopted for the other
+// case.
 func Allocate(root, dir, taskID, desc, now string) (Allocation, error) {
+	return allocate(root, dir, taskID, desc, now, false)
+}
+
+// AllocateAdopted is Allocate for a directory the tool did NOT create — the
+// `adopt` command's allocation. Everything else is identical (same index
+// derivation, same uniqueness rules, same lock); only Adopted differs, and
+// that flag is what stops destroy and gc from ever removing the directory.
+//
+// Two named constructors rather than one function with a trailing bool: the
+// flag decides whether a later `destroy` deletes the user's directory, and
+// `alloc.Allocate(root, dir, id, desc, now, false)` at every existing call
+// site would be both unreadable and one typo away from data loss. The shared
+// body below is what keeps the two from drifting.
+func AllocateAdopted(root, dir, taskID, desc, now string) (Allocation, error) {
+	return allocate(root, dir, taskID, desc, now, true)
+}
+
+// allocate is the shared body of both constructors.
+func allocate(root, dir, taskID, desc, now string, adopted bool) (Allocation, error) {
 	var a Allocation
 	err := WithLock(root, func() error {
 		reg, err := Load(root)
@@ -39,6 +62,7 @@ func Allocate(root, dir, taskID, desc, now string) (Allocation, error) {
 			TaskID:      taskID,
 			Description: desc,
 			CreatedAt:   now,
+			Adopted:     adopted,
 		}
 		reg[dir] = a
 		return Save(root, reg)

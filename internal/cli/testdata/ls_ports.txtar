@@ -31,10 +31,12 @@ exec git -C $WORK/root/B-7_y/app add README
 exec git -C $WORK/root/B-7_y/app commit -m init
 
 # --- ls -------------------------------------------------------------------
-# One row per workspace, sorted by name, index prefixed with '#'.
+# One row per workspace, sorted by name, index prefixed with '#'. B-7_y is an
+# ADOPTED workspace, so its description cell carries the `(adopted)` marker —
+# the human counterpart of the `"adopted": true` field asserted below.
 exec workspace ls
 stdout '^A-1_x +#0 +A-1 +fix the thing$'
-stdout '^B-7_y +#2 +B-7 +add the widget$'
+stdout '^B-7_y +#2 +B-7 +add the widget \(adopted\)$'
 stdout '(?s)A-1_x.*B-7_y'
 ! stdout 'no workspaces'
 
@@ -42,7 +44,7 @@ stdout '(?s)A-1_x.*B-7_y'
 # `lib` is configured but checked out nowhere, so it never appears.
 exec workspace ls -g
 stdout '^A-1_x +#0 +A-1 +fix the thing +app@main$'
-stdout '^B-7_y +#2 +B-7 +add the widget +app@main\*$'
+stdout '^B-7_y +#2 +B-7 +add the widget \(adopted\) +app@main\*$'
 ! stdout 'lib'
 
 # --json is an array sorted by name; no `projects` key without -g.

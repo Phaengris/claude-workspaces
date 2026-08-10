@@ -1,0 +1,195 @@
+# launch: the one-shot — create (or reuse) + checkout + up + claude session.
+#
+# The `claude` on PATH is a shim that prints its argv and cwd and APPENDS a line
+# to $CLAUDE_SHIM_LOG — PATH discipline (it is prepended first, so a real claude
+# can never be invoked) plus an invocation MARKER: the abort contract ("no
+# claude on a broken env") is asserted as the absence of that file, so each
+# abort case points the log at a fresh path.
+#
+# HOME is redirected to a fixture so the history probe sees OUR
+# ~/.claude/projects, never the developer's.
+#
+# Daemon lifetime discipline (as up.txtar): every daemon is `sleep 30` and the
+# script ends with `workspace down` for the workspace it started daemons in.
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT template substitution).
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+# Real source repos (worktrees need commits to branch from).
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+exec git -C $WORK/root/src/api init -b main
+exec git -C $WORK/root/src/api add README
+exec git -C $WORK/root/src/api commit -m init
+exec git -C $WORK/root/src/bad init -b main
+exec git -C $WORK/root/src/bad add README
+exec git -C $WORK/root/src/bad commit -m init
+exec git -C $WORK/root/src/flaky init -b main
+exec git -C $WORK/root/src/flaky add README
+exec git -C $WORK/root/src/flaky commit -m init
+
+# Hermetic HOME + the shim first on PATH.
+env HOME=$WORK/home
+mkdir $WORK/home
+chmod 0755 $WORK/bin/claude
+env PATH=$WORK/bin:$PATH
+env CLAUDE_SHIM_LOG=$WORK/claude.log
+
+# --- fresh launch: create, check out, up, then the session --------------------
+# One command: new's creation output, up's daemon line, then the shim's own
+# output — proving the session ran LAST, in the workspace dir, with the decided
+# injection (no --continue: this dir has no history under our fixture HOME).
+exec workspace launch T-1 'fix thing' app
+stdout 'workspace T-1_fix-thing created \(index 0\)'
+stdout 'started app:sleeper \(pid \d+\)'
+stdout 'argv: --dangerously-skip-permissions$'
+stdout 'cwd: '$WORK'/root/T-1_fix-thing$'
+stdout 'WORKSPACE=T-1$'
+exists $WORK/root/T-1_fix-thing/app/README
+exists $WORK/root/T-1_fix-thing/.workspace/setup-app.ok
+exists $WORK/root/T-1_fix-thing/.workspace/pids/app:sleeper
+grep -count=1 'invoked' $WORK/claude.log
+
+# --- re-launch the same task id: reuse, no duplicate allocation ---------------
+# The workspace is found by task id, so nothing is created and nothing is
+# re-allocated; up converges (the daemon is already running) and claude runs
+# again.
+exec workspace launch T-1
+stdout 'using existing workspace T-1_fix-thing'
+! stdout 'created'
+stdout 'app:sleeper already running \(pid \d+\)'
+stdout 'argv: --dangerously-skip-permissions$'
+grep -count=2 'invoked' $WORK/claude.log
+
+# One row in ls, one entry in the registry: the reuse path allocated nothing.
+exec workspace ls
+stdout -count=1 'T-1_fix-thing'
+! stdout '#1'
+
+# --- reuse ignores a supplied description -------------------------------------
+# The grammar does not change when reusing: positional 2 is still the
+# description slot, and an ordinary description handed to an existing workspace
+# is ignored SILENTLY — the `using existing workspace` line is the notice, and
+# no `note:` line appears.
+exec workspace launch T-1 'some other words'
+stdout 'using existing workspace T-1_fix-thing'
+! stdout 'created'
+! stdout 'note:'
+! exists $WORK/root/T-1_some-other-words
+exec workspace ls
+stdout -count=1 'T-1_fix-thing'
+! stdout '#1'
+
+# --- reuse: a description that NAMES a project is called out -------------------
+# The one ignore that must not be silent: `launch T-1 bad` is almost certainly
+# `launch <id> <desc> <project>` with the description forgotten. The workspace is
+# still reused and the session still runs — but a note says the word landed in
+# the description slot, and the project is NOT checked out (bad's setup is
+# `false`, so checking it out would also have failed the command outright).
+exec workspace launch T-1 bad
+stdout 'using existing workspace T-1_fix-thing'
+stdout 'note: "bad" is in the description slot and was ignored'
+stdout 'or use checkout'
+! exists $WORK/root/T-1_fix-thing/bad
+
+# --- reuse + an extra project: checked out -------------------------------------
+# api is listed after the (ignored) description, so the reuse path checks it out
+# through the same ensure loop `checkout` uses, and up then covers it.
+exec workspace launch T-1 'fix thing' api
+stdout 'using existing workspace T-1_fix-thing'
+exists $WORK/root/T-1_fix-thing/api/README
+exists $WORK/root/T-1_fix-thing/.workspace/setup-api.ok
+grep '### api' $WORK/root/T-1_fix-thing/WORKSPACE.md
+
+# --- session flags and `--` passthrough, end to end ---------------------------
+# -S is OURS (before the separator): it suppresses the skip-permissions
+# injection. Everything after `--` is claude's, verbatim — including a token
+# spelled like our own flag.
+exec workspace launch T-1 -S -- -S --model opus
+stdout 'using existing workspace T-1_fix-thing'
+stdout 'argv: -S --model opus$'
+! stdout 'dangerously'
+
+# --- create without a description: usage error, NOTHING created ---------------
+# Exit 2 is pinned in TestLaunchExitCodes; here: the refusal names the missing
+# description, no dir and no allocation appear, and claude never runs.
+env CLAUDE_SHIM_LOG=$WORK/no-claude-usage.log
+! exec workspace launch T-9
+stderr 'description'
+! exists $WORK/root/T-9
+! grep 'T-9' $WORK/root/.allocations.json
+! exists $WORK/no-claude-usage.log
+
+# --- create: a description that NAMES a project is called out too --------------
+# The same mistake on the create path (`launch <id> <project>` with the
+# description forgotten) is just as invisible: T-9 would be created described as
+# "api", with api NOT checked out. The grammar still does not bend — the word IS
+# the description — but the note makes the reading explicit.
+env CLAUDE_SHIM_LOG=$WORK/claude-create-note.log
+exec workspace launch T-9 api
+stdout 'workspace T-9_api created'
+stdout 'note: "api" is in the description slot'
+stdout 'or use checkout'
+! exists $WORK/root/T-9_api/api
+
+# --- create-phase failure: rolled back, no session ----------------------------
+# bad's setup is `false`, so `new`'s transaction undoes itself: no dir, no
+# allocation — and claude is NOT launched onto a broken environment.
+env CLAUDE_SHIM_LOG=$WORK/no-claude-create.log
+! exec workspace launch T-3 'broken' bad
+stderr 'project "bad"'
+! exists $WORK/root/T-3_broken
+! grep 'T-3' $WORK/root/.allocations.json
+! exists $WORK/no-claude-create.log
+
+# --- up-phase failure: no session, workspace intact ---------------------------
+# flaky checks out fine and fails in its run-and-wait, i.e. AFTER creation: the
+# reuse/converge path has no transaction to undo, so the workspace stays (a
+# re-run converges) but the session still must not start.
+env CLAUDE_SHIM_LOG=$WORK/no-claude-up.log
+! exec workspace launch T-1 'fix thing' flaky
+stderr 'project "flaky"'
+! exists $WORK/no-claude-up.log
+exists $WORK/root/T-1_fix-thing/flaky/README
+
+# --- cleanup: stop what this script started ------------------------------------
+exec workspace down T-1
+stdout 'stopped app:sleeper \(TERM\)'
+
+-- config.tmpl --
+values:
+  PORT: { start: 18300, per_workspace: 5 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    start:
+      - sleeper: sleep 30
+  api:
+    repo: WORKROOT/src/api
+  bad:
+    repo: WORKROOT/src/bad
+    setup:
+      - "false"
+  flaky:
+    repo: WORKROOT/src/flaky
+    start:
+      - "false"
+-- bin/claude --
+#!/bin/sh
+echo "argv: $@"
+echo "cwd: $(pwd)"
+echo "WORKSPACE=$WORKSPACE"
+echo invoked >> "$CLAUDE_SHIM_LOG"
+exit ${CLAUDE_SHIM_EXIT:-0}
+-- root/src/app/README --
+app source
+-- root/src/api/README --
+api source
+-- root/src/bad/README --
+bad source
+-- root/src/flaky/README --
+flaky source

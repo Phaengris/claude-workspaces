@@ -348,6 +348,65 @@ func TestReadPidFileCorrupt(t *testing.T) {
 	}
 }
 
+// TestStartDaemonPidFileFailureKillsGroup pins StartDaemon's last promise: if
+// the pid file cannot be written, the group it JUST started is killed. An
+// untracked daemon is worse than no daemon — nothing would ever find it again
+// to stop it, and `up` would happily start a second one next to it.
+//
+// The forced failure is an unwritable pid directory (0500), which is exactly
+// the production shape: the pid file's parent is the caller's job, so a bad
+// mode or a read-only mount lands here. Root is skipped — it writes through
+// any mode, so there would be no failure to observe.
+//
+// The death is observed by REAPING: the test binary is the daemon's parent
+// (StartDaemon Release()s without waiting), so the killed child is a zombie
+// only this process can collect, and its wait status carries the signal that
+// killed it. Wait4(-1) is safe here because the package's tests are sequential
+// and every other daemon is reaped by its own cleanup before the next test
+// starts. Reaping is also the cleanup: no zombie outlives the test.
+func TestStartDaemonPidFileFailureKillsGroup(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: mode 0500 is still writable, so there is no failure to force")
+	}
+	t.Setenv("SHELL", "/bin/sh")
+	dir := t.TempDir()
+	pidDir := filepath.Join(dir, "pids")
+	if err := os.Mkdir(pidDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	// t.TempDir's cleanup must be able to remove pidDir's entries; restore a
+	// normal mode even though nothing should have been created inside it.
+	t.Cleanup(func() { _ = os.Chmod(pidDir, 0o700) })
+	pidPath := filepath.Join(pidDir, "d.pid")
+
+	err := proc.StartDaemon(dir, "sleep 30", daemonEnv(dir),
+		filepath.Join(dir, "d.log"), filepath.Join(dir, "d.err.log"), pidPath)
+	if err == nil {
+		t.Fatal("StartDaemon with an unwritable pid dir = nil, want an error")
+	}
+	if !strings.Contains(err.Error(), "writing pid file") {
+		t.Errorf("error %q does not name the failed step (writing pid file)", err)
+	}
+	if _, statErr := os.Stat(pidPath); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("stat(%s) = %v, want the pid file to be absent", pidPath, statErr)
+	}
+
+	var status unix.WaitStatus
+	pid, waitErr := unix.Wait4(-1, &status, 0, nil)
+	if waitErr != nil {
+		t.Fatalf("Wait4 for the started daemon: %v (StartDaemon must leave a killed child behind)", waitErr)
+	}
+	if !status.Signaled() || status.Signal() != syscall.SIGKILL {
+		t.Fatalf("child %d wait status = %v (signaled=%v, signal=%v), want killed by SIGKILL",
+			pid, status, status.Signaled(), status.Signal())
+	}
+	// Reaped: the pid is now truly absent, as it is in production once init
+	// has collected it.
+	if killErr := unix.Kill(pid, 0); !errors.Is(killErr, unix.ESRCH) {
+		t.Errorf("kill(%d, 0) after reap = %v, want ESRCH", pid, killErr)
+	}
+}
+
 func TestStartDaemonTruncatesLogs(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	dir := t.TempDir()

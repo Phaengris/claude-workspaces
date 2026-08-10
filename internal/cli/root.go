@@ -61,8 +61,13 @@ func Root() *cobra.Command {
 	root.AddCommand(newLogsCmd())
 	root.AddCommand(newExecCmd())
 	root.AddCommand(newBrowseCmd())
+	root.AddCommand(newAdoptCmd())
+	root.AddCommand(newReleaseCmd())
 	root.AddCommand(newDestroyCmd())
+	root.AddCommand(newGCCmd())
 	root.AddCommand(newDoctorCmd())
+	root.AddCommand(newClaudeCmd())
+	root.AddCommand(newLaunchCmd())
 	return root
 }
 
@@ -86,7 +91,13 @@ func usageArgs(next cobra.PositionalArgs) cobra.PositionalArgs {
 // nothing below main prints-and-dies.
 func Main() int {
 	err := classifyUsageError(Root().Execute())
-	if err != nil {
+	// A propagated child exit code (xerr.ExitError, from the claude session
+	// runner) is deliberately NOT printed: the child owned the terminal and
+	// said whatever it had to say; a trailing "workspace: exit status 7"
+	// after every non-zero session would be pure noise. The code still
+	// propagates via ExitCode below.
+	var ee *xerr.ExitError
+	if err != nil && !errors.As(err, &ee) {
 		fmt.Fprintln(os.Stderr, "workspace:", err)
 	}
 	return xerr.ExitCode(err)

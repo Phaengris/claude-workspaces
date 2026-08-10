@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -152,12 +153,27 @@ func lsEntries(cfg *config.Config, reg alloc.Registry, withGit bool) []lsEntry {
 	return entries
 }
 
+// adoptedMarker flags an adopted workspace in human output. It is appended to
+// the DESCRIPTION cell rather than given a column of its own, so the row shape
+// is unchanged for every existing consumer: `-g` project cells still start at
+// index 4, and a plain listing stays four columns wide. --json is where a
+// machine consumer reads it, from the `adopted` field that has always been
+// there.
+const adoptedMarker = "(adopted)"
+
 // lsRow renders one entry as table cells: NAME  #INDEX  TASK_ID  DESCRIPTION,
 // plus one PROJECT@BRANCH cell per checked-out project (with a '*' suffix when
 // the tree is dirty) for `-g`. Exported package-privately because `status`
 // without a workspace argument reuses this exact one-line format.
+//
+// An adopted workspace's description cell carries adoptedMarker — usually
+// alone, since `adopt` takes no description.
 func lsRow(e lsEntry) []string {
-	row := []string{e.Name, "#" + strconv.Itoa(e.Index), e.TaskID, e.Description}
+	desc := e.Description
+	if e.Adopted {
+		desc = strings.TrimSpace(desc + " " + adoptedMarker)
+	}
+	row := []string{e.Name, "#" + strconv.Itoa(e.Index), e.TaskID, desc}
 	if e.Projects == nil {
 		return row
 	}
@@ -176,17 +192,26 @@ func lsRow(e lsEntry) []string {
 // ErrConfig kind (exit 4); a registry that cannot be read is a plain error
 // (exit 1) prefixed so the message names its source.
 func loadRoot() (*config.Config, alloc.Registry, error) {
+	_, cfg, reg, err := loadRootDir()
+	return cfg, reg, err
+}
+
+// loadRootDir is loadRoot for the callers that also need the ROOT itself —
+// `launch`, whose create path hands it to newWork (allocation writes there).
+// Same preamble, same error kinds; loadRoot is the two-thirds view of it, so
+// there is only ever one load order.
+func loadRootDir() (string, *config.Config, alloc.Registry, error) {
 	root, err := config.RootDir()
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 	cfg, err := config.Load(root)
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 	reg, err := alloc.Load(root)
 	if err != nil {
-		return nil, nil, fmt.Errorf("registry: %w", err)
+		return "", nil, nil, fmt.Errorf("registry: %w", err)
 	}
-	return cfg, reg, nil
+	return root, cfg, reg, nil
 }
