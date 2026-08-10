@@ -11,6 +11,7 @@ import (
 
 	"git.internal/cat/claude-workspaces-go/internal/assets"
 	"git.internal/cat/claude-workspaces-go/internal/config"
+	"git.internal/cat/claude-workspaces-go/internal/wsp"
 )
 
 // TestAccessorsCarryTheirContent is the embed round-trip: every accessor must
@@ -219,6 +220,15 @@ func TestConfigStubExamplesAreValidWhenUncommented(t *testing.T) {
 	} else if acme.BrowsePort != "${PORT0}" {
 		t.Errorf("runtime tokens must survive template expansion, got browse_port %q", acme.BrowsePort)
 	}
+	// ${WORKSPACE} is the TASK ID, not the workspace directory name
+	// (wsp.RuntimeVars binds it to taskID) — and the stub's token list says so,
+	// because a user keying a database or container name on it would otherwise
+	// get a different string than documented. Resolved through the real
+	// substitution path, on the example's own DATABASE_URL.
+	env := wsp.ResolvedEnv(cfg, "TASK-123", "my-app", 1)
+	if got, want := env["DATABASE_URL"], "postgres:///my_app_TASK-123"; got != want {
+		t.Errorf("${WORKSPACE} must resolve to the task id: DATABASE_URL = %q, want %q", got, want)
+	}
 }
 
 // writeAsset drops an embedded script into dir and returns its path.
@@ -382,11 +392,13 @@ func TestFishWrapperParses(t *testing.T) {
 	}
 }
 
-// wrapperShim is the fake `workspace` binary both wrapper tests drive. It
-// answers `cd` the three ways the real command can — a path, a JSON object
-// (with --json), a not-found failure — and echoes anything else with a
-// passthrough marker, which is how the tests tell "the wrapper handed this to
-// the binary" apart from "the wrapper acted on its own".
+// wrapperShim is the fake `workspace` binary both wrapper tests drive: `cd`
+// prints a path or fails with 3 (not found), and with --json it prints a
+// deliberate NON-path, standing in for the outputs the wrappers must not
+// chdir to (a help page today, a JSON shape if `cd --json` ever grows one).
+// Anything else is echoed with a passthrough marker, which is how the tests
+// tell "the wrapper handed this to the binary" apart from "the wrapper acted
+// on its own".
 const wrapperShim = `#!/bin/sh
 case "$1" in
 cd)
@@ -412,8 +424,8 @@ esac
 // The four cases are the whole contract: cd moves the shell; other
 // subcommands reach the binary untouched; a failed cd neither moves the shell
 // nor flattens the exit code (2 usage / 3 not found / 4 config are scripted
-// against); and the cd forms that do not print a path are passed through
-// instead of being treated as one.
+// against); and a cd form whose output is not a path (--help, or --json if it
+// ever returns one) is passed through instead of being chdir-ed to.
 func checkWrapper(t *testing.T, startDir, target string, run func(args string) (string, int)) {
 	t.Helper()
 

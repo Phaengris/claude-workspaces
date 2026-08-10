@@ -20,8 +20,11 @@
 workspace() {
 	local _ws_arg _ws_dir
 	if [ "$1" = "cd" ]; then
-		# `cd --json` and `cd --help` print JSON or a help page, not a path;
-		# chdir-ing to that output would be nonsense, so they pass through.
+		# `cd --help` prints a help page, not a path. `--json` is accepted and
+		# deliberately ignored by `cd` today (a lone absolute path already IS
+		# the machine-readable form), so it is reserved for a future JSON
+		# shape; bypassing both here means a wrapper installed now keeps
+		# working if that shape ever arrives.
 		for _ws_arg in "$@"; do
 			case "$_ws_arg" in
 			--json | --help | -h)

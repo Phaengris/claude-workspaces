@@ -14,7 +14,8 @@
 # test suite, so they are valid as written).
 #
 # --- runtime ${...} tokens -------------------------------------------------
-#   ${WORKSPACE}   the workspace directory name (e.g. TASK-123_fix_the_thing)
+#   ${WORKSPACE}   the TASK ID (e.g. TASK-123), despite the name — not the
+#                  workspace directory name, which is task-id_description
 #   ${PROJECT}     the project name
 #   ${PORT0}, ...  the numbered values derived from `values:` below
 # They are substituted when the command runs, in: env, setup, start, stop,
@@ -45,7 +46,7 @@ values:
 # >>> example
 # env:
 #   RAILS_ENV: development
-#   WORKSPACE_NAME: ${WORKSPACE}
+#   TASK_ID: ${WORKSPACE}
 # <<< example
 
 # =========================================================== env_allow =====
