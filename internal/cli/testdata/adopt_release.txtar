@@ -1,0 +1,179 @@
+# adopt + release: allocating a directory the tool did not create, and giving
+# the allocation back without touching a single file.
+#
+# Fixture:
+#   src/app, src/api — two real source repos INSIDE the workspaces root
+#   $WORK/foreign    — a hand-built dir OUTSIDE the root holding one real
+#                      worktree (app), so detection has something to find and
+#                      api has to stay undetected
+#   $WORK/other      — a hand-built dir holding BOTH worktrees, for the
+#                      --projects override (which must ignore detection)
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT template substitution).
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+# Real source repos.
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+exec git -C $WORK/root/src/api init -b main
+exec git -C $WORK/root/src/api add README
+exec git -C $WORK/root/src/api commit -m init
+
+# The foreign dir: one real worktree at the path the config implies (app), and
+# a plain directory where api would live — so "is a worktree root", not "the
+# directory exists", is what detection is pinned on.
+exec git -C $WORK/root/src/app worktree add $WORK/foreign/app -b foreign-app
+mkdir $WORK/foreign/api
+
+# --- adopt from OUTSIDE, by explicit dir: detection, values, docs ------------
+exec workspace adopt $WORK/foreign
+stdout '^adopted foreign #0$'
+stdout '^  app: \.env written$'
+! stdout api
+
+# .env carries the workspace-allocated values, like any checked-out project.
+grep '^APP_PORT=5000$' $WORK/foreign/app/.env
+grep '^DB_NAME=app_foreign_dev$' $WORK/foreign/app/.env
+! exists $WORK/foreign/api/.env
+
+# Docs scaffolded in place.
+exists $WORK/foreign/CLAUDE.md
+grep '### app' $WORK/foreign/WORKSPACE.md
+
+# The allocation is a real one: `env` resolves the same values.
+exec workspace env foreign app
+stdout '^APP_PORT=5000$'
+
+# ls marks it adopted (the description cell); tool-created rows never do.
+exec workspace ls
+stdout 'foreign\s+#0\s+foreign\s+\(adopted\)'
+
+# --- re-adopt of the SAME dir: idempotent no-op success (spec §2) -----------
+exec workspace adopt $WORK/foreign
+stdout '^already adopted \(#0\)$'
+exec workspace ls
+! stdout '#1'
+
+# A DIFFERENT dir whose basename collides on the task id is still an error.
+mkdir $WORK/nest/foreign
+! exec workspace adopt $WORK/nest/foreign
+stderr 'task id foreign is already allocated'
+
+# --- refusals ----------------------------------------------------------------
+# The workspaces root itself is not a workspace.
+! exec workspace adopt $WORK/root
+stderr 'workspaces root'
+
+# A basename that cannot be a task id: the user must rename or use `new`.
+mkdir $WORK/x@y
+! exec workspace adopt $WORK/x@y
+stderr 'not usable as a task id'
+
+# Missing dir, and a plain file.
+! exec workspace adopt $WORK/nope
+stderr 'nope'
+! exec workspace adopt $WORK/afile
+stderr 'not a directory'
+
+# A tool-created workspace is already allocated; adopt does not take it over.
+exec workspace new T-1 x
+! exec workspace adopt $WORK/root/T-1_x
+stderr 'already allocated to task T-1'
+exec workspace ls
+! stdout 'T-1_x.*adopted'
+
+# --- --projects overrides detection ENTIRELY ---------------------------------
+exec git -C $WORK/root/src/app worktree add $WORK/other/app -b other-app
+exec git -C $WORK/root/src/api worktree add $WORK/other/api -b other-api
+
+# An unconfigured name is exit 3 (pinned in TestAdoptExitCodes) and nothing is
+# allocated: the name check runs before any mutation.
+! exec workspace adopt $WORK/other --projects nope
+stderr 'project "nope" is not configured'
+! grep '/other"' $WORK/root/.allocations.json
+
+# api IS a worktree root here, and is still skipped: the flag replaces
+# detection rather than adding to it.
+exec workspace adopt $WORK/other --projects app
+stdout '^adopted other #2$'
+exists $WORK/other/app/.env
+! exists $WORK/other/api/.env
+
+# --- release: cwd default walks up from anywhere inside the workspace --------
+cd $WORK/other/app
+exec workspace release
+stdout '^released other \(#2 freed\)$'
+
+# NEVER touches disk: worktree, .env and docs all survive.
+exists $WORK/other/app/.git
+exists $WORK/other/app/.env
+exists $WORK/other/WORKSPACE.md
+! grep '/other"' $WORK/root/.allocations.json
+
+# Releasing again from the same (now unallocated) dir is success, not an error.
+exec workspace release
+stdout '^already released$'
+cd $WORK
+
+# --- release by explicit dir, and the freed index is reused ------------------
+exec workspace release $WORK/foreign
+stdout '^released foreign \(#0 freed\)$'
+exists $WORK/foreign/app/.env
+! grep '/foreign"' $WORK/root/.allocations.json
+exec workspace release $WORK/foreign
+stdout '^already released$'
+
+# A dir that was never allocated at all — same idempotent answer, no disk touch.
+exec workspace release $WORK/never-existed
+stdout '^already released$'
+! exists $WORK/never-existed
+
+# Index 0 is free again, so re-adopting takes it back (gap-filling NextIndex).
+exec workspace adopt $WORK/foreign
+stdout '^adopted foreign #0$'
+
+# --- regression pin: destroy on an ADOPTED workspace keeps the dir -----------
+exec workspace destroy foreign
+stdout 'left in place'
+exists $WORK/foreign/app/.git
+! grep '/foreign"' $WORK/root/.allocations.json
+
+# --- no argument at all: the CURRENT directory is adopted ---------------------
+# Also the empty case: a dir with no configured project checked out is still
+# adoptable, and the output says so rather than looking like a silent success.
+# Index 0 is free again after the destroy above.
+mkdir $WORK/E-1
+cd $WORK/E-1
+exec workspace adopt
+stdout '^adopted E-1 #0$'
+stdout 'no configured projects checked out here'
+exists $WORK/E-1/WORKSPACE.md
+cd $WORK
+
+# --- usage: at most one positional each (exit 2, pinned in the unit tests) ---
+! exec workspace adopt a b
+stderr 'accepts at most 1 arg'
+! exec workspace release a b
+stderr 'accepts at most 1 arg'
+
+-- config.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+env:
+  APP_PORT: ${PORT0}
+  DB_NAME: ${PROJECT}_${WORKSPACE}_dev
+projects:
+  app:
+    repo: WORKROOT/src/app
+  api:
+    repo: WORKROOT/src/api
+-- afile --
+not a directory
+-- root/src/app/README --
+app source
+-- root/src/api/README --
+api source

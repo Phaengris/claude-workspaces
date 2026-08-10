@@ -110,6 +110,30 @@ func workspaceAt(reg alloc.Registry, path string) (wsp.Workspace, bool) {
 	return best, found
 }
 
+// allocationAt finds the workspace whose dir IS path — no ancestry walk. It is
+// workspaceAt's exact-match sibling, for the commands that address a workspace
+// by its own directory rather than by being somewhere inside it: `adopt`
+// (is this dir already allocated?) and `release <dir>` (which allocation does
+// this dir name?).
+//
+// Comparison is on filepath.Clean, not on the raw map key: a registry key is
+// written by us and should already be clean and absolute, but a caller's path
+// arrives from a command line and a hand-edited registry can hold anything, so
+// "/ws/T-1/" and "/ws/T-1" must not name two different workspaces. Callers act
+// on the returned ws.Dir — the registry's OWN spelling — so a release always
+// deletes the key that exists.
+//
+// Like workspaceAt, symlinks are compared as written; see its note on why.
+func allocationAt(reg alloc.Registry, path string) (wsp.Workspace, bool) {
+	want := filepath.Clean(path)
+	for _, ws := range wsp.List(reg) {
+		if filepath.Clean(ws.Dir) == want {
+			return ws, true
+		}
+	}
+	return wsp.Workspace{}, false
+}
+
 // isAncestorOrSame reports whether dir is path or one of path's ancestors,
 // comparing PATH COMPONENTS rather than characters.
 //
