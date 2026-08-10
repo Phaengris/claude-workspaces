@@ -55,6 +55,10 @@ func wireCompletions(root *cobra.Command) {
 		// `new` names a workspace that does not exist yet — its task id and
 		// description are free text, so there is nothing to suggest for either.
 		"new": completeNothing,
+		// install/uninstall take no positionals; their targets are fixed
+		// paths under $HOME, not anything worth suggesting.
+		"install":   completeNothing,
+		"uninstall": completeNothing,
 
 		// A single workspace slot.
 		"status":  completeWorkspace,

@@ -33,6 +33,7 @@ func TestScripts(t *testing.T) {
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 			"wsenv":    cmdWsenv,
 			"workroot": cmdWorkroot,
+			"isexec":   cmdIsExec,
 		},
 	})
 }
@@ -51,6 +52,25 @@ func cmdWsenv(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Setenv("GIT_COMMITTER_NAME", "t")
 	ts.Setenv("GIT_COMMITTER_EMAIL", "t@t")
 	ts.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", ts.Getenv("WORK")+"/root")
+}
+
+// cmdIsExec asserts each file exists AND carries the owner-executable bit —
+// this go-internal's `exists` knows -readonly but not -exec, and the install
+// script has two 0755 artifacts (the binary and the hook) whose mode is part
+// of the contract, not a detail.
+func cmdIsExec(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) == 0 {
+		ts.Fatalf("usage: isexec file...")
+	}
+	for _, name := range args {
+		info, err := os.Stat(ts.MkAbs(name))
+		if err != nil {
+			ts.Fatalf("isexec %s: %v", name, err)
+		}
+		if info.Mode().Perm()&0o100 == 0 {
+			ts.Fatalf("isexec %s: mode %v is not owner-executable", name, info.Mode())
+		}
+	}
 }
 
 // cmdWorkroot copies src to dst substituting the literal WORKROOT with
