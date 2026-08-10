@@ -33,6 +33,7 @@ func TestScripts(t *testing.T) {
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 			"wsenv":    cmdWsenv,
 			"workroot": cmdWorkroot,
+			"isexec":   cmdIsExec,
 		},
 	})
 }
@@ -53,16 +54,39 @@ func cmdWsenv(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", ts.Getenv("WORK")+"/root")
 }
 
+// cmdIsExec asserts each file exists AND carries the owner-executable bit —
+// this go-internal's `exists` knows -readonly but not -exec, and the install
+// script has two 0755 artifacts (the binary and the hook) whose mode is part
+// of the contract, not a detail.
+func cmdIsExec(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) == 0 {
+		ts.Fatalf("usage: isexec file...")
+	}
+	for _, name := range args {
+		info, err := os.Stat(ts.MkAbs(name))
+		if err != nil {
+			ts.Fatalf("isexec %s: %v", name, err)
+		}
+		if info.Mode().Perm()&0o100 == 0 {
+			ts.Fatalf("isexec %s: mode %v is not owner-executable", name, info.Mode())
+		}
+	}
+}
+
 // cmdWorkroot copies src to dst substituting the literal WORKROOT with
-// $WORK/root. Registry and config fixtures need absolute paths, txtar file
-// bodies are extracted verbatim (no env expansion), so path-bearing fixtures
-// ship as templates and are instantiated here.
+// $WORK/root and the literal WORKDIR with $WORK itself. Registry and config
+// fixtures need absolute paths, txtar file bodies are extracted verbatim (no env
+// expansion), so path-bearing fixtures ship as templates and are instantiated
+// here. WORKDIR exists for the fixtures that must name a path OUTSIDE the root
+// (doctor's out-of-root allocations); the two tokens do not overlap, so the
+// substitution order is irrelevant.
 func cmdWorkroot(ts *testscript.TestScript, neg bool, args []string) {
 	if neg || len(args) != 2 {
 		ts.Fatalf("usage: workroot <src-template> <dst>")
 	}
 	data := ts.ReadFile(args[0])
 	out := strings.ReplaceAll(data, "WORKROOT", ts.Getenv("WORK")+"/root")
+	out = strings.ReplaceAll(out, "WORKDIR", ts.Getenv("WORK"))
 	if err := os.WriteFile(ts.MkAbs(args[1]), []byte(out), 0o644); err != nil {
 		ts.Fatalf("workroot: %v", err)
 	}

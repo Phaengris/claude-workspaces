@@ -1,0 +1,105 @@
+# `workspace install` copies the tool's pieces into $HOME and records EVERY
+# path it wrote in a manifest; `workspace uninstall` removes exactly those
+# paths and nothing else — that manifest discipline is the safety line for a
+# command that mutates the user's home directory.
+#
+# Everything here runs against a FAKE home ($WORK/home, per the plan's global
+# constraint): os.UserHomeDir honors $HOME on linux, and no
+# CLAUDE_WORKSPACES_ROOT_DIR is set, so the root is the default
+# $HOME/claude-workspaces.
+
+env HOME=$WORK/home
+mkdir $HOME
+
+exec workspace install
+
+# Every artifact lands, with the right modes: the binary and the hook are
+# EXECUTED (0755, `isexec` from cli_test.go), everything else is read.
+isexec $HOME/.local/bin/workspace
+exists $HOME/.config/fish/functions/workspace.fish
+exists $HOME/.config/fish/completions/workspace.fish
+exists $HOME/.local/share/workspace/shell/workspace.bash
+exists $HOME/.local/share/workspace/completions/workspace.bash
+exists $HOME/.local/share/workspace/completions/_workspace
+exists $HOME/.claude/skills/claude-workspaces-go/SKILL.md
+isexec $HOME/.local/share/workspace/hooks/session-start.sh
+
+# fish's functions/ holds the cd WRAPPER and completions/ the generated
+# completion script — the two files share a name and must never be swapped.
+grep 'function workspace --description' $HOME/.config/fish/functions/workspace.fish
+! grep '__workspace_perform_completion' $HOME/.config/fish/functions/workspace.fish
+grep '__workspace_perform_completion' $HOME/.config/fish/completions/workspace.fish
+! grep 'function workspace --description' $HOME/.config/fish/completions/workspace.fish
+
+# The manifest lists exactly the 8 files installed above — one JSON string per
+# path — and neither the config stub nor the root: those are user data and
+# uninstall must never touch them.
+grep -count=8 '"/' $HOME/.local/share/workspace/install-manifest.json
+grep '/.local/bin/workspace' $HOME/.local/share/workspace/install-manifest.json
+grep 'session-start\.sh' $HOME/.local/share/workspace/install-manifest.json
+! grep 'config\.yml' $HOME/.local/share/workspace/install-manifest.json
+
+# The config stub is created in the (freshly made) default root.
+exists $HOME/claude-workspaces/config.yml
+grep 'claude-workspaces configuration' $HOME/claude-workspaces/config.yml
+stdout 'created .*/claude-workspaces/config\.yml \(starter config\)'
+stdout 'manifest: .*/install-manifest\.json'
+
+# The epilogue PRINTS the settings.json snippet and the rc source lines —
+# install never edits those files itself (plan's global constraint).
+stdout 'settings\.json'
+stdout 'SessionStart'
+stdout 'session-start\.sh'
+stdout '\.bashrc'
+stdout '\.zshrc'
+
+# Positional arguments are a usage error (exit 2 territory, nonzero here).
+! exec workspace install extra
+stderr 'unknown command'
+! exec workspace uninstall extra
+stderr 'unknown command'
+
+# --- re-install: idempotent for OUR files, sacred for the user's ------------
+# The config stub is only-if-absent: user edits survive. Everything the tool
+# owns is overwritten: junk scribbled into a wrapper is repaired.
+cp marker.yml $HOME/claude-workspaces/config.yml
+cp junk.txt $HOME/.config/fish/functions/workspace.fish
+
+exec workspace install
+grep 'USER-EDITED-KEEP' $HOME/claude-workspaces/config.yml
+! grep 'JUNK' $HOME/.config/fish/functions/workspace.fish
+grep 'function workspace --description' $HOME/.config/fish/functions/workspace.fish
+stdout 'kept .*/claude-workspaces/config\.yml \(exists, not overwritten\)'
+
+# --- uninstall: exactly the manifest, then the manifest itself --------------
+exec workspace uninstall
+! exists $HOME/.local/bin/workspace
+! exists $HOME/.config/fish/functions/workspace.fish
+! exists $HOME/.config/fish/completions/workspace.fish
+! exists $HOME/.local/share/workspace/shell/workspace.bash
+! exists $HOME/.local/share/workspace/completions/workspace.bash
+! exists $HOME/.local/share/workspace/completions/_workspace
+! exists $HOME/.claude/skills/claude-workspaces-go/SKILL.md
+! exists $HOME/.local/share/workspace/hooks/session-start.sh
+! exists $HOME/.local/share/workspace/install-manifest.json
+
+# The root, the (edited) config and the reminder about the settings.json hook
+# entry: uninstall says what it deliberately left behind.
+exists $HOME/claude-workspaces
+exists $HOME/claude-workspaces/config.yml
+grep 'USER-EDITED-KEEP' $HOME/claude-workspaces/config.yml
+stdout 'left untouched:'
+stdout 'claude-workspaces'
+stdout 'settings\.json'
+stdout 'now-empty tool directories'
+
+# A second uninstall has nothing to act on — and says so, exit 0.
+exec workspace uninstall
+stdout 'nothing installed'
+
+-- marker.yml --
+# USER-EDITED-KEEP
+values:
+  PORT: { start: 6000, per_workspace: 5 }
+-- junk.txt --
+JUNK

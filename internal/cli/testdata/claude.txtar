@@ -64,6 +64,17 @@ stdout 'argv: $'
 exec workspace claude T-1 -- -S --foo
 stdout 'argv: --dangerously-skip-permissions --continue -S --foo$'
 
+# --- …but CLAUDE's OWN flags after `--` still INFLUENCE injection ---------------
+# The deliberate documented rule (buildClaudeArgv): the injection scan covers
+# ALL of rest, both sides of the separator. `--` protects claude's arguments
+# from OUR parsing — it does not hide a stance from our injection decision, and
+# injecting --continue next to a --print the user asked for would fight it.
+# History exists at this point in the script, so the absence of --continue can
+# only come from the post-separator --print.
+exec workspace claude T-1 -- --print
+stdout 'argv: --dangerously-skip-permissions --print$'
+! stdout 'continue'
+
 # --- a user permission stance suppresses that injection only -------------------
 exec workspace claude T-1 --permission-mode plan
 stdout 'argv: --continue --permission-mode plan$'

@@ -123,6 +123,12 @@ func Starttime(pid int) (uint64, error) {
 
 // parseStat extracts state (field 3) and starttime (field 22) from a
 // /proc/<pid>/stat line, counting after the last ')' per Starttime's note.
+//
+// The two shape rejections are reported SEPARATELY, because they are different
+// defects and the message is all a reader of a log gets: a short line is a
+// field COUNT problem, while a state field wider than one byte is a field WIDTH
+// problem on a line whose count may be perfectly correct — reporting the count
+// there would point at the wrong thing entirely.
 func parseStat(stat string) (state byte, starttime uint64, err error) {
 	i := strings.LastIndexByte(stat, ')')
 	if i < 0 {
@@ -130,8 +136,11 @@ func parseStat(stat string) (state byte, starttime uint64, err error) {
 	}
 	fields := strings.Fields(stat[i+1:])
 	// fields[0] is field 3 (state); starttime is field 22 → fields[19].
-	if len(fields) < 20 || len(fields[0]) != 1 {
-		return 0, 0, fmt.Errorf("malformed stat line: %d fields after ')'", len(fields))
+	if len(fields) < 20 {
+		return 0, 0, fmt.Errorf("malformed stat line: %d fields after ')', want at least 20", len(fields))
+	}
+	if len(fields[0]) != 1 {
+		return 0, 0, fmt.Errorf("malformed stat line: state field %q is not a single byte", fields[0])
 	}
 	starttime, err = strconv.ParseUint(fields[19], 10, 64)
 	if err != nil {

@@ -1,13 +1,17 @@
 package cli
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"git.internal/cat/claude-workspaces-go/internal/proc"
 	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"git.internal/cat/claude-workspaces-go/internal/xerr"
 )
 
 // TestGCExitCodes pins the codes gc.txtar can only assert as "non-zero" or
@@ -88,5 +92,50 @@ func TestAnyDaemonRunningEnumeratesPidsDir(t *testing.T) {
 	write("gone:live", strconv.Itoa(self)+" "+strconv.FormatUint(st, 10)+"\n")
 	if running, err := anyDaemonRunning(ws); !running || err != nil {
 		t.Errorf("live record under an unconfigured key = (%v, %v), want (true, nil)", running, err)
+	}
+}
+
+// TestFlattenBatchSeversKinds pins gc's batch-error rule (its doc comment's
+// failure policy, M5 debt row): the joined per-workspace errors leave the
+// command as a PLAIN error, so a kinded error raised deep inside one
+// workspace's teardown — an xerr.ErrNotFound from some inner resolution, say —
+// cannot drag the whole batch's exit code to 3 (or 4, or 2). Once several
+// workspaces' failures are one error, a per-workspace code is meaningless;
+// exit 1 is the honest answer, and the messages must all survive.
+//
+// The pin is on the helper with a SYNTHETIC joined error rather than on a
+// txtar-built gc run: making a real pass raise a kinded failure means
+// manufacturing an inner resolution error inside destroyWork, which no fixture
+// can do without contorting the registry into a shape gc would reject earlier.
+// The helper is where the severing lives, so the helper is what is pinned.
+func TestFlattenBatchSeversKinds(t *testing.T) {
+	inner := xerr.Wrap(xerr.ErrNotFound, errors.New("no such project \"gone\""))
+	joined := errors.Join(
+		fmt.Errorf("workspace A-1: %w", inner),
+		errors.New("workspace B-2: teardown exploded"),
+	)
+	// Control: without the flattening the kind IS reachable, so the assertion
+	// below tests the helper and not a fixture that never carried a kind.
+	if !errors.Is(joined, xerr.ErrNotFound) {
+		t.Fatal("fixture must carry the kind before flattening")
+	}
+	if got := xerr.ExitCode(joined); got != 3 {
+		t.Fatalf("unflattened batch exit code = %d, want 3 (the kind leaking)", got)
+	}
+
+	flat := flattenBatch(joined)
+	if errors.Is(flat, xerr.ErrNotFound) {
+		t.Error("flattenBatch left the unwrap chain intact: a kinded inner error can still dictate the batch's exit code")
+	}
+	if got := xerr.ExitCode(flat); got != 1 {
+		t.Errorf("flattened batch exit code = %d, want 1 (plain error)", got)
+	}
+	for _, want := range []string{"workspace A-1", "no such project", "workspace B-2", "teardown exploded"} {
+		if !strings.Contains(flat.Error(), want) {
+			t.Errorf("flattened message %q lost %q; severing the chain must not lose text", flat, want)
+		}
+	}
+	if flattenBatch(nil) != nil {
+		t.Error("flattenBatch(nil) must stay nil: a batch with no failures is a success")
 	}
 }

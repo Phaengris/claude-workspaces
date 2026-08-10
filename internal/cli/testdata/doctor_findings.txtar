@@ -1,0 +1,118 @@
+# doctor full: ONE root exhibiting every finding class at the same time.
+#
+# doctor only reports — `gc` and `down` fix — so every line below is a
+# statement about the root, and the command exits 0 regardless (pinned in
+# TestDoctorExitCodes). The fixture is hand-built (registry template + mkdir)
+# because doctor is read-only: nothing here has to be reachable through the
+# creating commands, and a hand-edited registry is exactly what the
+# outside-root check exists to catch.
+#
+# The matrix, one of each:
+#   T-1_vanished          allocation whose dir is gone            → finding
+#   T-2_daemons           dead pid file under a CONFIGURED key    → finding
+#                         dead pid file under an UNLISTED key     → finding + note
+#   A-9_adopted           adopted allocation outside the root     → informational
+#   X-1_corrupt           NOT-adopted allocation outside the root → finding
+#   project "gone"        configured repo dir absent              → finding
+# Five findings; the adopted out-of-root line is informational and must NOT be
+# counted. A LIVE daemon's informational count needs a real live process, so it
+# is pinned in doctor_test.go instead (this script starts nothing).
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT/WORKDIR substitution).
+wsenv
+mkdir $WORK/root
+workroot config.tmpl root/config.yml
+workroot registry.tmpl root/.allocations.json
+
+# What EXISTS is what every answer turns on: project app's repo is here,
+# project gone's is not; T-2's dir is here, T-1's is not; both out-of-root
+# dirs are here (a MISSING one would report as stale, not as out-of-root).
+mkdir $WORK/root/src/app
+mkdir $WORK/root/T-2_daemons/.workspace/pids
+mkdir $WORK/side/A-9_adopted
+mkdir $WORK/side/X-1_corrupt
+
+# Two dead records: `app:ghost` is a configured daemon, `vanished:ghost` is a
+# key no config can name (a renamed daemon, or a project that left the config).
+# Both name pid 1 with an impossible starttime, so liveness is deterministically
+# false — no timing games.
+cp stale-pid $WORK/root/T-2_daemons/.workspace/pids/app:ghost
+cp stale-pid $WORK/root/T-2_daemons/.workspace/pids/vanished:ghost
+
+exec workspace doctor
+stdout '^config: OK$'
+stdout '^projects \(2\): app, gone$'
+stdout '^stale allocation: '$WORK'/root/T-1_vanished \(run: workspace gc\)$'
+stdout '^allocation outside root: '$WORK'/side/A-9_adopted \(adopted\)$'
+stdout '^allocation outside root: '$WORK'/side/X-1_corrupt \(NOT adopted — possibly corrupt registry\)$'
+stdout '^project "gone": repo does not exist: '$WORK'/root/src/gone$'
+stdout '^stale pid file: T-2_daemons/app:ghost \(run: workspace gc\)$'
+stdout '^stale pid file: T-2_daemons/vanished:ghost \(not in config\) \(run: workspace gc\)$'
+stdout '^doctor: 5 finding\(s\)$'
+
+# Nothing runs here, so no daemon note at all — the live count is reported only
+# when there IS something live.
+! stdout 'running'
+
+# doctor never fixes anything: the registry and the stale records survive.
+grep T-1_vanished $WORK/root/.allocations.json
+exists $WORK/root/T-2_daemons/.workspace/pids/app:ghost
+
+# --- the same root as --json ---------------------------------------------------
+# Findings and informational are separate arrays; kinds are the machine handle,
+# detail is the human line verbatim. Parsing (and the kind/array split) is
+# pinned in TestDoctorJSONShape; these are the on-the-wire spellings.
+exec workspace doctor --json
+stdout '"config": "ok"'
+stdout '"kind": "stale_allocation"'
+stdout '"kind": "allocation_outside_root"'
+stdout '"kind": "project_repo_missing"'
+stdout '"kind": "stale_pid_file"'
+stdout '"workspace": "T-2_daemons"'
+# --json is the whole report: no human summary line leaks into it.
+! stdout 'doctor: '
+
+-- config.tmpl --
+values:
+  PORT: { start: 5000, per_workspace: 10 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+    start:
+      - ghost: sleep 30
+  gone:
+    repo: WORKROOT/src/gone
+-- registry.tmpl --
+{
+  "WORKROOT/T-1_vanished": {
+    "index": 0,
+    "task_id": "T-1",
+    "description": "vanished",
+    "created_at": "2026-01-01T00:00:00Z",
+    "adopted": false
+  },
+  "WORKROOT/T-2_daemons": {
+    "index": 1,
+    "task_id": "T-2",
+    "description": "daemons",
+    "created_at": "2026-01-01T00:00:00Z",
+    "adopted": false
+  },
+  "WORKDIR/side/A-9_adopted": {
+    "index": 2,
+    "task_id": "A-9",
+    "description": "adopted elsewhere",
+    "created_at": "2026-01-01T00:00:00Z",
+    "adopted": true
+  },
+  "WORKDIR/side/X-1_corrupt": {
+    "index": 3,
+    "task_id": "X-1",
+    "description": "hand-written",
+    "created_at": "2026-01-01T00:00:00Z",
+    "adopted": false
+  }
+}
+-- stale-pid --
+1 99999999999

@@ -1,0 +1,128 @@
+# claude-workspaces configuration — <root>/config.yml
+#
+# Written by `workspace install` only when this file does not exist, so your
+# edits are never overwritten. There is no reload step: every command reads it.
+#
+# Decoded STRICTLY — an unknown or misspelled key is an error with a
+# line:column position. `workspace doctor` prints the full report.
+#
+# Live below: a PORT value block and an empty `projects:`. Everything else is
+# a commented example, so a fresh install loads cleanly and reports no
+# findings — a project whose `repo` does not exist on this machine would be a
+# doctor finding and a failing checkout, so nothing is declared for you.
+# Uncomment what you need (the example blocks are checked by the tool's own
+# test suite, so they are valid as written).
+#
+# --- runtime ${...} tokens -------------------------------------------------
+#   ${WORKSPACE}   the TASK ID (e.g. TASK-123), despite the name — not the
+#                  workspace directory name, which is task-id_description
+#   ${PROJECT}     the project name
+#   ${PORT0}, ...  the numbered values derived from `values:` below
+# They are substituted when the command runs, in: env, setup, start, stop,
+# teardown, browse_port.
+#
+# --- YAML caveat -----------------------------------------------------------
+# An unquoted ${...} cannot appear inside a FLOW collection: `env: {A: ${P0}}`
+# and `setup: [echo ${P0}]` are invalid YAML (the spec forbids `{`/`}` in
+# plain scalars there). Use block style, as every example below does, or quote
+# the value: `env: {A: "${PORT0}"}`.
+
+# ============================================================== values =====
+# Per-workspace number blocks. A workspace with allocation index i gets
+#   NAME0 .. NAME<per_workspace-1>  =  start + i*per_workspace + n
+# so workspace #0 gets PORT0=5000..PORT9=5009, workspace #1 gets 5010..5019.
+# `workspace ports` shows the blocks in use.
+values:
+  PORT:
+    start: 5000
+    per_workspace: 10
+# Add more blocks alongside PORT — a block of one is still named REDIS_DB0:
+#   REDIS_DB:
+#     start: 1
+#     per_workspace: 1
+
+# ================================================================= env =====
+# Environment for every command in every project, values substituted.
+# >>> example
+# env:
+#   RAILS_ENV: development
+#   TASK_ID: ${WORKSPACE}
+# <<< example
+
+# =========================================================== env_allow =====
+# Extra variables let through from the parent environment.
+#
+# Spawned commands do NOT inherit your shell: they get a fixed allowlist
+# (HOME USER SHELL TERM LANG/LC_* TZ DISPLAY SSH_AUTH_SOCK XDG_* ...), a PATH
+# with concrete per-version install directories stripped so version-manager
+# shims still resolve each worktree's own .ruby-version/.tool-versions, and
+# the env above on top. Anything else silently does not arrive — name it here
+# (exact names, no globs) or set it in `env:`.
+#
+# Valid globally, as here, and per project. PATH is always sanitized even when
+# named here; the `env:` blocks are the raw-override channel.
+# >>> example
+# env_allow: [MY_API_TOKEN, DOCKER_HOST]
+# <<< example
+
+# =========================================================== templates =====
+# Reusable project definitions. A project's own keys shallow-merge OVER the
+# template's (a key replaces it wholesale, no deep merge). ${PARAM} for names
+# declared in `params:` is substituted at LOAD time; runtime tokens like
+# ${WORKSPACE} and ${PORT0} pass through untouched.
+# >>> example
+# templates:
+#   rails-client:
+#     params: [NAME]
+#     repo: ~/dev/clients/${NAME}
+#     base_branch: main
+#     setup:
+#       - bundle install
+#     start:
+#       - rails: bin/rails s -p ${PORT0}
+#     browse_port: ${PORT0}
+# <<< example
+
+# ============================================================ projects =====
+# The projects `new`/`checkout` can check out, by name. Each becomes a git
+# worktree of `repo` on a branch named after the task id. Replace the `{}`
+# with your own, following the example below.
+projects: {}
+
+# >>> example
+# projects:
+#   my-app:
+#     repo: ~/dev/my-app        # REQUIRED; ~ is expanded
+#     base_branch: main         # branch off this (default: the repo's HEAD)
+#     path: my-app              # subdirectory inside the workspace
+#                               #   (default: the project name above)
+#     depends: shared-lib       # a name or a list; orders setup and up,
+#                               #   reversed for down. Cycles are an error.
+#     setup:                    # run at checkout, re-run by `up` when these
+#       - bundle install        #   lines themselves change
+#       - bin/rails db:prepare
+#     start:                    # what `up` runs, in order
+#       - bin/rails db:migrate  #   a bare string: run it and wait
+#       - rails: bin/rails s -p ${PORT0}   # {name: command}: a DAEMON — own
+#       - worker: bin/sidekiq              #   log and pid file, and the name
+#                                          #   that `logs`/`down` address
+#     stop:                     # optional, after the daemons are confirmed
+#       - bin/rails tmp:clear   #   dead
+#     teardown:                 # on `destroy`, before the worktree goes
+#       - dropdb --if-exists my_app_${WORKSPACE}
+#     env:                      # project env, over the global `env:`
+#       DATABASE_URL: postgres:///my_app_${WORKSPACE}
+#       PORT: ${PORT0}
+#     env_allow: [MY_APP_SECRET]
+#     browse_port: ${PORT0}     # `workspace browse` opens http://localhost:<it>
+#     # `instructions` is appended verbatim to the workspace's WORKSPACE.md —
+#     # tell the agent whatever it needs to know about this project:
+#     instructions: |
+#       Tests: `bin/rspec`. The API is in app/controllers/api.
+#   shared-lib:
+#     repo: ~/dev/shared-lib
+#   acme:                       # a project built from the template above
+#     template: rails-client
+#     params:
+#       NAME: acme
+# <<< example

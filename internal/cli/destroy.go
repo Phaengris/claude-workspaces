@@ -72,16 +72,22 @@ func newDestroyCmd() *cobra.Command {
 // Then three strict phases, because down and teardown are the parts that can
 // fail for user reasons (spec §7):
 //
-//  0. down — the WHOLE workspace's daemons, via the same downWork flow `down`
-//     itself runs (ResolveTargets with no filter). This is not optional
-//     tidiness: destroy deletes the pid records along with the dir, so a
-//     daemon that outlives destroy is invisible AND still holding this index's
-//     ports, which the next workspace on that index then cannot bind. Any stop
-//     failure aborts destroy with the joined errors and NOTHING removed, on
-//     the same convergence rule as teardown below — a daemon that survived
-//     even SIGKILL keeps its pid record (down's caller-removes contract) and
-//     its dir, so a re-run finds it and tries again. force does not soften
-//     this phase: a live daemon is not a broken repo.
+//  0. down — the WHOLE workspace's daemons, via the same downAll flow a
+//     no-target `down` runs (ResolveTargets with no filter, then the pids
+//     DIRECTORY). This is not optional tidiness: destroy deletes the pid
+//     records along with the dir, so a daemon that outlives destroy is
+//     invisible AND still holding this index's ports, which the next workspace
+//     on that index then cannot bind. The directory, not just the config, for
+//     the same reason: a key that drifted out of the config (renamed daemon,
+//     dropped `start:` entry, deleted project) still names a live process, and
+//     it is exactly the one a config-driven stop would miss and this phase
+//     would then erase all trace of. Any stop failure — or an unreadable pids
+//     directory, which leaves what is running unknown — aborts destroy with
+//     the joined errors and NOTHING removed, on the same convergence rule as
+//     teardown below: a daemon that survived even SIGKILL keeps its pid record
+//     (down's caller-removes contract) and its dir, so a re-run finds it and
+//     tries again. force does not soften this phase: a live daemon is not a
+//     broken repo.
 //  1. teardown — per checked-out project in REVERSE dependency order
 //     (dependents first, the mirror of setup's topo order). Command strings
 //     are substituted with RuntimeVars and run via proc.Run under the curated
@@ -167,20 +173,30 @@ func destroyWork(cmd *cobra.Command, cfg *config.Config, root string, ws wsp.Wor
 	}
 
 	// Phase 0 — down, the whole workspace, before anything is torn
-	// down or removed. nil targets is `down <ws>` with no filter.
+	// down or removed. nil targets is `down <ws>` with no filter, and
+	// downAll is that no-filter down in full: the config-resolved
+	// daemons AND every live record in the pids DIRECTORY, config-known
+	// or not. The directory is what makes this phase's promise true —
+	// destroy deletes the records along with the dir and frees the
+	// index, so a daemon whose key drifted out of the config would
+	// otherwise survive with nothing left on disk to find it by, and no
+	// re-run could ever converge on it.
 	//
-	// downWork on an EMPTY work list is a silent no-op success: the
+	// downAll on an EMPTY workspace is a silent no-op success: the
 	// "nothing checked out" hint lives in down's own RunE, not in
-	// downWork, so destroying a projectless workspace stays quiet and
+	// downAll, so destroying a projectless workspace stays quiet and
 	// down's UX is untouched.
 	work, err := wsp.ResolveTargets(cfg, ws, nil)
 	if err != nil {
 		return err
 	}
-	if err := downWork(cmd, cfg, ws, work); err != nil {
+	if _, err := downAll(cmd, cfg, ws, work); err != nil {
 		// Nothing removed, nothing torn down: a surviving daemon keeps
 		// its pid record, so a re-run converges. Aborting here is also
 		// what keeps teardown from running against a still-live app.
+		// An UNREADABLE pids directory aborts too (downAll reports it):
+		// destroy is irreversible, and "cannot tell what runs here" is
+		// not a state to delete a workspace around.
 		return err
 	}
 
