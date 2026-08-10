@@ -130,6 +130,56 @@ stderr 'no workspace matching'
 ! exec workspace destroy
 stderr 'accepts 1 arg'
 
+# --- destroy --force: a corrupted worktree marker cannot wedge destruction ----
+# T-5's api worktree gets its .git file overwritten with junk: git no longer
+# recognizes the dir as api's worktree, so WorktreeRemove fails. Plain destroy
+# must ABORT on that failure (pin: dir and allocation untouched); --force
+# downgrades it to a warning, removes the dir, prunes the stale registration
+# from the (healthy) source repo, and releases.
+workroot config.tmpl root/config.yml
+exec workspace new T-5 corrupt api
+cp junk-git $WORK/root/T-5_corrupt/api/.git
+
+! exec workspace destroy T-5
+stderr 'project "api"'
+exists $WORK/root/T-5_corrupt/api
+grep T-5 $WORK/root/.allocations.json
+
+exec workspace destroy --force T-5
+stdout 'warning: worktree removal failed for .*T-5_corrupt/api'
+! exists $WORK/root/T-5_corrupt
+! grep T-5 $WORK/root/.allocations.json
+
+# The forced destroy pruned api's stale worktree registration: without prune,
+# `worktree list` would still show T-5_corrupt (and its branch dir slot would
+# stay claimed in .git/worktrees).
+exec git -C $WORK/root/src/api worktree list
+! stdout T-5_corrupt
+
+# --- destroy --force: a MOVED source repo (the M2-deferred escape hatch) ------
+# With src/app gone from its configured path, the worktree's .git file points
+# into the void: the project no longer reads as checked out (no down targets,
+# no teardown), but its dir still carries git's linked-worktree marker, so the
+# removal phase still tries — and fails — WorktreeRemove against the missing
+# repo. Plain destroy aborts (pin); --force warns and proceeds. The prune
+# epilogue also fails here (the repo path is gone) and that too is only a
+# warning — prune is best-effort by contract.
+exec workspace new T-6 broken app
+exec mv $WORK/root/src/app $WORK/root/src/app-moved
+
+! exec workspace destroy T-6
+stderr 'project "app"'
+exists $WORK/root/T-6_broken/app
+grep T-6 $WORK/root/.allocations.json
+
+exec workspace destroy --force T-6
+stdout 'warning: worktree removal failed for .*T-6_broken/app'
+stdout 'warning: worktree prune failed for .*src/app'
+! exists $WORK/root/T-6_broken
+! grep T-6 $WORK/root/.allocations.json
+
+-- junk-git --
+gitdir: /nonexistent/nowhere
 -- config.tmpl --
 values:
   PORT: { start: 5000, per_workspace: 10 }
