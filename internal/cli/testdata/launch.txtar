@@ -72,15 +72,29 @@ stdout -count=1 'T-1_fix-thing'
 
 # --- reuse ignores a supplied description -------------------------------------
 # The grammar does not change when reusing: positional 2 is still the
-# description slot, and a description handed to an existing workspace is
-# ignored silently — the `using existing workspace` line IS the notice.
+# description slot, and an ordinary description handed to an existing workspace
+# is ignored SILENTLY — the `using existing workspace` line is the notice, and
+# no `note:` line appears.
 exec workspace launch T-1 'some other words'
 stdout 'using existing workspace T-1_fix-thing'
 ! stdout 'created'
+! stdout 'note:'
 ! exists $WORK/root/T-1_some-other-words
 exec workspace ls
 stdout -count=1 'T-1_fix-thing'
 ! stdout '#1'
+
+# --- reuse: a description that NAMES a project is called out -------------------
+# The one ignore that must not be silent: `launch T-1 bad` is almost certainly
+# `launch <id> <desc> <project>` with the description forgotten. The workspace is
+# still reused and the session still runs — but a note says the word landed in
+# the description slot, and the project is NOT checked out (bad's setup is
+# `false`, so checking it out would also have failed the command outright).
+exec workspace launch T-1 bad
+stdout 'using existing workspace T-1_fix-thing'
+stdout 'note: "bad" is in the description slot and was ignored'
+stdout 'or use checkout'
+! exists $WORK/root/T-1_fix-thing/bad
 
 # --- reuse + an extra project: checked out -------------------------------------
 # api is listed after the (ignored) description, so the reuse path checks it out
@@ -90,6 +104,15 @@ stdout 'using existing workspace T-1_fix-thing'
 exists $WORK/root/T-1_fix-thing/api/README
 exists $WORK/root/T-1_fix-thing/.workspace/setup-api.ok
 grep '### api' $WORK/root/T-1_fix-thing/WORKSPACE.md
+
+# --- session flags and `--` passthrough, end to end ---------------------------
+# -S is OURS (before the separator): it suppresses the skip-permissions
+# injection. Everything after `--` is claude's, verbatim — including a token
+# spelled like our own flag.
+exec workspace launch T-1 -S -- -S --model opus
+stdout 'using existing workspace T-1_fix-thing'
+stdout 'argv: -S --model opus$'
+! stdout 'dangerously'
 
 # --- create without a description: usage error, NOTHING created ---------------
 # Exit 2 is pinned in TestLaunchExitCodes; here: the refusal names the missing
@@ -122,7 +145,6 @@ stderr 'project "flaky"'
 exists $WORK/root/T-1_fix-thing/flaky/README
 
 # --- cleanup: stop what this script started ------------------------------------
-env CLAUDE_SHIM_LOG=$WORK/claude.log
 exec workspace down T-1
 stdout 'stopped app:sleeper \(TERM\)'
 

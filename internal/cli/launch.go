@@ -88,6 +88,21 @@ func newLaunchCmd() *cobra.Command {
 			switch {
 			case err == nil:
 				fmt.Fprintf(out, "using existing workspace %s\n", ws.Name())
+				// The one description the silent-ignore rule must NOT stay
+				// silent about: a supplied description that exactly names a
+				// configured project is almost certainly `launch <id>
+				// <project>` typed with the description slot forgotten — and
+				// the user would otherwise get a session with that project
+				// still not checked out and nothing on screen saying so. The
+				// grammar does not bend (positional 2 is the description); the
+				// note just makes the drop visible.
+				if len(positional) > 1 {
+					if _, isProject := cfg.Projects[positional[1]]; isProject {
+						fmt.Fprintf(out, "note: %q is in the description slot and was ignored"+
+							" — projects go after a description (launch <id> <desc> <project…>)"+
+							" or use checkout\n", positional[1])
+					}
+				}
 				if len(positional) > 2 {
 					if err := checkoutWork(cfg, ws, positional[2:]); err != nil {
 						return err
