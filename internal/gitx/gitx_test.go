@@ -350,17 +350,27 @@ func TestIsMerged(t *testing.T) {
 	// ancestor-or-same check answers true — correct for gc, there is no
 	// unmerged work to lose.
 	gitIn(t, repo, "branch", "fresh")
+	// A TAG with the same name as a branch: git's ambiguous-refname
+	// resolution prefers refs/tags/ over refs/heads/, so an unqualified
+	// "shadowed" would resolve to the tag at main's tip and read "merged"
+	// while the BRANCH holds an unmerged commit — the destructive flip
+	// IsMerged's refs/heads/ qualification exists to prevent.
+	gitIn(t, repo, "checkout", "-b", "shadowed")
+	gitIn(t, repo, "commit", "--allow-empty", "-m", "not merged anywhere")
+	gitIn(t, repo, "checkout", "main")
+	gitIn(t, repo, "tag", "shadowed")
 
 	cases := map[string]struct {
 		repo, branch, base string
 		want               bool
 	}{
-		"merged":         {repo, "done-work", "main", true},
-		"unmerged":       {repo, "open-work", "main", false},
-		"no own commits": {repo, "fresh", "main", true},
-		"missing branch": {repo, "nope", "main", false},
-		"missing base":   {repo, "done-work", "nope", false},
-		"missing repo":   {filepath.Join(t.TempDir(), "gone"), "done-work", "main", false},
+		"merged":             {repo, "done-work", "main", true},
+		"unmerged":           {repo, "open-work", "main", false},
+		"no own commits":     {repo, "fresh", "main", true},
+		"missing branch":     {repo, "nope", "main", false},
+		"tag shadows branch": {repo, "shadowed", "main", false},
+		"missing base":       {repo, "done-work", "nope", false},
+		"missing repo":       {filepath.Join(t.TempDir(), "gone"), "done-work", "main", false},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

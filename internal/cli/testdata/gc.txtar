@@ -6,9 +6,10 @@
 # checked-out branch is merged into its base and which run no daemon. The
 # survival matrix is the point of this script — one root holding, at the same
 # time: a vanished dir, a live daemon beside a stale pid file, a merged
-# workspace, an unmerged one, an adopted one, and an empty one. Only the
-# vanished allocation, the stale pid file and the merged workspace may be
-# collected; everything else SURVIVES, and each survival is pinned.
+# workspace, an unmerged one, an adopted one, an empty one, and a merged but
+# DIRTY one. Only the vanished allocation, the stale pid file and the clean
+# merged workspace may be collected; everything else SURVIVES, and each
+# survival is pinned.
 #
 # Daemon lifetime discipline (down_restart.txtar's rule): the daemon is
 # `sleep 30`, self-expiring, so nothing here can outlive the test run.
@@ -19,9 +20,13 @@ wsenv
 workroot config.tmpl root/config.yml
 ! grep WORKROOT root/config.yml
 
-# Real source repo (worktrees need a commit to branch from).
+# Real source repo (worktrees need a commit to branch from). It gitignores
+# .env, as real projects do: checkout writes .env INTO the worktree, so in a
+# repo that does not ignore it every workspace reads dirty — to `ls -g`'s
+# star exactly as to gc's dirty gate (one predicate, gitx.Stats.Dirty), and
+# then only the explicit `workspace destroy` can ever collect anything.
 exec git -C $WORK/root/src/app init -b main
-exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app add README .gitignore
 exec git -C $WORK/root/src/app commit -m init
 
 # --- empty root: truly nothing to do ------------------------------------------
@@ -60,6 +65,13 @@ stdout 'adopted A-9'
 # (6) empty: tool-created, nothing checked out — no merge evidence exists.
 exec workspace new T-5 empty
 
+# (7) dirty: branch T-6 has no commits of its own (trivially merged) and no
+# daemon runs — everything says collectable EXCEPT an untracked file in the
+# worktree. gc -d must skip it loudly: merged covers only committed work,
+# and a batch sweep never discards a working copy (plan-owner ruling).
+exec workspace new T-6 dirty app
+cp stale-pid $WORK/root/T-6_dirty/app/scratch
+
 # --- gc without --destroy-dirs: release + reap only, never destroy -------------
 exec workspace gc
 stdout '^released T-1_vanished \(dir vanished\)$'
@@ -79,6 +91,7 @@ stdout '^nothing to collect$'
 exec workspace gc -d
 stdout '^destroyed T-3_merged \(merged\)$'
 stdout 'project "app": worktree removed'
+stdout '^skipped T-6_dirty \(uncommitted changes\)$'
 stdout '^gc: 0 released, 0 reaped, 1 destroyed$'
 
 # Destroyed: merged, daemonless, tool-created — the one collectable workspace.
@@ -105,19 +118,25 @@ grep A-9 $WORK/root/.allocations.json
 exists $WORK/root/T-5_empty
 grep T-5 $WORK/root/.allocations.json
 
+# Survives LOUDLY: dirty (the `skipped … (uncommitted changes)` line above).
+# Merged and daemonless, but the untracked file is unsaved work — the only
+# gate that earns a skip line.
+exists $WORK/root/T-6_dirty/app/scratch
+grep T-6 $WORK/root/.allocations.json
+
 # --- join-and-continue: one workspace's failure doesn't stop the batch ---------
-# Config gains project "boom", whose teardown always fails. T-6 checks it out;
+# Config gains project "boom", whose teardown always fails. T-7 checks it out;
 # its branch has no commits of its own, so it reads as merged (nothing to
 # lose). T-2's daemon is stopped, making T-2 merged-and-daemonless too. gc -d
-# now finds two collectable workspaces, hits T-6's teardown failure (T-2_live
+# now finds two collectable workspaces, hits T-7's teardown failure (T-2_live
 # sorts first, so T-2 is already gone), keeps going, and exits non-zero with a
 # summary that counts only what succeeded.
 exec workspace down T-2
 workroot config-fail.tmpl root/config.yml
 exec git -C $WORK/root/src/boom init -b main
-exec git -C $WORK/root/src/boom add README
+exec git -C $WORK/root/src/boom add README .gitignore
 exec git -C $WORK/root/src/boom commit -m init
-exec workspace new T-6 fail boom
+exec workspace new T-7 fail boom
 
 ! exec workspace gc -d
 stderr 'project "boom"'
@@ -127,8 +146,12 @@ stdout '^gc: 0 released, 0 reaped, 1 destroyed$'
 ! grep T-2 $WORK/root/.allocations.json
 
 # The failed workspace is left intact for a retry: dir, worktree, allocation.
-exists $WORK/root/T-6_fail/boom/.git
-grep T-6 $WORK/root/.allocations.json
+exists $WORK/root/T-7_fail/boom/.git
+grep T-7 $WORK/root/.allocations.json
+
+# The dirty one still survives this run too (and still says why).
+stdout '^skipped T-6_dirty \(uncommitted changes\)$'
+exists $WORK/root/T-6_dirty/app/scratch
 
 # --- usage: gc takes no positionals (exit 2, pinned in TestGCExitCodes) --------
 ! exec workspace gc extra
@@ -160,5 +183,9 @@ projects:
 1 99999999999
 -- root/src/app/README --
 app source
+-- root/src/app/.gitignore --
+.env
 -- root/src/boom/README --
 boom source
+-- root/src/boom/.gitignore --
+.env

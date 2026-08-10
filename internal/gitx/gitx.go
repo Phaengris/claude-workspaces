@@ -135,18 +135,28 @@ func WorktreeAdd(repo, dest, branch, base string) error {
 }
 
 // IsMerged reports whether branch is fully merged into base in the repo at
-// repo — `merge-base --is-ancestor <branch> <base>`: every commit of the
-// branch is reachable from base, so deleting the branch's worktree loses no
-// work. A branch whose tip IS base's tip (no commits of its own) is merged by
-// this definition, which is the right answer for the caller: there is nothing
-// to lose.
+// repo — `merge-base --is-ancestor refs/heads/<branch> <base>`: every commit
+// of the branch is reachable from base, so deleting the branch's worktree
+// loses no work. A branch whose tip IS base's tip (no commits of its own) is
+// merged by this definition, which is the right answer for the caller: there
+// is nothing to lose.
+//
+// The branch side is fully qualified as refs/heads/ on purpose: git's
+// ambiguous-refname resolution prefers TAGS over heads, so a tag named like
+// the branch (a task-id tag, say) sitting at base's tip would answer
+// "merged" while the BRANCH still holds unmerged commits — and the caller
+// would destroy them. BranchExists asks with the same qualification. base
+// stays unqualified: it is the user's own base_branch config (or
+// DefaultBranch's output, which is a real branch name), the same loosely
+// resolved value WorktreeAdd branched from — and a base that fails to
+// resolve only ever reads FALSE, the safe direction.
 //
 // ANY error — branch missing, base missing, repo missing, git absent — is
 // simply FALSE. The one caller is gc --destroy-dirs, which reads true as
 // permission to destroy a workspace; an unanswerable question must never
 // grant that permission.
 func IsMerged(repo, branch, base string) bool {
-	_, err := git(repo, "merge-base", "--is-ancestor", branch, base)
+	_, err := git(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, base)
 	return err == nil
 }
 
