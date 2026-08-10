@@ -287,7 +287,8 @@ func TestHasConversation(t *testing.T) {
 // curated allowlist: Claude is the operator's tool.
 func TestSessionEnv(t *testing.T) {
 	t.Setenv("SESSION_PARENT_VAR", "inherited")
-	t.Setenv("DB_NAME", "parent-loses") // collides with the overlay
+	t.Setenv("DB_NAME", "parent-loses")   // collides with the overlay
+	t.Setenv("PWD", "/wherever/launched") // the launcher's cwd: stale for the child
 	cfg := &config.Config{
 		Values: map[string]config.Value{"PORT": {Start: 5000, PerWorkspace: 10}},
 		Env:    map[string]string{"DB_NAME": "app_${WORKSPACE}_dev"},
@@ -305,6 +306,7 @@ func TestSessionEnv(t *testing.T) {
 		"WORKSPACE":          "T-9",         // runtime identity var exported
 		"PORT0":              "5010",        // value vars exported (index 1 × 10)
 		"PORT9":              "5019",        // ... the whole block
+		"PWD":                "/x/T-9_y",    // ws.Dir, not the launcher's cwd
 	}
 	for k, v := range want {
 		if got[k] != v {

@@ -16,8 +16,7 @@ backlog. Prioritize on daily-driving feedback.*
 
 ## Hardening / polish
 - sessionEnv: overlay PWD=ws.Dir (or drop the key) — stale $PWD from the
-  launcher reaches session children. [taken in M5 close-out if the fix
-  landed; else top of this list]
+  launcher reaches session children. [taken in M5 close-out]
 - install layoutFor: honor XDG_CONFIG_HOME/XDG_DATA_HOME (hardcoded
   ~/.config/fish + ~/.local/share today — relocated-XDG users get a
   wrapper fish never autoloads).

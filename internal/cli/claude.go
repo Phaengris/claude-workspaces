@@ -312,6 +312,9 @@ func encodeClaudeProjectDir(dir string) string {
 // scripts rely on $WORKSPACE/$PORT0 existing even when config `env` never
 // mentions them. RuntimeVars is applied last: the tool-derived identity vars
 // are authoritative over a config env entry that happens to reuse a name.
+// PWD is overlaid with ws.Dir because the child runs with c.Dir = ws.Dir while
+// the inherited PWD still names the launcher's cwd: children that trust $PWD
+// instead of getcwd must see the session's actual working directory.
 // Output is sorted for determinism, like envx.Curated.
 func sessionEnv(cfg *config.Config, ws wsp.Workspace) []string {
 	merged := map[string]string{}
@@ -322,6 +325,7 @@ func sessionEnv(cfg *config.Config, ws wsp.Workspace) []string {
 	}
 	maps.Copy(merged, wsp.ResolvedEnv(cfg, ws.Alloc.TaskID, "", ws.Alloc.Index))
 	maps.Copy(merged, wsp.RuntimeVars(cfg, ws.Alloc.TaskID, "", ws.Alloc.Index))
+	merged["PWD"] = ws.Dir
 	out := make([]string, 0, len(merged))
 	for k, v := range merged {
 		out = append(out, k+"="+v)
