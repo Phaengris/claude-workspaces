@@ -180,6 +180,13 @@ func printLogs(w io.Writer, ws wsp.Workspace, d wsp.Daemon, lines int, follow bo
 // The file is read BACKWARDS in chunks rather than whole: a daemon log is
 // unbounded between restarts (truncation happens at start, not by size), and
 // `logs` must stay cheap on a log that has been growing all day.
+//
+// Each chunk is scanned ONCE and its boundary count carried into the next, so
+// the work is linear in the bytes actually read. The obvious shape — prepend
+// each chunk to a growing buffer and re-ask "does this hold n lines yet?" —
+// rescans and recopies everything read so far on every iteration, which is
+// quadratic in the tail; and with sparse newlines (a daemon printing very long
+// lines, or none at all) that tail is the whole file.
 func readTail(path string, n int) ([]byte, int64, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -192,10 +199,13 @@ func readTail(path string, n int) ([]byte, int64, error) {
 		return nil, 0, err
 	}
 	if n <= 0 {
+		// "No history" — what makes `-n 0 -f` mean "only what happens next".
 		return nil, size, nil
 	}
 	const chunk = 64 << 10
-	var buf []byte
+	// Chunks newest-first, joined once at the end into exactly the tail.
+	var rev [][]byte
+	remaining := n
 	for pos := size; pos > 0; {
 		read := int64(chunk)
 		if read > pos {
@@ -206,42 +216,58 @@ func readTail(path string, n int) ([]byte, int64, error) {
 		if _, err := f.ReadAt(b, pos); err != nil {
 			return nil, 0, err
 		}
-		buf = append(b, buf...)
-		// start > 0 means the n-th line boundary was found INSIDE this buffer,
-		// so n complete lines are in hand; start == 0 with more file behind us
-		// means fewer than n lines are buffered yet — read another chunk.
-		if start := tailStart(buf, n); start > 0 || pos == 0 {
-			return buf[start:], size, nil
+		// Only the FIRST chunk read is the file's end, where the terminating
+		// newline belongs to the line it ends rather than starting another.
+		cut, seen := tailScan(b, remaining, len(rev) == 0)
+		remaining -= seen
+		if cut >= 0 {
+			rev = append(rev, b[cut:]) // n-th boundary found: the tail starts here
+			break
 		}
+		rev = append(rev, b) // fewer than n lines so far — keep reading backwards
 	}
-	return buf, size, nil
+	return joinReversed(rev), size, nil
 }
 
-// tailStart returns the offset in b where its last n lines begin: 0 when b
-// holds n lines or fewer, len(b) when n is not positive ("no history", which
-// is what makes `-n 0 -f` mean "only what happens next").
+// tailScan walks b backwards looking for n line boundaries. cut is the offset
+// where the n-th-from-last line begins, or -1 when b holds fewer than n
+// boundaries; seen is how many were found either way — the count the caller
+// carries into the chunk BEFORE this one, which is what keeps the walk linear.
 //
-// The newline TERMINATING the final line is not a boundary of its own — it
-// ends the line it belongs to. Skipping that subtlety is the classic off-by-one
-// here: `-n 1` on "a\nb\n" would cut after the last byte and print nothing.
-func tailStart(b []byte, n int) int {
-	if n <= 0 {
-		return len(b)
-	}
+// atEnd says b ends the file, where the newline TERMINATING the final line is
+// not a boundary of its own: it ends the line it belongs to. Skipping that
+// subtlety is the classic off-by-one here — `-n 1` on "a\nb\n" would cut after
+// the last byte and print nothing. An interior chunk gets no such discount:
+// its last newline really does start the line that continues after it.
+func tailScan(b []byte, n int, atEnd bool) (cut, seen int) {
 	end := len(b)
-	if end > 0 && b[end-1] == '\n' {
+	if atEnd && end > 0 && b[end-1] == '\n' {
 		end--
 	}
 	for i := end - 1; i >= 0; i-- {
 		if b[i] != '\n' {
 			continue
 		}
-		n--
-		if n == 0 {
-			return i + 1
+		seen++
+		if seen == n {
+			return i + 1, seen
 		}
 	}
-	return 0
+	return -1, seen
+}
+
+// joinReversed concatenates chunks collected newest-first back into file
+// order, in one allocation of exactly the right size.
+func joinReversed(rev [][]byte) []byte {
+	total := 0
+	for _, b := range rev {
+		total += len(b)
+	}
+	out := make([]byte, 0, total)
+	for i := len(rev) - 1; i >= 0; i-- {
+		out = append(out, rev[i]...)
+	}
+	return out
 }
 
 // logStream is one file being followed and how far it has been consumed.

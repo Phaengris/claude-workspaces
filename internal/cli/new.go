@@ -27,11 +27,43 @@ type undoStack []func() error
 
 func (u *undoStack) push(fn func() error) { *u = append(*u, fn) }
 
+// undoHalt marks an undo failure that must STOP the rest of the stack. It is a
+// wrapper rather than a flag on the stack because only the failing action
+// knows whether what remains is still safe to do, and errors.As carries that
+// judgement out through whatever the action wrapped its cause in.
+type undoHalt struct{ err error }
+
+func (h undoHalt) Error() string { return h.err.Error() }
+func (h undoHalt) Unwrap() error { return h.err }
+
+// haltedMessage is appended when the stack stops early: the exact state a user
+// is left in, and the command that finishes the job once the cause is fixed.
+const haltedMessage = "undo halted: worktree removal failed; workspace dir and allocation left for retry (destroy --force after fixing the repo)"
+
+// run executes the stack LIFO, collecting every failure — except an undoHalt,
+// which stops the walk with the remaining actions DELIBERATELY skipped.
+//
+// The rule exists because each later undo is coarser than the one before it:
+// os.RemoveAll(dir) deletes whatever the worktree removal could not, and
+// alloc.Release then forgets the workspace ever existed. Running them after a
+// failed worktree removal converts a recoverable half-state — a worktree git
+// still knows about, inside a directory the registry still names — into an
+// orphan nothing points at: git's bookkeeping references a path that no longer
+// exists, its branch stays locked to a phantom checkout, and the user has no
+// identifier left to aim a repair at. Stopping keeps every piece addressable;
+// `destroy --force` is the escape hatch that finishes it.
 func (u undoStack) run() error {
 	var errs []error
 	for i := len(u) - 1; i >= 0; i-- {
-		if err := u[i](); err != nil {
-			errs = append(errs, err)
+		err := u[i]()
+		if err == nil {
+			continue
+		}
+		errs = append(errs, err)
+		var halt undoHalt
+		if errors.As(err, &halt) {
+			errs = append(errs, errors.New(haltedMessage))
+			break
 		}
 	}
 	return errors.Join(errs...)
@@ -105,6 +137,11 @@ func requireValidTaskID(taskID string) error {
 // picks the exit code. Worktree branches are deliberately NOT deleted by undo
 // (decided table: a branch is the user's work, and the surviving branch is
 // simply reused when the fixed `new` re-runs).
+//
+// "Leaves nothing behind" has one documented exception: a worktree removal
+// that FAILS halts the rest of the undo (undoStack.run), so the workspace dir
+// and its allocation survive — addressable state a `destroy --force` can
+// finish off, rather than an orphaned worktree no name reaches.
 func newWork(cmd *cobra.Command, cfg *config.Config, root, taskID, desc string, projects []string) (wsp.Workspace, error) {
 	ordered, err := resolveProjectNames(cfg, projects)
 	if err != nil {
@@ -183,10 +220,19 @@ func newWork(cmd *cobra.Command, cfg *config.Config, root, taskID, desc string, 
 			// even though config validation rejects escaping paths, nothing
 			// here may remove a dir outside the workspace this invocation
 			// created.
+			//
+			// BOTH failures halt the stack (see undoStack.run): a refused
+			// containment check means the dest is somewhere this command may
+			// not touch, and a refused removal means git still owns the
+			// worktree — in either case the coarser undos that follow would
+			// delete what they must not, or forget what still needs a name.
 			if err := assertInsideWorkspace(dir, dest); err != nil {
-				return err
+				return undoHalt{err}
 			}
-			return gitx.WorktreeRemove(repo, dest, true)
+			if err := gitx.WorktreeRemove(repo, dest, true); err != nil {
+				return undoHalt{err}
+			}
+			return nil
 		})
 		if err := wsp.EnsureProject(cfg, ws, name); err != nil {
 			return fail(err) // already prefixed `project "<name>": …`
