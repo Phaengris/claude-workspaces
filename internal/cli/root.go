@@ -69,6 +69,10 @@ func Root() *cobra.Command {
 	root.AddCommand(newDoctorCmd())
 	root.AddCommand(newClaudeCmd())
 	root.AddCommand(newLaunchCmd())
+	// Dynamic shell completions, wired in one table after the tree exists (see
+	// completion.go): every command gets a deliberate suggestion policy, and no
+	// command falls back to completing file names in a workspace slot.
+	wireCompletions(root)
 	return root
 }
 
