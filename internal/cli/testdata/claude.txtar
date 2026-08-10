@@ -1,0 +1,102 @@
+# claude: session launch with flag injection (spec §8), end to end.
+#
+# The `claude` on PATH is a shim that prints its argv, cwd, and selected env
+# vars — PATH discipline: it is prepended FIRST so a real claude binary can
+# never be invoked from this script. HOME is redirected to a fixture so the
+# history probe sees OUR ~/.claude/projects, never the developer's.
+#
+# Exit-code PROPAGATION is asserted here only as zero/non-zero (testscript
+# cannot see exact codes); the exact-code pin (shim exit 7 → workspace exit 7)
+# lives in TestClaudeExitCodePropagation.
+#
+# `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
+# (hermetic git env + root at $WORK/root; WORKROOT template substitution).
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+# Real source repo (worktrees need commits to branch from).
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+
+exec workspace new T-1 x app
+
+# Hermetic HOME + the shim first on PATH.
+env HOME=$WORK/home
+mkdir $WORK/home
+chmod 0755 $WORK/bin/claude
+env PATH=$WORK/bin:$PATH
+
+# --- fresh workspace: skip-permissions injected, NO --continue -----------------
+# The shim's cwd is the workspace dir; the session env carries the inherited
+# environment PLUS the overlay: WORKSPACE, the value vars, and the resolved
+# global env (sanitized-inherited + overlay — NOT the curated allowlist).
+exec workspace claude T-1
+stdout 'argv: --dangerously-skip-permissions$'
+! stdout 'continue'
+stdout 'cwd: '$WORK'/root/T-1_x$'
+stdout 'WORKSPACE=T-1$'
+stdout 'PORT0=18200$'
+stdout 'DB_NAME=app_T-1_dev$'
+
+# --- history appears → --continue injected -------------------------------------
+# The reference encoding (every byte outside [A-Za-z0-9] becomes '-') is
+# duplicated here in sed ON PURPOSE: if encodeClaudeProjectDir ever drifts,
+# this block stops finding the fixture and the --continue assertion fails.
+exec sh -c 'enc=$(printf %s "$WORK/root/T-1_x" | LC_ALL=C sed "s/[^A-Za-z0-9]/-/g"); mkdir -p "$HOME/.claude/projects/$enc" && : > "$HOME/.claude/projects/$enc/conv.jsonl"'
+exec workspace claude T-1
+stdout 'argv: --dangerously-skip-permissions --continue$'
+
+# --- -R suppresses resume; -S suppresses skip-permissions; both ----------------
+exec workspace claude T-1 -R
+stdout 'argv: --dangerously-skip-permissions$'
+! stdout 'continue'
+exec workspace claude T-1 -S
+stdout 'argv: --continue$'
+! stdout 'dangerously'
+exec workspace claude T-1 -S -R
+stdout 'argv: $'
+
+# --- after `--` everything is claude's, verbatim -------------------------------
+# -S after the separator is NOT our flag: both injections still happen and the
+# look-alikes arrive untouched, in order, with the `--` itself dropped.
+exec workspace claude T-1 -- -S --foo
+stdout 'argv: --dangerously-skip-permissions --continue -S --foo$'
+
+# --- a user permission stance suppresses that injection only -------------------
+exec workspace claude T-1 --permission-mode plan
+stdout 'argv: --continue --permission-mode plan$'
+! stdout 'dangerously'
+
+# --- print mode suppresses --continue only --------------------------------------
+exec workspace claude T-1 -p hi
+stdout 'argv: --dangerously-skip-permissions -p hi$'
+! stdout 'continue'
+
+# --- non-zero session exit propagates, with NO added stderr noise ---------------
+# The child owned the terminal; workspace must not print "workspace: exit
+# status 7" on top. Exact code pinned in the unit test.
+env CLAUDE_SHIM_EXIT=7
+! exec workspace claude T-1
+! stderr .
+env CLAUDE_SHIM_EXIT=
+
+-- config.tmpl --
+values:
+  PORT: { start: 18200, per_workspace: 5 }
+env:
+  DB_NAME: app_${WORKSPACE}_dev
+projects:
+  app:
+    repo: WORKROOT/src/app
+-- bin/claude --
+#!/bin/sh
+echo "argv: $@"
+echo "cwd: $(pwd)"
+echo "WORKSPACE=$WORKSPACE"
+echo "PORT0=$PORT0"
+echo "DB_NAME=$DB_NAME"
+exit ${CLAUDE_SHIM_EXIT:-0}
+-- root/src/app/README --
+app source
