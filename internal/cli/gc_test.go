@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/proc"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/proc"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 // TestGCExitCodes pins the codes gc.txtar can only assert as "non-zero" or

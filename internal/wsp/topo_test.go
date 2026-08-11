@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/config"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 func cfgWithDeps(deps map[string][]string) *config.Config {

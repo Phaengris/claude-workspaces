@@ -6,9 +6,9 @@ import (
 	"slices"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/alloc"
-	"git.internal/cat/claude-workspaces-go/internal/config"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/alloc"
+	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 // projectConfig is a valid config with two projects, used by the tests that

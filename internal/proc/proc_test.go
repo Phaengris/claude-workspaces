@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/envx"
-	"git.internal/cat/claude-workspaces-go/internal/proc"
+	"github.com/Phaengris/claude-workspaces/internal/envx"
+	"github.com/Phaengris/claude-workspaces/internal/proc"
 )
 
 // All Run tests pin SHELL to /bin/sh: the developer's login shell may be fish,

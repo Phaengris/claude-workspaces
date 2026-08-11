@@ -6,9 +6,10 @@ and daemons — an *environment engine*. Clean-room Go rewrite (v1.0.x, complete
 daily-driven) of a retired Ruby tool; **never consult or port Ruby code** —
 the spec and this repo are the only sources.
 
-Module path is `git.internal/cat/claude-workspaces-go` (predates the repo rename —
-renaming it is a deliberate deferral, don't "fix" casually; it touches every
-import and the install ldflags).
+Module path is `github.com/Phaengris/claude-workspaces` — the intended public
+home, named ahead of publication (module paths are independent of where the
+code actually lives until someone `go install`s by that path). The git remote
+is still git.internal; publishing to GitHub requires no further rename.
 
 ## Commands
 
@@ -17,7 +18,7 @@ CGO_ENABLED=0 go build -o ./workspace ./cmd/workspace     # build (binary is git
 go test ./...                                             # full suite (~11s; real processes, real git)
 go test -race ./internal/proc ./internal/wsp ./internal/cli
 gofmt -l . && go vet ./...                                # both must be clean before commit
-# release: -ldflags "-X git.internal/cat/claude-workspaces-go/internal/cli.version=X.Y.Z", tag vX.Y.Z, ./workspace install
+# release: -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=X.Y.Z", tag vX.Y.Z, ./workspace install
 ```
 
 Conventional commits (`feat(cli): …`). The user's real install lives at

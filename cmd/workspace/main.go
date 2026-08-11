@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"git.internal/cat/claude-workspaces-go/internal/cli"
+	"github.com/Phaengris/claude-workspaces/internal/cli"
 )
 
 func main() {

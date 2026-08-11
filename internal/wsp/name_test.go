@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 func TestDirName(t *testing.T) {

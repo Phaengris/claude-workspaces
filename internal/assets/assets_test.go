@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/assets"
-	"git.internal/cat/claude-workspaces-go/internal/config"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/assets"
+	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 // TestAccessorsCarryTheirContent is the embed round-trip: every accessor must
@@ -28,7 +28,7 @@ func TestAccessorsCarryTheirContent(t *testing.T) {
 		sentinels []string
 	}{
 		{"Skill", assets.Skill(), []string{
-			"name: claude-workspaces-go",
+			"name: claude-workspaces",
 			"description:",
 			"work on",
 			"workspace launch",

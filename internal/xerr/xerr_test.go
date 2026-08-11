@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 func TestExitCode(t *testing.T) {

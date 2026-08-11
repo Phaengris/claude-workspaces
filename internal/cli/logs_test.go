@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 // daemonConfig is a config whose projects declare daemons, so the target

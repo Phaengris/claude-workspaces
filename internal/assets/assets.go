@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	embedded "git.internal/cat/claude-workspaces-go/assets"
+	embedded "github.com/Phaengris/claude-workspaces/assets"
 )
 
 // The files are read once, at package init: an embedded FS cannot change
@@ -47,7 +47,7 @@ func mustRead(name string) []byte {
 func clone(b []byte) []byte { return append([]byte(nil), b...) }
 
 // Skill returns the Claude Code skill document. Install target:
-// ~/.claude/skills/claude-workspaces-go/SKILL.md, mode 0644. The directory
+// ~/.claude/skills/claude-workspaces/SKILL.md, mode 0644. The directory
 // name must match the skill's frontmatter `name`.
 func Skill() []byte { return clone(skill) }
 

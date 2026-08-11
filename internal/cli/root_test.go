@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 // runCLI drives Root() for the given args with all output discarded and

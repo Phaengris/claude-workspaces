@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 // defaultLogLines is how much history `logs` prints without -n: the decided

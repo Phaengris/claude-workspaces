@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"git.internal/cat/claude-workspaces-go/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/config"
 )
 
 // TopoOrder orders the given project names so that every project comes after

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/ui"
+	"github.com/Phaengris/claude-workspaces/internal/ui"
 )
 
 func TestPrintJSON(t *testing.T) {

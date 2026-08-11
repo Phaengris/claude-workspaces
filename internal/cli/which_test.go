@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/alloc"
+	"github.com/Phaengris/claude-workspaces/internal/alloc"
 )
 
 // siblingRoot builds a root holding projectConfig plus four allocations whose

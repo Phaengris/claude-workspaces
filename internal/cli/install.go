@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.internal/cat/claude-workspaces-go/internal/assets"
-	"git.internal/cat/claude-workspaces-go/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/assets"
+	"github.com/Phaengris/claude-workspaces/internal/config"
 )
 
 // `workspace install` / `workspace uninstall` (spec §2, §9) are the one place
@@ -48,7 +48,7 @@ type installLayout struct {
 	bashWrapper string // ~/.local/share/workspace/shell/workspace.bash — sourced by bash AND zsh
 	bashComp    string // ~/.local/share/workspace/completions/workspace.bash — generated, sourced
 	zshComp     string // ~/.local/share/workspace/completions/_workspace — generated, via $fpath
-	skill       string // ~/.claude/skills/claude-workspaces-go/SKILL.md
+	skill       string // ~/.claude/skills/claude-workspaces/SKILL.md
 	hook        string // ~/.local/share/workspace/hooks/session-start.sh, 0755 — executed
 	manifest    string // ~/.local/share/workspace/install-manifest.json — the uninstall contract
 }
@@ -67,7 +67,7 @@ func layoutFor(home string) installLayout {
 		bashWrapper: filepath.Join(share, "shell", "workspace.bash"),
 		bashComp:    filepath.Join(share, "completions", "workspace.bash"),
 		zshComp:     filepath.Join(share, "completions", "_workspace"),
-		skill:       filepath.Join(home, ".claude", "skills", "claude-workspaces-go", "SKILL.md"),
+		skill:       filepath.Join(home, ".claude", "skills", "claude-workspaces", "SKILL.md"),
 		hook:        filepath.Join(share, "hooks", "session-start.sh"),
 		manifest:    filepath.Join(share, "install-manifest.json"),
 	}

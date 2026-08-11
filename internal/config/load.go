@@ -8,7 +8,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 // RootDir resolves the workspaces root: $CLAUDE_WORKSPACES_ROOT_DIR overrides

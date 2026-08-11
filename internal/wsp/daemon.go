@@ -10,9 +10,9 @@ import (
 	"slices"
 	"strings"
 
-	"git.internal/cat/claude-workspaces-go/internal/config"
-	"git.internal/cat/claude-workspaces-go/internal/proc"
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/proc"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 // The daemon model (spec §2/§3): which long-running processes a project

@@ -14,11 +14,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.internal/cat/claude-workspaces-go/internal/alloc"
-	"git.internal/cat/claude-workspaces-go/internal/config"
-	"git.internal/cat/claude-workspaces-go/internal/proc"
-	"git.internal/cat/claude-workspaces-go/internal/ui"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/alloc"
+	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/proc"
+	"github.com/Phaengris/claude-workspaces/internal/ui"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 // Observation kinds — the machine handle a --json consumer branches on, and

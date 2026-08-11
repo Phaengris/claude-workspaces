@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.internal/cat/claude-workspaces-go/internal/ui"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/ui"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 // newEnvCmd builds `workspace env <workspace> [project]`: the environment a

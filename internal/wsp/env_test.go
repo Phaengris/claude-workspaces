@@ -3,8 +3,8 @@ package wsp_test
 import (
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/config"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 func testCfg() *config.Config {

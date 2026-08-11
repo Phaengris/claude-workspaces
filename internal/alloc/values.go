@@ -3,7 +3,7 @@ package alloc
 import (
 	"strconv"
 
-	"git.internal/cat/claude-workspaces-go/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/config"
 )
 
 // NextIndex returns the lowest index not currently allocated. Gap-filling —

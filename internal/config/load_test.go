@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 func writeConfig(t *testing.T, yml string) string {

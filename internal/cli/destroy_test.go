@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 // TestDestroyExitCodes pins the codes destroy.txtar can only assert as

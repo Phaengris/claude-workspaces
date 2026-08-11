@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 
-	"git.internal/cat/claude-workspaces-go/internal/gitx"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/gitx"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 // newExecCmd builds `workspace exec <workspace> [project] <command> [args…]`:

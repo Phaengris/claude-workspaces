@@ -14,8 +14,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"git.internal/cat/claude-workspaces-go/internal/envx"
-	"git.internal/cat/claude-workspaces-go/internal/proc"
+	"github.com/Phaengris/claude-workspaces/internal/envx"
+	"github.com/Phaengris/claude-workspaces/internal/proc"
 )
 
 // All daemon tests use REAL processes with bounded lifetimes (≤30s: every

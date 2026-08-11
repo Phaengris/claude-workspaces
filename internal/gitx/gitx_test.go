@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/gitx"
+	"github.com/Phaengris/claude-workspaces/internal/gitx"
 )
 
 // mkRepo builds a real repo in a temp dir, hermetically sealed against the

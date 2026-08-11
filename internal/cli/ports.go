@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.internal/cat/claude-workspaces-go/internal/alloc"
-	"git.internal/cat/claude-workspaces-go/internal/ui"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/alloc"
+	"github.com/Phaengris/claude-workspaces/internal/ui"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 // portRange is one value's block for one workspace, inclusive on both ends.

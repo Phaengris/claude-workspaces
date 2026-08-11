@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.internal/cat/claude-workspaces-go/internal/config"
-	"git.internal/cat/claude-workspaces-go/internal/ui"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/ui"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 // taskSep joins a task id to its description on the `task:` line. It is an

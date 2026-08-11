@@ -1,5 +1,5 @@
 ---
-name: claude-workspaces-go
+name: claude-workspaces
 description: >-
   Create and drive isolated dev workspaces with the `workspace` CLI — a git
   worktree per project, its own port block, its own env and its own daemons.

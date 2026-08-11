@@ -21,7 +21,7 @@ exists $HOME/.config/fish/completions/workspace.fish
 exists $HOME/.local/share/workspace/shell/workspace.bash
 exists $HOME/.local/share/workspace/completions/workspace.bash
 exists $HOME/.local/share/workspace/completions/_workspace
-exists $HOME/.claude/skills/claude-workspaces-go/SKILL.md
+exists $HOME/.claude/skills/claude-workspaces/SKILL.md
 isexec $HOME/.local/share/workspace/hooks/session-start.sh
 
 # fish's functions/ holds the cd WRAPPER and completions/ the generated
@@ -79,7 +79,7 @@ exec workspace uninstall
 ! exists $HOME/.local/share/workspace/shell/workspace.bash
 ! exists $HOME/.local/share/workspace/completions/workspace.bash
 ! exists $HOME/.local/share/workspace/completions/_workspace
-! exists $HOME/.claude/skills/claude-workspaces-go/SKILL.md
+! exists $HOME/.claude/skills/claude-workspaces/SKILL.md
 ! exists $HOME/.local/share/workspace/hooks/session-start.sh
 ! exists $HOME/.local/share/workspace/install-manifest.json
 

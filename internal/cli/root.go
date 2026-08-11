@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.internal/cat/claude-workspaces-go/internal/envx"
-	"git.internal/cat/claude-workspaces-go/internal/xerr"
+	"github.com/Phaengris/claude-workspaces/internal/envx"
+	"github.com/Phaengris/claude-workspaces/internal/xerr"
 )
 
 // version is stamped at release time via -ldflags "-X …/internal/cli.version=v…".

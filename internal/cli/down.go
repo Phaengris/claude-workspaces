@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.internal/cat/claude-workspaces-go/internal/config"
-	"git.internal/cat/claude-workspaces-go/internal/gitx"
-	"git.internal/cat/claude-workspaces-go/internal/proc"
-	"git.internal/cat/claude-workspaces-go/internal/wsp"
+	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/claude-workspaces/internal/gitx"
+	"github.com/Phaengris/claude-workspaces/internal/proc"
+	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
 // newDownCmd builds `workspace down <workspace> [target…]` (alias `stop`):

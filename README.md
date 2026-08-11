@@ -20,7 +20,7 @@ first, macOS expected to work).
 ### 1. Build
 
 ```sh
-CGO_ENABLED=0 go build -ldflags "-X git.internal/cat/claude-workspaces-go/internal/cli.version=1.0.0" -o workspace ./cmd/workspace
+CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=1.0.0" -o workspace ./cmd/workspace
 ```
 
 `CGO_ENABLED=0` is the point of the exercise (one static file, no libc
@@ -52,7 +52,7 @@ references your build tree) and writes:
 | `~/.local/share/workspace/shell/workspace.bash` | the bash/zsh `cd` wrapper — *you* source it |
 | `~/.local/share/workspace/completions/workspace.bash` | generated bash completions — *you* source it |
 | `~/.local/share/workspace/completions/_workspace` | generated zsh completions — *you* add the dir to `$fpath` |
-| `~/.claude/skills/claude-workspaces-go/SKILL.md` | the Claude Code skill (its own name, so it coexists with the v1 skill) |
+| `~/.claude/skills/claude-workspaces/SKILL.md` | the Claude Code skill (its own name, so it coexists with the v1 skill) |
 | `~/.local/share/workspace/hooks/session-start.sh` | the SessionStart hook script, mode 0755 |
 | `~/.local/share/workspace/install-manifest.json` | the list of the paths above — the uninstall contract |
 | `<root>/config.yml` | a commented starter config, **only if absent** |
@@ -634,7 +634,7 @@ environment. Reuse **ignores a supplied description silently** (the
 configured project, a note says what became of it, because you almost certainly
 meant `launch <id> <desc> <project…>`.
 
-The installed **skill** (`~/.claude/skills/claude-workspaces-go/SKILL.md`) is
+The installed **skill** (`~/.claude/skills/claude-workspaces/SKILL.md`) is
 the session-facing interface — "work on FIZZY-123" turns into
 `new`/`checkout`/`up` and a `cd`. The **SessionStart hook** adds identity and
 status as context and never mutates. `WORKSPACE.md` holds the task, the
@@ -736,7 +736,7 @@ unreadable registry (exit 1) are errors. `--json` gives `findings` and
 Consolidated, for anyone coming from the Ruby tool. This is a **new tool** with
 a new command surface and new on-disk formats, not a port: live v1 workspaces
 are not migrated (they finish on Ruby), and the two coexist — the skill here is
-installed under its own name, `claude-workspaces-go`.
+installed under its own name, `claude-workspaces`.
 
 - **Dropped commands**: `archive`/`unarchive` (a workspace with daemons down and
   its allocation released *is* archived; re-provisioning is `adopt`), `resolve`
@@ -778,7 +778,7 @@ installed under its own name, `claude-workspaces-go`.
 go test ./... -count=1      # table tests + testscript command flows
 gofmt -l .                  # must print nothing
 go vet ./...
-CGO_ENABLED=0 go build -ldflags "-X git.internal/cat/claude-workspaces-go/internal/cli.version=$(git describe --tags --always)" -o workspace ./cmd/workspace
+CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=$(git describe --tags --always)" -o workspace ./cmd/workspace
 ```
 
 Runtime dependencies are deliberately three, four modules with `pflag` (which is

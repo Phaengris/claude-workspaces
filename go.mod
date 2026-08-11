@@ -1,4 +1,4 @@
-module git.internal/cat/claude-workspaces-go
+module github.com/Phaengris/claude-workspaces
 
 go 1.26.0
 

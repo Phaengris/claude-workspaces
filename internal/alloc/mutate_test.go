@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"git.internal/cat/claude-workspaces-go/internal/alloc"
+	"github.com/Phaengris/claude-workspaces/internal/alloc"
 )
 
 const testNow = "2026-08-09T12:00:00+03:00"
