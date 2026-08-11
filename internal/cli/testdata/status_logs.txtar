@@ -6,6 +6,12 @@
 #   lib     — configured, never checked out, daemon `liblet`: the probe that a
 #             not-checked-out project shows NO daemon lines and no daemons key
 #
+# `sleeper` carries a description with a ${} value token — the substituted
+# form is the load-bearing probe that status renders it (human, appended after
+# an em-dash, and JSON). T-1 is this fixture's only (and thus first) workspace,
+# so its index is 0 and PORT0 = 5000. `other` carries NO description on
+# purpose: its line must stay byte-identical to before descriptions existed.
+#
 # Daemon lifetime discipline (Task 4's rule): every daemon is `sleep 30` —
 # self-expiring well before any timeout — and the script still ends with
 # `workspace down`. Only ONE of app's two daemons is ever started: the whole
@@ -32,7 +38,7 @@ stdout 'started app:sleeper \(pid \d+\)'
 
 exec workspace status T-1
 stdout '^  app: checked out \(branch T-1\), setup current$'
-stdout '^    sleeper: running \(pid \d+\)$'
+stdout '^    sleeper: running \(pid \d+\) — naps on port 5000$'
 stdout '^    other: stopped$'
 # Daemon lines are indented UNDER their project and follow it in listed order
 # (start order), not sorted — the project heading is the only project context.
@@ -43,10 +49,13 @@ stdout '(?s)  app:.*    sleeper:.*    other:'
 stdout '^  lib: not checked out$'
 ! stdout 'liblet'
 
-# --json: projects[] carries daemons:[{name, running, pid}] in the same order.
+# --json: projects[] carries daemons:[{name, running, pid, description}] in
+# the same order. description is substituted, and omitted (omitempty) for a
+# daemon that configures none.
 exec workspace status T-1 --json
-stdout '(?s)"daemons": \[\s+\{\s+"name": "sleeper",\s+"running": true,\s+"pid": \d+'
-stdout '(?s)"name": "other",\s+"running": false,\s+"pid": 0'
+stdout '(?s)"daemons": \[\s+\{\s+"name": "sleeper",\s+"running": true,\s+"pid": \d+,\s+"description": "naps on port 5000"'
+stdout '(?s)"name": "other",\s+"running": false,\s+"pid": 0\s+\}'
+! stdout '"description": ""'
 # lib is not checked out: nothing was measured, so it carries no daemons key.
 ! stdout 'liblet'
 
@@ -87,9 +96,11 @@ exec workspace down T-1
 stdout 'stopped app:sleeper \(TERM\)'
 stdout 'other already stopped'
 
-# And status now reports both daemons stopped.
+# And status now reports both daemons stopped — sleeper's description still
+# appended (stopped and running render it identically), other's line
+# byte-identical to before descriptions existed.
 exec workspace status T-1
-stdout '^    sleeper: stopped$'
+stdout '^    sleeper: stopped — naps on port 5000$'
 stdout '^    other: stopped$'
 
 -- config.tmpl --
@@ -101,7 +112,9 @@ projects:
     setup:
       - echo ran > setup.log
     start:
-      - sleeper: sleep 30
+      - sleeper:
+          command: sleep 30
+          description: naps on port ${PORT0}
       - other: sleep 30
   lib:
     repo: WORKROOT/src/lib
