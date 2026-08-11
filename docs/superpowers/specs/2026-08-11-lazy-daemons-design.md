@@ -30,7 +30,7 @@ This design only changes *when* things start and *what the reader is told*.
 | 2 | Where role knowledge lives | New optional per-daemon `description:` in config — single source; rendered into `status`, WORKSPACE.md and doctor. NOT `instructions:` prose (can't render per-daemon into status). |
 | 3 | `up <ws>` (no targets) | Unchanged: starts everything checked out. It is the explicit "bring it all up". |
 | 4 | launch-on-reuse convergence | Gone with the up phase: launch no longer restarts dead daemons on reuse. It leaves processes exactly as found. |
-| 5 | Description `${}` | Rendered through the same runtime substitution as commands (`wsp.Subst` over `wsp.ResolvedEnv`), so readers see `localhost:20800`, not `${PORT_0}`. |
+| 5 | Description `${}` | Rendered through the same runtime substitution as commands (`wsp.Subst` over `wsp.RuntimeVars`), so readers see `localhost:20800`, not `${PORT0}`. |
 | 6 | Missing description | Doctor **note** (uncounted), never a finding — nothing is broken, and findings keep their "a command fixes this" contract. Reported once per `project:daemon`, not per workspace. |
 | 7 | Run-and-waits | No descriptions — they are unnamed, untargetable and re-run on every `up`; nothing to lazily start or describe. |
 | 8 | Version | v1.1.0 — behavior change (launch), backward-compatible config grammar. |
@@ -77,7 +77,8 @@ start:
 ## 3. Surfacing
 
 One authoring home (config), three read paths. All rendering substitutes
-`${}` via `wsp.Subst(desc, wsp.ResolvedEnv(cfg, taskID, project, index))`.
+`${}` via `wsp.Subst(desc, wsp.RuntimeVars(cfg, taskID, project, index))` —
+the same vars the daemon's command receives.
 
 **status** — the daemon line gains the description as a suffix:
 
