@@ -103,7 +103,7 @@ stdout 'or use checkout'
 
 # --- reuse + an extra project: checked out -------------------------------------
 # api is listed after the (ignored) description, so the reuse path checks it out
-# through the same ensure loop `checkout` uses, and up then covers it.
+# through the same ensure loop `checkout` uses.
 exec workspace launch T-1 'fix thing' api
 stdout 'using existing workspace T-1_fix-thing'
 exists $WORK/root/T-1_fix-thing/api/README

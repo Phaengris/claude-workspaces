@@ -119,7 +119,6 @@ func newLaunchCmd() *cobra.Command {
 				return err // an ambiguous task id: plain error, exit 1
 			}
 
-			// --- phase 2: nothing starts -------------------------------------
 			// Daemons are lazy (spec 2026-08-11): the session starts what it
 			// needs via `workspace up`. The one thing launch still says here is
 			// the empty-workspace hint — a workspace with nothing checked out is
@@ -128,7 +127,7 @@ func newLaunchCmd() *cobra.Command {
 				hintNothingCheckedOut(cmd, ws)
 			}
 
-			// --- phase 3: the session ------------------------------------
+			// --- phase 2: the session ------------------------------------
 			return runClaudeSession(cfg, ws, skipPerms, noResume, claudeArgs)
 		},
 	}
