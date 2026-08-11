@@ -14,9 +14,13 @@
 #   A-9_adopted           adopted allocation outside the root     → informational
 #   X-1_corrupt           NOT-adopted allocation outside the root → finding
 #   project "gone"        configured repo dir absent              → finding
-# Five findings; the adopted out-of-root line is informational and must NOT be
-# counted. A LIVE daemon's informational count needs a real live process, so it
-# is pinned in doctor_test.go instead (this script starts nothing).
+#   project "app"'s `ghost` daemon is configured with no `description:` (the
+#   shorthand `- ghost: sleep 30` form never has one) → note, config-level,
+#   NOT counted.
+# Five findings; the adopted out-of-root line and the description-less-daemon
+# note are informational and must NOT be counted. A LIVE daemon's
+# informational count needs a real live process, so it is pinned in
+# doctor_test.go instead (this script starts nothing).
 #
 # `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
 # (hermetic git env + root at $WORK/root; WORKROOT/WORKDIR substitution).
@@ -49,6 +53,7 @@ stdout '^allocation outside root: '$WORK'/side/X-1_corrupt \(NOT adopted — pos
 stdout '^project "gone": repo does not exist: '$WORK'/root/src/gone$'
 stdout '^stale pid file: T-2_daemons/app:ghost \(run: workspace gc\)$'
 stdout '^stale pid file: T-2_daemons/vanished:ghost \(not in config\) \(run: workspace gc\)$'
+stdout 'note: daemon app:ghost has no description — add description: under start: to tell sessions what it is for'
 stdout '^doctor: 5 finding\(s\)$'
 
 # Nothing runs here, so no daemon note at all — the live count is reported only

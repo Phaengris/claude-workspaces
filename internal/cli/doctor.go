@@ -38,6 +38,7 @@ const (
 	kindStalePidFile          = "stale_pid_file"
 	kindPidsUnreadable        = "pids_unreadable"
 	kindDaemonsRunning        = "daemons_running"
+	kindDaemonNoDescription   = "daemon_no_description"
 )
 
 // gcHint closes every finding `workspace gc` is the fix for. doctor reports and
@@ -182,6 +183,21 @@ func doctorObserve(root string, cfg *config.Config, reg alloc.Registry) []doctor
 	}
 	note := func(kind, ws, detail string) {
 		obs = append(obs, doctorObs{kind: kind, workspace: ws, detail: detail, note: true})
+	}
+
+	// Config-level advisory, once per configured daemon (not per workspace):
+	// a daemon without a description: is invisible-in-purpose to sessions,
+	// which now must decide what to start (daemons are lazy). A note, never a
+	// finding — nothing is broken and no command fixes it; the fix is an edit
+	// to config.yml.
+	for _, project := range slices.Sorted(maps.Keys(cfg.Projects)) {
+		for _, d := range wsp.DaemonsOf(cfg, project) {
+			if d.Description == "" {
+				note(kindDaemonNoDescription, "", fmt.Sprintf(
+					"note: daemon %s has no description — add description: under start: to tell sessions what it is for",
+					d.Key()))
+			}
+		}
 	}
 
 	// Section 2 — allocations. wsp.List sorts by name, which is what makes the
