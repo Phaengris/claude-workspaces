@@ -239,7 +239,9 @@ projects:
     start:                         # what `up` runs, in order
       - bin/rails db:migrate       #   bare string  = run-and-wait
       - rails: bin/rails s -p ${PORT0}   # {name: cmd} = DAEMON
-      - worker: bin/sidekiq
+      - worker:                     # {name: {command, description}} = DAEMON,
+          command: bin/sidekiq      #   with a description `status`/
+          description: background jobs   #   WORKSPACE.md show (${…} substituted)
     stop:                          # optional; runs AFTER this project's daemons stop
       - bin/rails tmp:clear
     teardown:                      # on `destroy`, before the worktree goes
@@ -490,7 +492,10 @@ the distinction:
 - a **single-key map** (`name: command`) is a **daemon**: its own process
   group, stdout to `.workspace/logs/<project:daemon>.log` and stderr to
   `<project:daemon>.err.log` (both truncated at every start), and a pid file
-  `.workspace/pids/<project:daemon>` holding `<pid> <starttime>`.
+  `.workspace/pids/<project:daemon>` holding `<pid> <starttime>`. The value
+  can also be a nested `{command, description}` map — same daemon, plus an
+  optional `description:` that `status` and `WORKSPACE.md` show (with `${…}`
+  substituted) so a session knows what the daemon is for before starting it.
 
 Run-and-waits belong to the **project**, not to any one daemon: they run when
 the whole project is targeted, and are skipped when you address a single daemon
