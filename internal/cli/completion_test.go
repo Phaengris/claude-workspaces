@@ -114,6 +114,18 @@ func TestDynamicCompletions(t *testing.T) {
 		"claude workspace":  {args: []string{"claude", ""}, want: wsIdents, directive: noFile},
 		"launch workspace":  {args: []string{"launch", ""}, want: wsIdents, directive: noFile},
 		"claude past first": {args: []string{"claude", "A-1", ""}, want: nil, directive: noFile},
+		// launch's positional grammar IS re-parsed for completion (the pure
+		// helpers exist anyway): task id, then description (free text — no
+		// suggestions), then project names minus the ones already typed.
+		// -S/-R don't shift the positional count; after `--` everything
+		// belongs to claude.
+		"launch flag then ws":     {args: []string{"launch", "-S", ""}, want: wsIdents, directive: noFile},
+		"launch desc slot":        {args: []string{"launch", "PATFIX", ""}, want: nil, directive: noFile},
+		"launch projects":         {args: []string{"launch", "PATFIX", "little fixes", ""}, want: []string{"app", "lib"}, directive: noFile},
+		"launch projects prefix":  {args: []string{"launch", "PATFIX", "little fixes", "a"}, want: []string{"app"}, directive: noFile},
+		"launch minus typed":      {args: []string{"launch", "PATFIX", "little fixes", "app", ""}, want: []string{"lib"}, directive: noFile},
+		"launch flags interleave": {args: []string{"launch", "-S", "PATFIX", "-R", "little fixes", ""}, want: []string{"app", "lib"}, directive: noFile},
+		"launch past dashdash":    {args: []string{"launch", "PATFIX", "little fixes", "--", ""}, want: nil, directive: noFile},
 
 		// Project slots: configured project names.
 		"cd project":          {args: []string{"cd", "A-1", ""}, want: []string{"app", "lib"}, directive: noFile},

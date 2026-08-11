@@ -88,9 +88,11 @@ func wireCompletions(root *cobra.Command) {
 		"adopt":   completeDir,
 		"release": completeDir,
 
-		// Sessions: the workspace slot only (see completeSessionWorkspace).
+		// Sessions: claude completes its workspace slot only (everything
+		// after it belongs to claude itself); launch re-parses its own
+		// positional grammar (see completeLaunch).
 		"claude": completeSessionWorkspace,
-		"launch": completeSessionWorkspace,
+		"launch": completeLaunch,
 	}
 	for _, cmd := range root.Commands() {
 		if fn, ok := byName[cmd.Name()]; ok {
@@ -135,22 +137,47 @@ func completeWorkspace(_ *cobra.Command, args []string, toComplete string) ([]st
 	return workspaceIdents(toComplete), cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeSessionWorkspace completes the workspace slot of `claude` and the
-// task-id slot of `launch` (a task id of an EXISTING workspace is what makes
-// launch reuse it, so the same idents apply).
-//
-// LIMITATION, by design: both commands set DisableFlagParsing (spec §8), so
-// cobra hands the completer the raw argv — flags, `--` and passthrough
-// arguments included, with no positional parsing. The first slot is the only
-// one whose meaning is unambiguous (nothing precedes it), so it is the only one
-// completed: `workspace claude -S <TAB>` suggests nothing, and completing
-// launch's later positionals (description, projects) would require re-parsing
-// the session grammar here purely for the shell's benefit.
+// completeSessionWorkspace completes the workspace slot of `claude`. The
+// command sets DisableFlagParsing (spec §8), so cobra hands the completer the
+// raw argv; the first slot is the only one that is ours — everything after it
+// is claude's own argv, and suggesting anything there would be wrong.
 func completeSessionWorkspace(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	return workspaceIdents(toComplete), cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeLaunch re-parses launch's positional grammar for the shell's
+// benefit, with the same pure helpers the command itself parses with: strip
+// the session flags (-S/-R — they never shift the positional count), stop at
+// `--` (everything after is claude passthrough), then complete by position —
+// task id (existing workspace idents: an existing id is what makes launch
+// reuse), description (free text, no suggestions), then configured project
+// names minus the ones already typed.
+func completeLaunch(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if slices.Contains(args, "--") {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	_, _, positionals := extractSessionFlags(args)
+	switch len(positionals) {
+	case 0:
+		return workspaceIdents(toComplete), cobra.ShellCompDirectiveNoFileComp
+	case 1:
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	default:
+		taken := make(map[string]bool, len(positionals)-2)
+		for _, p := range positionals[2:] {
+			taken[p] = true
+		}
+		var names []string
+		for _, name := range projectNames(toComplete) {
+			if !taken[name] {
+				names = append(names, name)
+			}
+		}
+		return names, cobra.ShellCompDirectiveNoFileComp
+	}
 }
 
 // completeWorkspaceThenProject completes `<workspace> [project]`.
