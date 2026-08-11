@@ -643,7 +643,8 @@ The installed **skill** (`~/.claude/skills/claude-workspaces/SKILL.md`) is
 the session-facing interface — "work on FIZZY-123" turns into
 `new`/`checkout`/`up` and a `cd`. The **SessionStart hook** adds identity and
 status as context and never mutates. `WORKSPACE.md` holds the task, the
-allocated values and the per-project `instructions`; `CLAUDE.md` is created
+allocated values, the per-project `instructions`, and each project's daemons
+and what they're for; `CLAUDE.md` is created
 **once** with a single reference line to it and never rewritten, so notes
 accumulated there survive every regeneration.
 

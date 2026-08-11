@@ -23,3 +23,10 @@ PORT1=5003
 Run `bin/rails s` on ${PORT0}.
 
 Ask before touching the schema.
+
+Services — not started automatically; start what you need with
+`workspace up T-1_add-widgets <daemon>` and follow it with
+`workspace logs T-1_add-widgets <daemon>`:
+
+- rails — app server — UI at http://localhost:5002
+- worker
