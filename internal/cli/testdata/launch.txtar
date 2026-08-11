@@ -1,4 +1,6 @@
-# launch: the one-shot — create (or reuse) + checkout + up + claude session.
+# launch: the one-shot — create (or reuse) + checkout + claude session. Daemons
+# are lazy (spec 2026-08-11): launch does not start them, on either the create
+# or the reuse path — `workspace up` is the explicit start.
 #
 # The `claude` on PATH is a shim that prints its argv and cwd and APPENDS a line
 # to $CLAUDE_SHIM_LOG — PATH discipline (it is prepended first, so a real claude
@@ -9,8 +11,9 @@
 # HOME is redirected to a fixture so the history probe sees OUR
 # ~/.claude/projects, never the developer's.
 #
-# Daemon lifetime discipline (as up.txtar): every daemon is `sleep 30` and the
-# script ends with `workspace down` for the workspace it started daemons in.
+# Daemon lifetime discipline (as up.txtar): the one daemon this script starts
+# (via an explicit `up`, at the end) is `sleep 30` and the script ends with
+# `workspace down` for the workspace it started it in.
 #
 # `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
 # (hermetic git env + root at $WORK/root; WORKROOT template substitution).
@@ -39,29 +42,31 @@ chmod 0755 $WORK/bin/claude
 env PATH=$WORK/bin:$PATH
 env CLAUDE_SHIM_LOG=$WORK/claude.log
 
-# --- fresh launch: create, check out, up, then the session --------------------
-# One command: new's creation output, up's daemon line, then the shim's own
-# output — proving the session ran LAST, in the workspace dir, with the decided
-# injection (no --continue: this dir has no history under our fixture HOME).
+# --- fresh launch: create, check out, then the session — no daemon starts ----
+# One command: new's creation output, then the shim's own output — proving the
+# session ran LAST, in the workspace dir, with the decided injection (no
+# --continue: this dir has no history under our fixture HOME). Daemons are
+# lazy: nothing starts, and the pids dir does not even exist yet.
 exec workspace launch T-1 'fix thing' app
 stdout 'workspace T-1_fix-thing created \(index 0\)'
-stdout 'started app:sleeper \(pid \d+\)'
+! stdout 'started'
 stdout 'argv: --dangerously-skip-permissions$'
 stdout 'cwd: '$WORK'/root/T-1_fix-thing$'
 stdout 'WORKSPACE=T-1$'
 exists $WORK/root/T-1_fix-thing/app/README
 exists $WORK/root/T-1_fix-thing/.workspace/setup-app.ok
-exists $WORK/root/T-1_fix-thing/.workspace/pids/app:sleeper
+! exists $WORK/root/T-1_fix-thing/.workspace/pids
 grep -count=1 'invoked' $WORK/claude.log
 
-# --- re-launch the same task id: reuse, no duplicate allocation ---------------
+# --- re-launch the same task id: reuse, no duplicate allocation, no daemons --
 # The workspace is found by task id, so nothing is created and nothing is
-# re-allocated; up converges (the daemon is already running) and claude runs
+# re-allocated; reuse no longer converges daemons either, so claude just runs
 # again.
 exec workspace launch T-1
 stdout 'using existing workspace T-1_fix-thing'
 ! stdout 'created'
-stdout 'app:sleeper already running \(pid \d+\)'
+! stdout 'started'
+! stdout 'already running'
 stdout 'argv: --dangerously-skip-permissions$'
 grep -count=2 'invoked' $WORK/claude.log
 
@@ -98,7 +103,7 @@ stdout 'or use checkout'
 
 # --- reuse + an extra project: checked out -------------------------------------
 # api is listed after the (ignored) description, so the reuse path checks it out
-# through the same ensure loop `checkout` uses, and up then covers it.
+# through the same ensure loop `checkout` uses.
 exec workspace launch T-1 'fix thing' api
 stdout 'using existing workspace T-1_fix-thing'
 exists $WORK/root/T-1_fix-thing/api/README
@@ -134,6 +139,7 @@ exec workspace launch T-9 api
 stdout 'workspace T-9_api created'
 stdout 'note: "api" is in the description slot'
 stdout 'or use checkout'
+stdout 'nothing checked out'
 ! exists $WORK/root/T-9_api/api
 
 # --- create-phase failure: rolled back, no session ----------------------------
@@ -146,17 +152,19 @@ stderr 'project "bad"'
 ! grep 'T-3' $WORK/root/.allocations.json
 ! exists $WORK/no-claude-create.log
 
-# --- up-phase failure: no session, workspace intact ---------------------------
-# flaky checks out fine and fails in its run-and-wait, i.e. AFTER creation: the
-# reuse/converge path has no transaction to undo, so the workspace stays (a
-# re-run converges) but the session still must not start.
-env CLAUDE_SHIM_LOG=$WORK/no-claude-up.log
-! exec workspace launch T-1 'fix thing' flaky
-stderr 'project "flaky"'
-! exists $WORK/no-claude-up.log
+# --- no up phase: a project whose start would fail launches fine --------------
+# flaky's run-and-wait is `false`; with launch lazy it never runs — the session
+# starts, and the failure is deferred to an explicit `workspace up`.
+env CLAUDE_SHIM_LOG=$WORK/claude-flaky.log
+exec workspace launch T-1 'fix thing' flaky
 exists $WORK/root/T-1_fix-thing/flaky/README
+grep -count=1 'invoked' $WORK/claude-flaky.log
+! exec workspace up T-1 flaky
+stderr 'project "flaky"'
 
-# --- cleanup: stop what this script started ------------------------------------
+# --- daemons start only when asked ---------------------------------------
+exec workspace up T-1 app
+stdout 'started app:sleeper \(pid \d+\)'
 exec workspace down T-1
 stdout 'stopped app:sleeper \(TERM\)'
 

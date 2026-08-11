@@ -239,7 +239,9 @@ projects:
     start:                         # what `up` runs, in order
       - bin/rails db:migrate       #   bare string  = run-and-wait
       - rails: bin/rails s -p ${PORT0}   # {name: cmd} = DAEMON
-      - worker: bin/sidekiq
+      - worker:                     # {name: {command, description}} = DAEMON,
+          command: bin/sidekiq      #   with a description `status`/
+          description: background jobs   #   WORKSPACE.md show (${…} substituted)
     stop:                          # optional; runs AFTER this project's daemons stop
       - bin/rails tmp:clear
     teardown:                      # on `destroy`, before the worktree goes
@@ -355,7 +357,7 @@ plain error listing the candidates.
 | | `env <ws> [project]` | The resolved environment as sorted `K=V`. |
 | | `ports` | Allocated value blocks across workspaces. |
 | **Sessions** | `claude <ws> [-S] [-R] [claude args…]` | Claude Code in the workspace dir, with flag injection. |
-| | `launch <task_id> [<description> [project…]] [-S] [-R] [-- claude args…]` | `new`-or-reuse + `checkout` + `up` + `claude`, one shot. |
+| | `launch <task_id> [<description> [project…]] [-S] [-R] [-- claude args…]` | `new`-or-reuse + `checkout` + `claude`, one shot. Daemons are lazy — not started here; use `up`. |
 | **Navigate** | `cd <ws> [project]` | Print the directory; the installed shell wrapper performs the `cd`. |
 | | `which` | The workspace containing the cwd (exit 3 when there is none — the scriptable "am I in a workspace?"). |
 | **Meta** | `doctor` | Config report + registry + allocations + missing repos + daemon health. Reports, never fixes. |
@@ -490,7 +492,10 @@ the distinction:
 - a **single-key map** (`name: command`) is a **daemon**: its own process
   group, stdout to `.workspace/logs/<project:daemon>.log` and stderr to
   `<project:daemon>.err.log` (both truncated at every start), and a pid file
-  `.workspace/pids/<project:daemon>` holding `<pid> <starttime>`.
+  `.workspace/pids/<project:daemon>` holding `<pid> <starttime>`. The value
+  can also be a nested `{command, description}` map — same daemon, plus an
+  optional `description:` that `status` and `WORKSPACE.md` show (with `${…}`
+  substituted) so a session knows what the daemon is for before starting it.
 
 Run-and-waits belong to the **project**, not to any one daemon: they run when
 the whole project is targeted, and are skipped when you address a single daemon
@@ -624,21 +629,25 @@ Three sharp edges worth knowing:
   one belongs to your command and is passed through untouched, so
   `workspace exec T-1 app git checkout -- README` still restores a file.
 
-`launch` composes the daily entry sequence — create-or-reuse, check out, bring
-the whole workspace up, then hand over the terminal — by calling the same work
-functions the individual commands use, so it cannot drift from them. Any phase
-that fails stops the sequence, so a session never opens onto a half-built
-environment. Reuse **ignores a supplied description silently** (the
-`using existing workspace <name>` line is the notice), and positional 2 is
-*always* the description slot on both paths — so when it happens to name a
-configured project, a note says what became of it, because you almost certainly
-meant `launch <id> <desc> <project…>`.
+`launch` composes the daily entry sequence — create-or-reuse, check out, then
+hand over the terminal — by calling the same work functions the individual
+commands use, so it cannot drift from them. Any phase that fails stops the
+sequence, so a session never opens onto a half-built environment. **Daemons
+are lazy**: `launch` starts none of them, on either the create or the reuse
+path, and reuse no longer converges a dead one back to running — `workspace up
+<ws> [target…]` is the explicit start, and the skill/session is expected to
+call it for whatever it actually needs. Reuse **ignores a supplied description
+silently** (the `using existing workspace <name>` line is the notice), and
+positional 2 is *always* the description slot on both paths — so when it
+happens to name a configured project, a note says what became of it, because
+you almost certainly meant `launch <id> <desc> <project…>`.
 
 The installed **skill** (`~/.claude/skills/claude-workspaces/SKILL.md`) is
 the session-facing interface — "work on FIZZY-123" turns into
 `new`/`checkout`/`up` and a `cd`. The **SessionStart hook** adds identity and
 status as context and never mutates. `WORKSPACE.md` holds the task, the
-allocated values and the per-project `instructions`; `CLAUDE.md` is created
+allocated values, the per-project `instructions`, and each project's daemons
+and what they're for; `CLAUDE.md` is created
 **once** with a single reference line to it and never rewritten, so notes
 accumulated there survive every regeneration.
 
@@ -746,6 +755,11 @@ installed under its own name, `claude-workspaces`.
   curation replaces it.
 - **Exit codes** are meaningful: 0/1/2/3/4 instead of 1 for everything.
 - **`stop:` runs after** the project's daemons stop, not before.
+- **`launch` no longer starts daemons.** v1 `launch` brought the whole
+  workspace up as part of the one-shot; v1.1 `launch` starts none, on either
+  the create or the reuse path, and reuse no longer converges a dead daemon
+  back to running either — `workspace up <ws> [target…]` is the explicit
+  start (daemons are lazy).
 - **`exec` runs under the curated environment.** v1's `exec` leaked the parent
   environment; here there is no inherit path to leak through.
 - **State**: one registry, `<root>/.allocations.json` (JSON, per-root, flock'd,

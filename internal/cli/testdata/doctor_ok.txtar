@@ -4,6 +4,11 @@
 # anything to report — the clean case (`doctor: no findings`, exit 0). The
 # finding classes themselves live in doctor_findings.txtar.
 #
+# Every fixture daemon carries a description EXCEPT app-a:undescribed, which
+# pins the description-less-daemon NOTE: it must be reported but must NOT
+# move `doctor: no findings` off "no findings" — that line is the load-bearing
+# pin (a config-level advisory is informational, never a finding).
+#
 # `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
 # (hermetic git env + root at $WORK/root; WORKROOT/WORKDIR substitution).
 wsenv
@@ -16,14 +21,17 @@ exec workspace doctor
 stdout '^config: OK$'
 stdout '^projects \(2\): app-a, app-b$'
 stdout '^values: PORT = 10 per workspace from 5000$'
+stdout 'note: daemon app-a:undescribed has no description — add description: under start: to tell sessions what it is for'
+! stdout 'app-a:described has no description'
 stdout '^doctor: no findings$'
 
-# --json on a clean root: config ok, and BOTH arrays present-but-empty (a
-# consumer never has to distinguish absent from empty).
+# --json on a clean root: findings stays EMPTY (the note is uncounted); the
+# description-less-daemon note is the only thing in informational, proving it
+# rode that array and not findings.
 exec workspace doctor --json
 stdout '"config": "ok"'
 stdout '"findings": \[\]'
-stdout '"informational": \[\]'
+stdout '"kind": "daemon_no_description"'
 
 -- config.tmpl --
 values:
@@ -33,3 +41,8 @@ projects:
     repo: WORKROOT/src/app-b
   app-a:
     repo: WORKROOT/src/app-a
+    start:
+      - undescribed: sleep 30
+      - described:
+          command: sleep 30
+          description: has a description

@@ -44,11 +44,15 @@ type statusProject struct {
 // enclosing section in both renderings, so repeating it on every line (and in
 // every JSON object) would be noise. Pid is 0 whenever Running is false —
 // wsp.DaemonState collapses every not-running reason to that, and the human
-// line omits it entirely (see statusDaemonDetail).
+// line omits it entirely (see statusDaemonDetail). Description is already
+// substituted (statusDaemonsOf's job) and omitted from JSON entirely
+// (omitempty) when the daemon configures none — a daemon predating
+// descriptions must keep emitting the exact same object shape.
 type statusDaemon struct {
-	Name    string `json:"name"`
-	Running bool   `json:"running"`
-	Pid     int    `json:"pid"`
+	Name        string `json:"name"`
+	Running     bool   `json:"running"`
+	Pid         int    `json:"pid"`
+	Description string `json:"description,omitempty"`
 }
 
 // statusEntry is the full derived view of one workspace: the registry's own
@@ -171,12 +175,22 @@ func statusOf(cfg *config.Config, ws wsp.Workspace) statusEntry {
 // result is never nil (an empty, non-nil slice for a project that configures no
 // daemons), which is what makes the JSON key present-but-empty; see
 // statusProject.Daemons.
+//
+// Descriptions are substituted HERE, once per project (RuntimeVars is the same
+// for every daemon of it) — wsp.Daemon carries the config text verbatim, and
+// every renderer would otherwise have to redo this itself.
 func statusDaemonsOf(cfg *config.Config, ws wsp.Workspace, project string) []statusDaemon {
 	ds := wsp.DaemonsOf(cfg, project)
+	vars := wsp.RuntimeVars(cfg, ws.Alloc.TaskID, project, ws.Alloc.Index)
 	out := make([]statusDaemon, 0, len(ds))
 	for _, d := range ds {
 		running, pid := wsp.DaemonState(ws, d)
-		out = append(out, statusDaemon{Name: d.Name, Running: running, Pid: pid})
+		out = append(out, statusDaemon{
+			Name:        d.Name,
+			Running:     running,
+			Pid:         pid,
+			Description: wsp.Subst(d.Description, vars),
+		})
 	}
 	return out
 }
@@ -258,9 +272,18 @@ func statusProjectDetail(p statusProject) string {
 // (attach, inspect, kill by hand); a stopped one carries nothing — its pid is
 // 0 for every not-running reason (missing, stale or recycled record — see
 // wsp.DaemonState), and "(pid 0)" would read as a real process.
+//
+// The description, already substituted, is appended after taskSep — same
+// separator and same rule as statusTaskLine: absent means no trailing dash.
+// A daemon with no description renders BYTE-IDENTICAL to before descriptions
+// existed (pinned in testdata/status_logs.txtar's `other`).
 func statusDaemonDetail(d statusDaemon) string {
-	if !d.Running {
-		return "stopped"
+	s := "stopped"
+	if d.Running {
+		s = fmt.Sprintf("running (pid %d)", d.Pid)
 	}
-	return fmt.Sprintf("running (pid %d)", d.Pid)
+	if d.Description != "" {
+		s += taskSep + d.Description
+	}
+	return s
 }

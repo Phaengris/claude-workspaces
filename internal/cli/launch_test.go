@@ -64,9 +64,8 @@ func TestSessionCommandsRejectLeadingFlag(t *testing.T) {
 
 // TestLaunchExitCodePropagation pins that launch ends in the SAME session
 // runner as `claude`: the child's code becomes ours, verbatim. T-1 exists in
-// the fixture (reuse path) and the fixture config has no projects, so the
-// up phase is a no-op success and the shim's 7 is the only thing left to
-// report.
+// the fixture (reuse path) and the fixture config has no projects, so nothing
+// but the session runs and the shim's 7 is the only thing left to report.
 func TestLaunchExitCodePropagation(t *testing.T) {
 	claudeFixture(t, "#!/bin/sh\nexit 7\n")
 	if got := exitCodeFor(t, "launch", "T-1"); got != 7 {

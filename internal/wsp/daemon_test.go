@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -75,6 +76,28 @@ func TestDaemonsOfAndRunAndWaits(t *testing.T) {
 	}
 	if rw := wsp.RunAndWaits(cfg, "ghost"); len(rw) != 0 {
 		t.Errorf("RunAndWaits(ghost) = %v, want none", rw)
+	}
+}
+
+// TestDaemonsOfCarriesDescription pins that DaemonsOf copies the config's
+// Description verbatim (no substitution here — renderers substitute ${}
+// themselves) and that a daemon without one carries the zero value rather
+// than some placeholder.
+func TestDaemonsOfCarriesDescription(t *testing.T) {
+	cfg := &config.Config{Projects: map[string]*config.Project{
+		"app": {Start: []config.StartEntry{
+			{Cmd: "bundle install"},
+			{Name: "rails", Cmd: "bin/rails s", Description: "app server"},
+			{Name: "worker", Cmd: "bin/sidekiq"},
+		}},
+	}}
+	got := wsp.DaemonsOf(cfg, "app")
+	want := []wsp.Daemon{
+		{Project: "app", Name: "rails", Cmd: "bin/rails s", Description: "app server"},
+		{Project: "app", Name: "worker", Cmd: "bin/sidekiq"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v\nwant %#v", got, want)
 	}
 }
 

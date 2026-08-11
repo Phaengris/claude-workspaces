@@ -37,7 +37,11 @@ const claudeMDBody = "See @WORKSPACE.md for this workspace's task, projects, val
 // testdata/workspace_md.golden. Guarantees the golden must keep: the workspace
 // name, task id and description appear; each checked-out project gets a
 // section with `dir:` and `branch:` lines followed by its configured
-// instructions verbatim; values appear as sorted NAME0=… lines.
+// instructions verbatim; values appear as sorted NAME0=… lines; a project with
+// at least one daemon gets a Services block, in start order, naming the
+// workspace itself in the `workspace up`/`logs` examples and appending
+// ` — ` + the runtime-substituted description only when one is configured; a
+// project with no daemons gets no Services block at all.
 //
 // Project dirs are written relative to the workspace dir: the reader (an agent
 // working in ws.Dir) can use them as-is, and the file stays identical no
@@ -90,6 +94,19 @@ func WriteWorkspaceMD(cfg *config.Config, ws Workspace) error {
 			// section starts cleanly regardless of how the YAML scalar
 			// ended.
 			fmt.Fprintf(&b, "\n%s\n", strings.TrimRight(p.Instructions, "\n"))
+		}
+		if ds := DaemonsOf(cfg, st.Name); len(ds) > 0 {
+			vars := RuntimeVars(cfg, ws.Alloc.TaskID, st.Name, ws.Alloc.Index)
+			fmt.Fprintf(&b, "\nServices — not started automatically; start what you need with\n"+
+				"`workspace up %s <daemon>` and follow it with\n"+
+				"`workspace logs %s <daemon>`:\n\n", ws.Name(), ws.Name())
+			for _, d := range ds {
+				if d.Description == "" {
+					fmt.Fprintf(&b, "- %s\n", d.Name)
+					continue
+				}
+				fmt.Fprintf(&b, "- %s — %s\n", d.Name, Subst(d.Description, vars))
+			}
 		}
 	}
 

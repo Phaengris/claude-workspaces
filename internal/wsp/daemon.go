@@ -29,6 +29,11 @@ type Daemon struct {
 	Project string
 	Name    string
 	Cmd     string
+	// Description is the config's `start:` entry description, VERBATIM — any
+	// ${} tokens are still literal here. Renderers (status, WORKSPACE.md) are
+	// the ones that substitute, each against its own vars, so this type does
+	// not have to know a workspace to carry the text.
+	Description string
 }
 
 // Key is the daemon's stable identity, `<project>:<daemon>` — used verbatim
@@ -53,7 +58,7 @@ func DaemonsOf(cfg *config.Config, project string) []Daemon {
 		if e.Name == "" {
 			continue
 		}
-		out = append(out, Daemon{Project: project, Name: e.Name, Cmd: e.Cmd})
+		out = append(out, Daemon{Project: project, Name: e.Name, Cmd: e.Cmd, Description: e.Description})
 	}
 	return out
 }

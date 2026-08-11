@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -114,6 +115,61 @@ projects:
 `
 	if _, err := decodeStrict([]byte(yml)); err == nil {
 		t.Fatal("a multi-key start map is ambiguous and must be an error")
+	}
+}
+
+func TestStartEntryNestedForm(t *testing.T) {
+	// Successful shapes: bare string, {name: cmd}, {name: {command,
+	// description}}, and nested form WITHOUT description.
+	yml := `
+projects:
+  app:
+    repo: /tmp/x
+    start:
+      - bundle install
+      - worker: bin/sidekiq
+      - rails:
+          command: bin/rails s -p ${PORT0}
+          description: app server — UI at http://localhost:${PORT0}
+      - quiet:
+          command: sleep 30
+`
+	cfg, err := decodeStrict([]byte(yml))
+	if err != nil {
+		t.Fatalf("decodeStrict: %v", err)
+	}
+	got := cfg.Projects["app"].Start
+	want := []StartEntry{
+		{Cmd: "bundle install"},
+		{Name: "worker", Cmd: "bin/sidekiq"},
+		{Name: "rails", Cmd: "bin/rails s -p ${PORT0}",
+			Description: "app server — UI at http://localhost:${PORT0}"},
+		{Name: "quiet", Cmd: "sleep 30"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v\nwant %#v", got, want)
+	}
+}
+
+func TestStartEntryNestedFormErrors(t *testing.T) {
+	cases := []struct{ name, yml, wantErr string }{
+		{"missing command",
+			"projects:\n  app:\n    repo: /tmp/x\n    start:\n      - rails:\n          description: d\n",
+			"command"},
+		{"unknown key",
+			"projects:\n  app:\n    repo: /tmp/x\n    start:\n      - rails:\n          command: c\n          descriptoin: d\n",
+			"descriptoin"},
+		{"two names",
+			"projects:\n  app:\n    repo: /tmp/x\n    start:\n      - rails: a\n        vite: b\n",
+			"single"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := decodeStrict([]byte(tc.yml))
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
+			}
+		})
 	}
 }
 

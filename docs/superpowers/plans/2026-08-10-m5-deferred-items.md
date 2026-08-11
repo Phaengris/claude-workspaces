@@ -47,3 +47,11 @@ backlog. Prioritize on daily-driving feedback.*
   (refs/heads-qualified), no live pids-dir record, clean.
 - Uninstall removes exactly the manifest; refusals for /, HOME,
   root-or-inside; survivors manifest on failures.
+
+## Deferred from feat/lazy-daemons (2026-08-11)
+- validate: empty shorthand daemon command (`- rails:` with null value) decodes silently to Cmd:"" while the nested form errors on missing command: — add a validate check (Cmd == "" && Name != "").
+- config: UnmarshalYAML ambiguity error message names only two of the three accepted start-entry shapes; duplicated string literal.
+- status: add unit table case for statusDaemonDetail with a Description (txtar-only coverage today).
+- wsp: WORKSPACE.md services block spacing when a project has daemons but no instructions is unexercised by the golden.
+- doctor: "Sections, in output order" doc comment omits the config-level description advisory pass; "note: " prefix baked into JSON detail string.
+- launch.txtar: decided-row-4 (reuse non-convergence) is pinned by absence; a direct pin (dead daemon stays dead across re-launch) is possible if ever needed.

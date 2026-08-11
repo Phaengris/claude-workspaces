@@ -41,9 +41,9 @@ workspace launch TASK-123 "short description" project-a project-b
 ```
 
 `launch` = create-or-reuse the workspace → check the listed projects out →
-start their daemons → open a Claude Code session in the workspace dir. An
-existing workspace is reused as-is (the description is ignored; listed
-projects are checked out). Pass session flags after `--`.
+open a Claude Code session in the workspace dir. **Daemons are not
+started.** An existing workspace is reused as-is (the description is
+ignored; listed projects are checked out). Pass session flags after `--`.
 
 **The steps, when you need them individually:**
 
@@ -52,6 +52,7 @@ projects are checked out). Pass session flags after `--`.
 | create a workspace | `workspace new <task_id> <description> [project…]` |
 | add a project to it | `workspace checkout <ws> <project…>` |
 | run setup + start daemons | `workspace up <ws> [target…]` |
+| start one service | `workspace up <ws> <daemon>` |
 | stop daemons | `workspace down <ws> [target…]` |
 | stop then start again | `workspace restart <ws> [target…]` |
 | see what is true right now | `workspace status [<ws>]`, `workspace ls`, `workspace ports` |
@@ -83,6 +84,18 @@ to it, which the tool writes once and then never touches.
 
 `workspace status <ws>` is the live view: which projects are checked out, on
 what branch, whether setup is current, which daemons are running.
+
+## Services are lazy
+
+Nothing starts a daemon until you ask. The session-start status block (and
+`workspace status <ws>`) lists every configured daemon, whether it runs,
+and — when the config describes it — what it is for:
+
+    rails: stopped — app server — UI at http://localhost:20800
+
+Start exactly what the task needs (`workspace up <ws> rails`), check it
+with `workspace logs <ws> rails`, and `workspace down <ws>` when done.
+WORKSPACE.md carries the same service list per project.
 
 ## The environment contract
 

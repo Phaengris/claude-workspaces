@@ -13,31 +13,33 @@ import (
 )
 
 // newLaunchCmd builds `workspace launch <task_id> [<description> [project…]]
-// [-S] [-R] [-- claude args…]`: the one-shot that composes the whole daily
-// entry sequence — create-or-reuse, check out, bring up, then hand the terminal
-// to Claude. It runs the OTHER commands' work functions (newWork, checkoutWork,
-// upWork, runClaudeSession); nothing about creation, ensuring, starting or
-// session policy is re-implemented here, so `launch` cannot drift from the
-// commands it stands in for.
+// [-S] [-R] [-- claude args…]`: the one-shot that composes the daily entry
+// sequence — create-or-reuse, check out, then hand the terminal to Claude. It
+// runs the OTHER commands' work functions (newWork, checkoutWork,
+// runClaudeSession); nothing about creation, ensuring or session policy is
+// re-implemented here, so `launch` cannot drift from the commands it stands in
+// for.
 //
 // PHASES, in order, and the abort rule (the decided row): any phase failing
 // stops the sequence and returns that phase's error — its kind picks the exit
 // code — so Claude is NEVER launched onto a broken environment. The create path
 // is transactional (newWork undoes itself), while the reuse path converges: a
 // failure there leaves the workspace in place for a re-run, exactly as
-// `checkout`/`up` would.
+// `checkout` would.
 //
 //  1. resolve the task id in the registry:
 //     FOUND    → reuse. Prints `using existing workspace <name>`; any projects
-//     listed after the description are checked out (checkoutWork).
+//     listed after the description are checked out (checkoutWork). This path
+//     no longer converges daemons — a dead one from a prior session stays
+//     dead until an explicit `up` (spec 2026-08-11, decided rows 1 and 4).
 //     NOT FOUND → create. The description becomes REQUIRED (usage error, exit
 //     2, when absent) and newWork runs with the listed projects.
 //     Anything else (an ambiguous task id) is that error, verbatim.
-//  2. up on the WHOLE workspace (ResolveTargets with no targets) — not just the
-//     projects named on this command line: `launch` promises a workspace that
-//     is running, and a project checked out by an earlier invocation is part of
-//     it.
-//  3. the session, via the same runner as `workspace claude`.
+//  2. the session, via the same runner as `workspace claude`. Daemons are
+//     lazy: launch starts NONE of them, on either path — `workspace up` is
+//     the explicit start. A workspace with nothing checked out still gets the
+//     empty-workspace hint (up's own), since that is a fact about checkout,
+//     not about daemons.
 //
 // REUSE ignores a supplied description SILENTLY — v1 launch is
 // idempotent-reuse, and the `using existing workspace <name>` line is the
@@ -58,11 +60,12 @@ import (
 func newLaunchCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "launch <task_id> [<description> [project...]] [-S] [-R] [-- claude args...]",
-		Short: "Create or reuse a workspace, start it, and open a Claude session",
-		Long: "Create or reuse a workspace, check out projects, start daemons, " +
+		Short: "Create or reuse a workspace and open a Claude session",
+		Long: "Create or reuse a workspace, check out projects, " +
 			"then launch a Claude Code session in it.\n\n" +
 			"An existing workspace is reused as-is: the description is ignored " +
-			"and any projects listed after it are checked out.",
+			"and any projects listed after it are checked out.\n\n" +
+			"Daemons are not started; use `workspace up` for the services you need.",
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
@@ -116,21 +119,15 @@ func newLaunchCmd() *cobra.Command {
 				return err // an ambiguous task id: plain error, exit 1
 			}
 
-			// --- phase 2: up ---------------------------------------------
-			work, err := wsp.ResolveTargets(cfg, ws, nil)
-			if err != nil {
-				return err
-			}
-			if len(work) == 0 {
-				// A workspace with nothing checked out is a legitimate place
-				// to think in, so this is not an abort — but the hint (up's
-				// own) says how to give it a stack.
+			// Daemons are lazy (spec 2026-08-11): the session starts what it
+			// needs via `workspace up`. The one thing launch still says here is
+			// the empty-workspace hint — a workspace with nothing checked out is
+			// a legitimate place to think in, but deserves the pointer.
+			if len(wsp.ProjectStates(cfg, ws)) == 0 {
 				hintNothingCheckedOut(cmd, ws)
-			} else if err := upWork(cmd, cfg, ws, work); err != nil {
-				return err
 			}
 
-			// --- phase 3: the session ------------------------------------
+			// --- phase 2: the session ------------------------------------
 			return runClaudeSession(cfg, ws, skipPerms, noResume, claudeArgs)
 		},
 	}

@@ -36,14 +36,27 @@ type Project struct {
 }
 
 // StartEntry is one `start:` item: a bare string is a run-and-wait command
-// (Name == ""), a single-key map is a named daemon (spec §4).
+// (Name == ""), a single-key map is a named daemon (spec §4). The daemon
+// form's value is either the command string or a {command, description}
+// block — the description is what status/WORKSPACE.md show a session so it
+// knows what the daemon is for before starting it.
 type StartEntry struct {
-	Name string
-	Cmd  string
+	Name        string
+	Cmd         string
+	Description string
 }
 
-// UnmarshalYAML accepts `cmd` or `{name: cmd}`. A map with any count other
-// than one key is ambiguous and is rejected as an error.
+// startEntryBody is the nested daemon form. Strict decode rejects unknown
+// keys like every other config struct.
+type startEntryBody struct {
+	Command     string `yaml:"command"`
+	Description string `yaml:"description"`
+}
+
+// UnmarshalYAML accepts `cmd`, `{name: cmd}` or `{name: {command,
+// description}}`. A map with any count other than one key is ambiguous and
+// rejected; a nested form without `command` has no daemon to run and is
+// rejected too.
 func (s *StartEntry) UnmarshalYAML(unmarshal func(any) error) error {
 	var str string
 	if err := unmarshal(&str); err == nil {
@@ -51,14 +64,27 @@ func (s *StartEntry) UnmarshalYAML(unmarshal func(any) error) error {
 		return nil
 	}
 	var m map[string]string
-	if err := unmarshal(&m); err != nil {
+	if err := unmarshal(&m); err == nil {
+		if len(m) != 1 {
+			return fmt.Errorf("start entry must be a string or a single {name: command} pair, got %d keys", len(m))
+		}
+		for name, cmd := range m {
+			s.Name, s.Cmd = name, cmd
+		}
+		return nil
+	}
+	var nested map[string]startEntryBody
+	if err := unmarshal(&nested); err != nil {
 		return err
 	}
-	if len(m) != 1 {
-		return fmt.Errorf("start entry must be a string or a single {name: command} pair, got %d keys", len(m))
+	if len(nested) != 1 {
+		return fmt.Errorf("start entry must be a string or a single {name: command} pair, got %d keys", len(nested))
 	}
-	for name, cmd := range m {
-		s.Name, s.Cmd = name, cmd
+	for name, body := range nested {
+		if body.Command == "" {
+			return fmt.Errorf("start entry %q: nested form requires command:", name)
+		}
+		s.Name, s.Cmd, s.Description = name, body.Command, body.Description
 	}
 	return nil
 }

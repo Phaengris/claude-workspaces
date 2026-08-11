@@ -103,9 +103,12 @@ projects: {}
 #       - bin/rails db:prepare
 #     start:                    # what `up` runs, in order
 #       - bin/rails db:migrate  #   a bare string: run it and wait
-#       - rails: bin/rails s -p ${PORT0}   # {name: command}: a DAEMON — own
-#       - worker: bin/sidekiq              #   log and pid file, and the name
-#                                          #   that `logs`/`down` address
+#       - rails:                #   a daemon with a description — what
+#           command: bin/rails s -p ${PORT0}   # status/WORKSPACE.md tell a
+#           description: app server — UI at http://localhost:${PORT0}   # session it's for
+#       - worker: bin/sidekiq   #   {name: command}: a daemon, description-less
+#                                #   — own log and pid file, and the name
+#                                #   that `logs`/`down` address
 #     stop:                     # optional, after the daemons are confirmed
 #       - bin/rails tmp:clear   #   dead
 #     teardown:                 # on `destroy`, before the worktree goes

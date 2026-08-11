@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Phaengris/claude-workspaces/internal/alloc"
+	"github.com/Phaengris/claude-workspaces/internal/config"
 	"github.com/Phaengris/claude-workspaces/internal/wsp"
 )
 
@@ -70,6 +71,14 @@ func TestWriteWorkspaceMDGolden(t *testing.T) {
 	ws := goldenWorkspace(t)
 	cfg := testCfg()
 	cfg.Projects["app"].Instructions = "Run `bin/rails s` on ${PORT0}.\n\nAsk before touching the schema.\n"
+	// "rails" carries a description with a ${} token over a fixture value
+	// (PORT0); "worker" has none, pinning the no-description rendering. The
+	// no-Services-block case for a daemon-less project is pinned separately,
+	// below, in TestWriteWorkspaceMDNoServicesWithoutDaemons.
+	cfg.Projects["app"].Start = []config.StartEntry{
+		{Name: "rails", Cmd: "bin/rails s -p ${PORT0}", Description: "app server — UI at http://localhost:${PORT0}"},
+		{Name: "worker", Cmd: "bundle exec sidekiq"},
+	}
 
 	if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {
 		t.Fatal(err)
@@ -88,8 +97,12 @@ func TestWriteWorkspaceMDGolden(t *testing.T) {
 		"T-1",                      // task id
 		"Add widgets to the thing", // description
 		"PORT0=5002", "PORT1=5003", // values, sorted
-		"branch: T-1",                     // per-project branch
-		"Ask before touching the schema.", // instructions verbatim
+		"branch: T-1",                                        // per-project branch
+		"Ask before touching the schema.",                    // instructions verbatim
+		"`workspace up T-1_add-widgets <daemon>`",            // services block names the workspace itself
+		"`workspace logs T-1_add-widgets <daemon>`",          //   ditto, for logs
+		"- rails — app server — UI at http://localhost:5002", // description, ${PORT0} substituted
+		"- worker", // description-less daemon, name only
 	} {
 		if !strings.Contains(s, must) {
 			t.Errorf("WORKSPACE.md must contain %q", must)
@@ -97,6 +110,9 @@ func TestWriteWorkspaceMDGolden(t *testing.T) {
 	}
 	if strings.Contains(s, "www") {
 		t.Error("web is not checked out; it must not get a section")
+	}
+	if strings.Contains(s, "worker — ") {
+		t.Error("a description-less daemon must not get a description separator")
 	}
 	// Verbatim means verbatim: runtime tokens in instructions are NOT
 	// substituted — the agent reads them next to the Values block, and the
@@ -106,6 +122,25 @@ func TestWriteWorkspaceMDGolden(t *testing.T) {
 	}
 	if i, j := strings.Index(s, "PORT0="), strings.Index(s, "PORT1="); i > j {
 		t.Error("values must be sorted")
+	}
+}
+
+// TestWriteWorkspaceMDNoServicesWithoutDaemons: testCfg's "app" has no
+// `start:` entries by default (TestWriteWorkspaceMDGolden adds them locally),
+// so a checked-out project with zero daemons must render no Services block
+// at all — not an empty one.
+func TestWriteWorkspaceMDNoServicesWithoutDaemons(t *testing.T) {
+	ws := goldenWorkspace(t)
+	cfg := testCfg()
+	if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(ws.Dir, "WORKSPACE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), "Services") {
+		t.Error("a project with no daemons must not get a Services block")
 	}
 }
 
