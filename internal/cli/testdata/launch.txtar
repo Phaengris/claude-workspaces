@@ -139,6 +139,7 @@ exec workspace launch T-9 api
 stdout 'workspace T-9_api created'
 stdout 'note: "api" is in the description slot'
 stdout 'or use checkout'
+stdout 'nothing checked out'
 ! exists $WORK/root/T-9_api/api
 
 # --- create-phase failure: rolled back, no session ----------------------------
