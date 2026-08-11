@@ -307,6 +307,7 @@ index: 0
 
 WORKSPACE.md holds the task, the allocated values and per-project instructions.
 Manage this workspace with: workspace status|up|down|logs|exec A-1_x
+Daemons are not auto-started; start what you need with: workspace up A-1_x <daemon>
 `
 	if stdout != want {
 		t.Errorf("hook stdout mismatch\n--- got ---\n%s\n--- want ---\n%s", stdout, want)

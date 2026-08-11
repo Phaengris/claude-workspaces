@@ -38,5 +38,6 @@ printf 'This session is inside workspace %s.\n\n' "$name"
 workspace status "$name" 2>/dev/null
 printf '\nWORKSPACE.md holds the task, the allocated values and per-project instructions.\n'
 printf 'Manage this workspace with: workspace status|up|down|logs|exec %s\n' "$name"
+printf 'Daemons are not auto-started; start what you need with: workspace up %s <daemon>\n' "$name"
 
 exit 0
