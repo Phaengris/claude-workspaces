@@ -18,6 +18,7 @@ go test ./...                                             # full suite (~11s; re
 go test -race ./internal/proc ./internal/wsp ./internal/cli
 gofmt -l . && go vet ./...                                # both must be clean before commit
 # release: CHANGELOG.md entry first, then -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=X.Y.Z", tag vX.Y.Z, ./workspace install
+# push master+tags to BOTH remotes: origin (git.internal) and github (the public repo)
 ```
 
 Conventional commits (`feat(cli): …`). The user's real install lives at
