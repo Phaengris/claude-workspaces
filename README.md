@@ -50,6 +50,18 @@ worktree's own `.ruby-version` without a translation layer. A
 container-based flavor (true isolation; explored during the predecessor's
 planning) is on the roadmap — just not today's trade.
 
+**Isn't this built into Claude Code?** Partly — and the parts compose.
+Claude Code's own worktree isolation gives a session or subagent its own
+*checkout*, so parallel edits don't collide; it is ephemeral and scoped to
+the work. What it doesn't provide is everything around the checkout: a
+worktree of your app still wants port 3000, the same dev database, the same
+Redis keyspace, and someone to run setup and start the server. That runtime
+layer — allocated values, generated env, service lifecycle, durable
+task-scoped identity that outlives any one session (and needs no Claude at
+all) — is this tool. A session inside a workspace can still spawn
+worktree-isolated subagents: code isolation nested inside environment
+separation.
+
 ---
 
 ## Install
