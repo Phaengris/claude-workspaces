@@ -29,7 +29,7 @@ a pending to-do printed right before Claude takes over the terminal.
 ## Mechanics
 
 - `internal/wsp/ensure.go`: `EnsureProject` (and its internal setup loop)
-  accepts the reporter; it calls `step("checking out (branch <base>)")`
+  accepts the reporter; it calls `step("checking out (branch <task id>)")`
   around the worktree creation ONLY when it actually creates one (an
   already-checked-out project reports nothing — idempotent re-runs stay
   quiet), and `step("setup: " + substitutedCmd)` around each setup command

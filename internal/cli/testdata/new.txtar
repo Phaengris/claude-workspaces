@@ -24,7 +24,7 @@ exec git -C $WORK/root/src/bad commit -m init
 exec workspace new T-1 'fix thing' app
 stdout 'T-1_fix-thing'
 stdout '^  app: checked out \(branch T-1\), setup current$'
-stdout 'workspace cd T-1'
+stdout 'hint: workspace cd T-1'
 
 # Docs scaffolded: CLAUDE.md once, WORKSPACE.md listing the project.
 exists $WORK/root/T-1_fix-thing/CLAUDE.md

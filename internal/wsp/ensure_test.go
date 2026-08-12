@@ -3,6 +3,7 @@ package wsp_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -57,7 +58,7 @@ func setupLogLines(t *testing.T, projectDir string) int {
 func TestEnsureProjectIdempotent(t *testing.T) {
 	cfg, ws := ensureFixture(t, []string{"echo ran >> setup.log"})
 
-	if err := wsp.EnsureProject(cfg, ws, "app"); err != nil {
+	if err := wsp.EnsureProject(cfg, ws, "app", nil); err != nil {
 		t.Fatalf("first EnsureProject: %v", err)
 	}
 	dest := wsp.ProjectDir(ws, cfg, "app")
@@ -81,7 +82,7 @@ func TestEnsureProjectIdempotent(t *testing.T) {
 	}
 
 	// Second run: worktree exists, stamp current — nothing re-runs.
-	if err := wsp.EnsureProject(cfg, ws, "app"); err != nil {
+	if err := wsp.EnsureProject(cfg, ws, "app", nil); err != nil {
 		t.Fatalf("second EnsureProject: %v", err)
 	}
 	if got := setupLogLines(t, dest); got != 1 {
@@ -89,16 +90,97 @@ func TestEnsureProjectIdempotent(t *testing.T) {
 	}
 }
 
+// recordingStep collects "begin <label>" / "end <label> ok|err" markers in
+// call order — the test double for the progress reporter.
+func recordingStep(log *[]string) wsp.Step {
+	return func(label string) func(error) {
+		*log = append(*log, "begin "+label)
+		return func(err error) {
+			verdict := "ok"
+			if err != nil {
+				verdict = "err"
+			}
+			*log = append(*log, "end "+label+" "+verdict)
+		}
+	}
+}
+
+// TestEnsureProjectReportsSteps pins the reported labels for the checkout
+// and setup steps, IN ORDER, including that a setup command's label carries
+// the SUBSTITUTED command (${WORKSPACE} → the task id), and that the
+// idempotent re-run (worktree already there, stamp current) reports nothing
+// at all — steps report only operations that actually run.
+func TestEnsureProjectReportsSteps(t *testing.T) {
+	cfg, ws := ensureFixture(t, []string{"true", "echo ${WORKSPACE}"})
+
+	var log []string
+	if err := wsp.EnsureProject(cfg, ws, "app", recordingStep(&log)); err != nil {
+		t.Fatalf("EnsureProject: %v", err)
+	}
+	want := []string{
+		"begin checking out (branch " + ws.Alloc.TaskID + ")",
+		"end checking out (branch " + ws.Alloc.TaskID + ") ok",
+		"begin setup: true",
+		"end setup: true ok",
+		"begin setup: echo " + ws.Alloc.TaskID,
+		"end setup: echo " + ws.Alloc.TaskID + " ok",
+	}
+	if !reflect.DeepEqual(log, want) {
+		t.Fatalf("first run log:\n got %q\nwant %q", log, want)
+	}
+
+	// Idempotent re-run: worktree exists, stamp current → COMPLETE silence.
+	log = nil
+	if err := wsp.EnsureProject(cfg, ws, "app", recordingStep(&log)); err != nil {
+		t.Fatalf("EnsureProject re-run: %v", err)
+	}
+	if len(log) != 0 {
+		t.Fatalf("re-run must report nothing, got %q", log)
+	}
+}
+
+// TestEnsureProjectReportsFailedStep pins that a failing setup command's
+// step ENDS with err before EnsureProject returns the failure — no step is
+// left dangling on the failure path.
+func TestEnsureProjectReportsFailedStep(t *testing.T) {
+	cfg, ws := ensureFixture(t, []string{"false"})
+
+	var log []string
+	err := wsp.EnsureProject(cfg, ws, "app", recordingStep(&log))
+	if err == nil {
+		t.Fatal("want setup failure")
+	}
+	want := []string{
+		"begin checking out (branch " + ws.Alloc.TaskID + ")",
+		"end checking out (branch " + ws.Alloc.TaskID + ") ok",
+		"begin setup: false",
+		"end setup: false err",
+	}
+	if !reflect.DeepEqual(log, want) {
+		t.Fatalf("failure log:\n got %q\nwant %q", log, want)
+	}
+}
+
+// TestEnsureProjectNilStepIsSilent pins that a nil Step is accepted on every
+// path — the boundary every non-reporting caller (and every not-yet-wired
+// caller) relies on.
+func TestEnsureProjectNilStepIsSilent(t *testing.T) {
+	cfg, ws := ensureFixture(t, []string{"true"})
+	if err := wsp.EnsureProject(cfg, ws, "app", nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestEnsureProjectStaleStampRerunsSetup(t *testing.T) {
 	cfg, ws := ensureFixture(t, []string{"echo ran >> setup.log"})
-	if err := wsp.EnsureProject(cfg, ws, "app"); err != nil {
+	if err := wsp.EnsureProject(cfg, ws, "app", nil); err != nil {
 		t.Fatalf("first EnsureProject: %v", err)
 	}
 
 	// Any change to the rendered setup changes SetupHash; a trailing comment
 	// changes the hash without changing what the command does.
 	cfg.Projects["app"].Setup = []string{"echo ran >> setup.log # v2"}
-	if err := wsp.EnsureProject(cfg, ws, "app"); err != nil {
+	if err := wsp.EnsureProject(cfg, ws, "app", nil); err != nil {
 		t.Fatalf("EnsureProject after config change: %v", err)
 	}
 	dest := wsp.ProjectDir(ws, cfg, "app")
@@ -125,7 +207,7 @@ func TestEnsureProjectSetupEnvAndSubst(t *testing.T) {
 	})
 	t.Setenv("SECRET_X", "leak-me-not")
 
-	if err := wsp.EnsureProject(cfg, ws, "app"); err != nil {
+	if err := wsp.EnsureProject(cfg, ws, "app", nil); err != nil {
 		t.Fatalf("EnsureProject: %v", err)
 	}
 	dest := wsp.ProjectDir(ws, cfg, "app")
@@ -188,7 +270,7 @@ func TestEnsureProjectNonEmptyDirInsideEnclosingRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := wsp.EnsureProject(cfg, ws, "app")
+	err := wsp.EnsureProject(cfg, ws, "app", nil)
 	if err == nil {
 		t.Fatal("EnsureProject succeeded on a plain dir nested in an enclosing repo; it must attempt WorktreeAdd and report git's failure")
 	}
@@ -219,7 +301,7 @@ func TestEnsureProjectNonEmptyDirInsideEnclosingRepo(t *testing.T) {
 func TestEnsureProjectEmptyDirInsideEnclosingRepo(t *testing.T) {
 	cfg, ws, dest := enclosedFixture(t, []string{"echo ran >> setup.log"})
 
-	if err := wsp.EnsureProject(cfg, ws, "app"); err != nil {
+	if err := wsp.EnsureProject(cfg, ws, "app", nil); err != nil {
 		t.Fatalf("EnsureProject over an empty dir inside an enclosing repo: %v", err)
 	}
 	if !gitx.IsWorkTreeRoot(dest) {
@@ -233,7 +315,7 @@ func TestEnsureProjectEmptyDirInsideEnclosingRepo(t *testing.T) {
 func TestEnsureProjectSetupFailure(t *testing.T) {
 	cfg, ws := ensureFixture(t, []string{"false"})
 
-	err := wsp.EnsureProject(cfg, ws, "app")
+	err := wsp.EnsureProject(cfg, ws, "app", nil)
 	if err == nil {
 		t.Fatal("EnsureProject returned nil for a failing setup command")
 	}

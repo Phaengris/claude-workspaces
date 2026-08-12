@@ -36,6 +36,8 @@ stdout 'workspace checkout'
 # EnsureProject chains (worktree + .env + stamped setup), then the run-and-wait
 # runs in the project dir, then the daemon starts and its pid file appears.
 exec workspace up T-1 app
+stdout '  app: checking out \(branch T-1\)… ok \(\d+\.\d+s\)'
+stdout '  app: setup: echo ran >> setup.log… ok \(\d+\.\d+s\)'
 stdout 'started app:sleeper \(pid \d+\)'
 exists $WORK/root/T-1_x/app/prestart-ran
 exists $WORK/root/T-1_x/.workspace/setup-app.ok
@@ -52,6 +54,7 @@ cp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-before
 exec workspace up T-1 app
 stdout 'app:sleeper already running \(pid \d+\)'
 ! stdout 'started'
+! stdout 'checking out \(branch T-1\)… ok'
 cmp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-before
 
 # Run-and-waits DO re-run on every up of the whole project (spec §7): the
@@ -73,6 +76,8 @@ stdout 'app:sleeper already running \(pid \d+\)'
 # is false, so the run-and-wait must NOT run. Exercises the `start` alias too.
 exec workspace new T-2 y
 exec workspace start T-2 sleeper
+stdout '  app: checking out \(branch T-2\)… ok \(\d+\.\d+s\)'
+stdout '  app: setup: echo ran >> setup.log… ok \(\d+\.\d+s\)'
 stdout 'started app:sleeper \(pid \d+\)'
 exists $WORK/root/T-2_y/.workspace/setup-app.ok
 exists $WORK/root/T-2_y/.workspace/pids/app:sleeper
@@ -86,6 +91,7 @@ grep '### app' $WORK/root/T-2_y/WORKSPACE.md
 # bad's `false` fails before its daemon: exit 1, project-prefixed error, and
 # NO pid file — a project whose prelude failed must not run half its stack.
 ! exec workspace up T-1 bad
+stdout '  bad: checking out \(branch T-1\)… ok \(\d+\.\d+s\)'
 stderr 'project "bad"'
 ! exists $WORK/root/T-1_x/.workspace/pids/bad:never
 

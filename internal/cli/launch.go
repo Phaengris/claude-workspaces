@@ -33,7 +33,11 @@ import (
 //     no longer converges daemons — a dead one from a prior session stays
 //     dead until an explicit `up` (spec 2026-08-11, decided rows 1 and 4).
 //     NOT FOUND → create. The description becomes REQUIRED (usage error, exit
-//     2, when absent) and newWork runs with the listed projects.
+//     2, when absent) and newWork runs with the listed projects. `new`'s own
+//     `hint: workspace cd <id>` is NOT printed here — the terminal is about to
+//     become the session's, so the hint would read as a pending to-do. Instead
+//     the create path prints a tip for reaching the workspace from ANOTHER
+//     terminal while the session runs.
 //     Anything else (an ambiguous task id) is that error, verbatim.
 //  2. the session, via the same runner as `workspace claude`. Daemons are
 //     lazy: launch starts NONE of them, on either path — `workspace up` is
@@ -97,7 +101,7 @@ func newLaunchCmd() *cobra.Command {
 				fmt.Fprintf(out, "using existing workspace %s\n", ws.Name())
 				noteProjectInDescriptionSlot(out, cfg, positional, "was ignored")
 				if len(positional) > 2 {
-					if err := checkoutWork(cfg, ws, positional[2:]); err != nil {
+					if err := checkoutWork(cmd, cfg, ws, positional[2:]); err != nil {
 						return err
 					}
 				}
@@ -115,6 +119,10 @@ func newLaunchCmd() *cobra.Command {
 				// and the project is still not checked out. Emitted after
 				// newWork so a rolled-back creation says nothing.
 				noteProjectInDescriptionSlot(out, cfg, positional, "became this workspace's description")
+				// The cd hint `new` prints would read as a pending to-do here — the
+				// session is about to own this terminal. What IS worth saying is how
+				// to reach the workspace while the session runs (spec row 7).
+				fmt.Fprintf(out, "tip: in another terminal: workspace cd %s — work alongside this session\n", taskID)
 			default:
 				return err // an ambiguous task id: plain error, exit 1
 			}
