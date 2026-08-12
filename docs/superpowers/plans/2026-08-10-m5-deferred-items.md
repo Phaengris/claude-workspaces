@@ -59,3 +59,22 @@ backlog. Prioritize on daily-driving feedback.*
 ## Deferred from feat/session-titles (2026-08-12)
 - `title:` config template/off-switch and truncation-length knobs (spec's out-of-scope, add on proven need).
 - claude.txtar could pin rename-happens-before-claude-spawn (today only rename-before-restore is pinned) by having the claude shim write a marker into the tmux log.
+
+## Deferred from real use (2026-08-12): launch reuse grammar / slot-2 friction
+
+Observed: slot-1 completion offers full workspace names, which steers the
+user into `launch <full-name> <project>` on an existing workspace — where
+slot 2 is the (ignored) description slot, so the project is neither
+completed nor checked out (the note fires instead). Ideas, postponed by
+owner decision, pick one when it itches enough:
+
+- Reuse path: a slot-2 word exactly naming a configured project is treated
+  as a project (checked out) instead of ignored-with-a-note; completion then
+  offers projects at slot 2 iff positional 1 resolves to an existing
+  workspace. Idempotent re-run survives (a real description names no
+  project, keeps today's silent-ignore).
+- Or a grammar/convention change: accept `<TASK-ID>_<dash-separated-descr>`
+  as a single first token (it is exactly the generated workspace name),
+  auto-detected by pattern — possibly supporting both spellings.
+- Interim workarounds: `checkout <ws> <project>` + `claude <ws>`, or the
+  slot-3 form `launch <ws> x <project>`.
