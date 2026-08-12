@@ -49,8 +49,11 @@ domain packages) with pure, table-testable parts:
   it before spawning and defers the restore — the single call site is what
   keeps the two commands from drifting.
 
-TTY detection: `golang.org/x/sys/unix` isatty-equivalent (an `IoctlGetTermios`
-call) on stdout's fd — x/sys is already a dependency; no new module.
+TTY detection: stdlib only — `os.Stdout.Stat()` and `Mode()&os.ModeCharDevice
+!= 0`. The ioctl route needs per-OS request constants (TCGETS/TIOCGETA), i.e.
+build tags the README promises not to have, or a new x/term module; the char-
+device test is cross-platform, and its one false positive (stdout redirected
+to /dev/null, a char device) emits escapes nobody sees.
 
 ## Testing
 
