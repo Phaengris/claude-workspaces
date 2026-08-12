@@ -1,0 +1,60 @@
+# CI for claude-workspaces.
+#
+# Linux carries the full suite: the tests spawn real processes and real git
+# repos, and daemon liveness is verified against /proc/<pid>/stat — which is
+# also why macOS is a build+vet job only: the tool RUNS on macOS (liveness
+# degrades to pid-only where /proc is absent, by design — see
+# internal/proc.Starttime), but the tests pin the Linux behavior.
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    name: test (linux)
+    runs-on: ubuntu-latest
+    env:
+      SHELL: /bin/bash # proc spawns via `$SHELL -lc`; runners don't always export it
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: vet
+        run: go vet ./...
+      - name: build (static)
+        run: CGO_ENABLED=0 go build ./...
+      - name: test
+        run: go test ./...
+
+  race:
+    name: race (linux)
+    runs-on: ubuntu-latest
+    env:
+      SHELL: /bin/bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: race
+        run: go test -race ./internal/proc ./internal/wsp ./internal/cli
+
+  build-macos:
+    name: build (macos)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: vet
+        run: go vet ./...
+      - name: build (static)
+        run: CGO_ENABLED=0 go build ./...
