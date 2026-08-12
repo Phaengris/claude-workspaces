@@ -97,7 +97,7 @@ func newLaunchCmd() *cobra.Command {
 				fmt.Fprintf(out, "using existing workspace %s\n", ws.Name())
 				noteProjectInDescriptionSlot(out, cfg, positional, "was ignored")
 				if len(positional) > 2 {
-					if err := checkoutWork(cfg, ws, positional[2:]); err != nil {
+					if err := checkoutWork(cmd, cfg, ws, positional[2:]); err != nil {
 						return err
 					}
 				}

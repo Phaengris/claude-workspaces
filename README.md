@@ -528,7 +528,11 @@ addressed a single daemon, then runs the prelude, then starts what is not
 already running. `started` means *spawned and recorded*, not *healthy* — a
 daemon that exits immediately says so in its `.err.log` and reads as not
 running from then on. Setup is re-run when the *rendered* `setup:` lines change
-(the stamp is a SHA-256 of them).
+(the stamp is a SHA-256 of them). `new`, `checkout` and `up` report the
+ensure chain as it actually runs: each checkout and setup command actually
+executed prints its own `label… ok (0.3s)` (or `failed`) line, with a real
+duration — a project that was already checked out with current setup stays
+silent, exactly as before.
 
 **`down`** walks the dependency order backwards, and within a project its
 daemons in reverse listed order. Each running daemon gets SIGTERM to its

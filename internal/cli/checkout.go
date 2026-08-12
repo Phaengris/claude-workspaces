@@ -43,7 +43,7 @@ func newCheckoutCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return checkoutWork(cfg, ws, args[1:])
+			return checkoutWork(cmd, cfg, ws, args[1:])
 		},
 	}
 }
@@ -53,14 +53,14 @@ func newCheckoutCmd() *cobra.Command {
 // WORKSPACE.md regardless. Shared with `launch`, whose reuse path checks extra
 // projects out into an existing workspace — exactly this operation, and it must
 // not fork into a second implementation.
-func checkoutWork(cfg *config.Config, ws wsp.Workspace, names []string) error {
+func checkoutWork(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, names []string) error {
 	ordered, err := resolveProjectNames(cfg, names)
 	if err != nil {
 		return err
 	}
 	var errs []error
 	for _, name := range ordered {
-		if err := wsp.EnsureProject(cfg, ws, name, nil); err != nil {
+		if err := wsp.EnsureProject(cfg, ws, name, projectStepper(cmd.OutOrStdout(), name)); err != nil {
 			errs = append(errs, err) // already prefixed `project "<name>": …`
 		}
 	}

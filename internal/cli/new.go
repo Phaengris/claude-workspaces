@@ -234,7 +234,7 @@ func newWork(cmd *cobra.Command, cfg *config.Config, root, taskID, desc string, 
 			}
 			return nil
 		})
-		if err := wsp.EnsureProject(cfg, ws, name, nil); err != nil {
+		if err := wsp.EnsureProject(cfg, ws, name, projectStepper(cmd.OutOrStdout(), name)); err != nil {
 			return fail(err) // already prefixed `project "<name>": …`
 		}
 	}
