@@ -55,3 +55,7 @@ backlog. Prioritize on daily-driving feedback.*
 - wsp: WORKSPACE.md services block spacing when a project has daemons but no instructions is unexercised by the golden.
 - doctor: "Sections, in output order" doc comment omits the config-level description advisory pass; "note: " prefix baked into JSON detail string.
 - launch.txtar: decided-row-4 (reuse non-convergence) is pinned by absence; a direct pin (dead daemon stays dead across re-launch) is possible if ever needed.
+
+## Deferred from feat/session-titles (2026-08-12)
+- `title:` config template/off-switch and truncation-length knobs (spec's out-of-scope, add on proven need).
+- claude.txtar could pin rename-happens-before-claude-spawn (today only rename-before-restore is pinned) by having the claude shim write a marker into the tmux log.

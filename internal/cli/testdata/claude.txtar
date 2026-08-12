@@ -95,10 +95,12 @@ env CLAUDE_SHIM_EXIT=
 
 # --- session titles: tmux window renamed, auto-name restored after ------------
 # The `tmux` on PATH is a shim (PATH discipline as claude's: prepended first,
-# a real tmux can never run) logging its argv. With $TMUX set, the session
-# renames the window BEFORE claude runs and unsets automatic-rename AFTER it
-# exits — rename-window is what turned that option off, so unsetting is the
-# exact undo (spec 2026-08-12 rows 4-5).
+# a real tmux can never run) logging its argv; the `claude` shim writes
+# nothing to this log. With $TMUX set, the rename lands in the log BEFORE the
+# restore — that is what the pin below proves (rename-before-restore, not
+# rename-before-claude-spawn, which nothing here observes) — and unsets
+# automatic-rename AFTER the session exits: rename-window is what turned that
+# option off, so unsetting is the exact undo (spec 2026-08-12 rows 4-5).
 chmod 0755 $WORK/bin/tmux
 env TMUX_SHIM_LOG=$WORK/tmux.log
 env TMUX=/tmp/fake-socket,1234,0
@@ -120,6 +122,20 @@ exec workspace claude T-1
 ! exists $WORK/tmux-none.log
 ! stdout ']0;'
 
+# --- titles: a failed rename is NOT followed by a restore ---------------------
+# The tmux shim exits 1 (TMUX_SHIM_EXIT) to simulate rename-window failing.
+# setSessionTitle's restore is a no-op in that case (session_title.go's
+# `.Run() != nil` early return) — the attempt is logged, but no set-option
+# restore ever fires. Mutation check: deleting that early return (so restore
+# always fires) makes this block fail; the code was restored before commit.
+env TMUX_SHIM_EXIT=1
+env TMUX_SHIM_LOG=$WORK/tmux-fail.log
+env TMUX=/tmp/fake-socket,1234,0
+exec workspace claude T-1
+grep -count=1 'rename-window' $WORK/tmux-fail.log
+! grep 'set-option' $WORK/tmux-fail.log
+env TMUX_SHIM_EXIT=
+
 -- config.tmpl --
 values:
   PORT: { start: 18200, per_workspace: 5 }
@@ -139,6 +155,6 @@ exit ${CLAUDE_SHIM_EXIT:-0}
 -- bin/tmux --
 #!/bin/sh
 echo "$@" >> "$TMUX_SHIM_LOG"
-exit 0
+exit ${TMUX_SHIM_EXIT:-0}
 -- root/src/app/README --
 app source

@@ -645,10 +645,11 @@ Three sharp edges worth knowing:
   `workspace exec T-1 app git checkout -- README` still restores a file.
 
 **Titles.** A session names its terminal (OSC escape, when stdout is a
-terminal) and, inside tmux, the current window (`tmux rename-window`, first 20
-characters of the workspace name) — and un-sets the window's
-`automatic-rename` when the session ends, so tmux auto-naming resumes exactly
-where it left off. Best-effort: no tmux, no tty, no problem.
+terminal, first 40 characters of the workspace name) and, inside tmux, the
+current window (`tmux rename-window`, first 20 characters of the workspace
+name) — and un-sets the window's `automatic-rename` when the session ends, so
+tmux auto-naming resumes exactly where it left off. Best-effort: no tmux, no
+tty, no problem.
 
 `launch` composes the daily entry sequence — create-or-reuse, check out, then
 hand over the terminal — by calling the same work functions the individual

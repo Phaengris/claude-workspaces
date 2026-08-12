@@ -140,16 +140,20 @@ func runClaudeSession(cfg *config.Config, ws wsp.Workspace, skipPerms, noResume 
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	c.Env = sessionEnv(cfg, ws)
 
-	// Session titles (spec 2026-08-12): name the terminal and the tmux
-	// window after the workspace for the duration of the session; the
-	// deferred restore hands tmux its auto-naming back on every exit path,
-	// error and absorbed-signal ones included.
-	restore := setSessionTitle(ws.Name())
-	defer restore()
-
 	absorbed := make(chan os.Signal, 1)
 	signal.Notify(absorbed, syscall.SIGINT, syscall.SIGQUIT)
 	defer signal.Stop(absorbed)
+
+	// Session titles (spec 2026-08-12): name the terminal and the tmux
+	// window after the workspace for the duration of the session. This is
+	// deliberately AFTER signal.Notify: by LIFO, defer runs restore() BEFORE
+	// signal.Stop, so the rename is undone while ^C/^\ are still absorbed —
+	// not after signal.Stop has already handed them back to their default
+	// disposition, where a ^C landing between Stop and restore could kill
+	// this process mid-restore. The rename itself likewise now happens after
+	// absorption has begun, not before.
+	restore := setSessionTitle(ws.Name())
+	defer restore()
 
 	if err := c.Run(); err != nil {
 		var ee *exec.ExitError
