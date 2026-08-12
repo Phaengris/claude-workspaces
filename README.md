@@ -35,7 +35,7 @@ stamped via `-ldflags`, which `go install` does not apply.) Or build from a
 checkout:
 
 ```sh
-CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=1.1.0" -o workspace ./cmd/workspace
+CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=1.2.0" -o workspace ./cmd/workspace
 ```
 
 `CGO_ENABLED=0` is the point of the exercise (one static file, no libc
@@ -644,6 +644,12 @@ Three sharp edges worth knowing:
   one belongs to your command and is passed through untouched, so
   `workspace exec T-1 app git checkout -- README` still restores a file.
 
+**Titles.** A session names its terminal (OSC escape, when stdout is a
+terminal) and, inside tmux, the current window (`tmux rename-window`, first 20
+characters of the workspace name) — and un-sets the window's
+`automatic-rename` when the session ends, so tmux auto-naming resumes exactly
+where it left off. Best-effort: no tmux, no tty, no problem.
+
 `launch` composes the daily entry sequence — create-or-reuse, check out, then
 hand over the terminal — by calling the same work functions the individual
 commands use, so it cannot drift from them. Any phase that fails stops the
@@ -768,9 +774,11 @@ installed under its own name, `claude-workspaces`.
 - **Dropped commands**: `archive`/`unarchive` (a workspace with daemons down and
   its allocation released *is* archived; re-provisioning is `adopt`), `resolve`
   (there is no broken state to resolve), `setup` as a command (it is an
-  ensure-step inside `checkout` and `up`), `title`, `welcome` (folded into
+  ensure-step inside `checkout` and `up`), `welcome` (folded into
   `--help`), `prune` (→ `gc`). Also gone: `command_runner` — environment
-  curation replaces it.
+  curation replaces it. `title` returned in v1.2 as automatic behavior on
+  `claude`/`launch` (tmux window + terminal title, restored on exit) — the
+  first dropped command daily use proved missed.
 - **Exit codes** are meaningful: 0/1/2/3/4 instead of 1 for everything.
 - **`stop:` runs after** the project's daemons stop, not before.
 - **`launch` no longer starts daemons.** v1 `launch` brought the whole

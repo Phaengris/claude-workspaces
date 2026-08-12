@@ -93,6 +93,33 @@ env CLAUDE_SHIM_EXIT=7
 ! stderr .
 env CLAUDE_SHIM_EXIT=
 
+# --- session titles: tmux window renamed, auto-name restored after ------------
+# The `tmux` on PATH is a shim (PATH discipline as claude's: prepended first,
+# a real tmux can never run) logging its argv. With $TMUX set, the session
+# renames the window BEFORE claude runs and unsets automatic-rename AFTER it
+# exits — rename-window is what turned that option off, so unsetting is the
+# exact undo (spec 2026-08-12 rows 4-5).
+chmod 0755 $WORK/bin/tmux
+env TMUX_SHIM_LOG=$WORK/tmux.log
+env TMUX=/tmp/fake-socket,1234,0
+exec workspace claude T-1
+grep -count=1 'rename-window T-1_x' $WORK/tmux.log
+grep -count=1 'set-option -w -u automatic-rename' $WORK/tmux.log
+exec sh -c 'test "$(sed -n 1p "$TMUX_SHIM_LOG")" = "rename-window T-1_x"'
+
+# --- titles: the tmux window name is truncated to 20 runes --------------------
+env TMUX_SHIM_LOG=$WORK/tmux-long.log
+exec workspace new T-2 abcdefghijklmnopqrstuvwxyz app
+exec workspace claude T-2
+grep -count=1 'rename-window T-2_abcdefghijklmnop$' $WORK/tmux-long.log
+
+# --- titles: outside tmux nothing is renamed; piped stdout stays clean --------
+env TMUX_SHIM_LOG=$WORK/tmux-none.log
+env TMUX=
+exec workspace claude T-1
+! exists $WORK/tmux-none.log
+! stdout ']0;'
+
 -- config.tmpl --
 values:
   PORT: { start: 18200, per_workspace: 5 }
@@ -109,5 +136,9 @@ echo "WORKSPACE=$WORKSPACE"
 echo "PORT0=$PORT0"
 echo "DB_NAME=$DB_NAME"
 exit ${CLAUDE_SHIM_EXIT:-0}
+-- bin/tmux --
+#!/bin/sh
+echo "$@" >> "$TMUX_SHIM_LOG"
+exit 0
 -- root/src/app/README --
 app source

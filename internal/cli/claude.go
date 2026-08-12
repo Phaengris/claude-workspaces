@@ -100,7 +100,10 @@ func requireIdentFirst(cmdName, noun string, args []string) error {
 // policy inputs come from extractSessionFlags at each entry point; rest is
 // already the user's claude args, post-`--` passthrough included). It probes
 // history for ws.Dir, builds the argv, runs claude in ws.Dir with INHERITED
-// stdio and sessionEnv, and turns the child's exit code into ours.
+// stdio and sessionEnv, and turns the child's exit code into ours. For the
+// session's duration it also names the terminal and tmux window after the
+// workspace (setSessionTitle, spec 2026-08-12), restoring tmux's automatic
+// naming on every exit path.
 //
 // SIGNALS — why the parent goes deaf while the child runs: claude owns the
 // terminal, and the shell delivers ^C (SIGINT) and ^\ (SIGQUIT) to the whole
@@ -136,6 +139,13 @@ func runClaudeSession(cfg *config.Config, ws wsp.Workspace, skipPerms, noResume 
 	c.Dir = ws.Dir
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	c.Env = sessionEnv(cfg, ws)
+
+	// Session titles (spec 2026-08-12): name the terminal and the tmux
+	// window after the workspace for the duration of the session; the
+	// deferred restore hands tmux its auto-naming back on every exit path,
+	// error and absorbed-signal ones included.
+	restore := setSessionTitle(ws.Name())
+	defer restore()
 
 	absorbed := make(chan os.Signal, 1)
 	signal.Notify(absorbed, syscall.SIGINT, syscall.SIGQUIT)
