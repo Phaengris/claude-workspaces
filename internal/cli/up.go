@@ -117,7 +117,7 @@ func upWork(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, work []wsp
 func upProject(cmd *cobra.Command, cfg *config.Config, ws wsp.Workspace, w wsp.TargetWork) error {
 	fail := func(err error) error { return fmt.Errorf("project %q: %w", w.Project, err) }
 
-	if err := wsp.EnsureProject(cfg, ws, w.Project); err != nil {
+	if err := wsp.EnsureProject(cfg, ws, w.Project, nil); err != nil {
 		return err // EnsureProject prefixes its own errors
 	}
 

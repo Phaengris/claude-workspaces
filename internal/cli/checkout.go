@@ -60,7 +60,7 @@ func checkoutWork(cfg *config.Config, ws wsp.Workspace, names []string) error {
 	}
 	var errs []error
 	for _, name := range ordered {
-		if err := wsp.EnsureProject(cfg, ws, name); err != nil {
+		if err := wsp.EnsureProject(cfg, ws, name, nil); err != nil {
 			errs = append(errs, err) // already prefixed `project "<name>": …`
 		}
 	}

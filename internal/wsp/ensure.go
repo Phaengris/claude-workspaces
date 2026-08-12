@@ -30,9 +30,31 @@ func CommandEnv(cfg *config.Config, project, taskID string, index int) []string 
 	return envx.Curated(os.Environ(), allow, ResolvedEnv(cfg, taskID, project, index))
 }
 
+// Step is the ensure chain's progress reporter: called with a human label
+// right before a slow operation runs, it returns the done to call when the
+// operation ends (err reports how). A nil Step is silence — every caller
+// that has nothing to say passes nil, and EnsureProject never notices.
+// Labels name only operations that ACTUALLY run: an already-checked-out
+// project or a current setup stamp reports nothing, so idempotent re-runs
+// stay as quiet as they always were (spec 2026-08-12 rows 1-2, Mechanics).
+type Step func(label string) (done func(err error))
+
+// begin starts a reported step, returning a done that is safe to call on
+// every path. It is the nil-Step adapter: with no reporter both halves are
+// no-ops.
+func begin(step Step, label string) func(error) {
+	if step == nil {
+		return func(error) {}
+	}
+	return step(label)
+}
+
 // EnsureProject makes one configured project real inside the workspace — the
 // checkout ensure-chain. Each step is idempotent, so re-running after any
-// failure converges:
+// failure converges. step reports slow operations as they actually run (a
+// human label right before, done(err) right after); nil is silence, and a
+// step that is SKIPPED (already checked out, setup stamp current) reports
+// nothing at all.
 //
 //  1. worktree: if ProjectDir is not already the ROOT of a work tree, check
 //     out a linked worktree on branch <task id> from the project's base_branch
@@ -57,7 +79,7 @@ func CommandEnv(cfg *config.Config, project, taskID string, index int) []string 
 // projects and joins the failures, so each line must say whose it is.
 // WORKSPACE.md is deliberately NOT refreshed here — the caller does that once,
 // after all projects, success or not.
-func EnsureProject(cfg *config.Config, ws Workspace, project string) error {
+func EnsureProject(cfg *config.Config, ws Workspace, project string, step Step) error {
 	fail := func(err error) error { return fmt.Errorf("project %q: %w", project, err) }
 	p := cfg.Projects[project]
 	if p == nil {
@@ -67,9 +89,12 @@ func EnsureProject(cfg *config.Config, ws Workspace, project string) error {
 
 	dest := ProjectDir(ws, cfg, project)
 	if !gitx.IsWorkTreeRoot(dest) {
+		done := begin(step, fmt.Sprintf("checking out (branch %s)", ws.Alloc.TaskID))
 		if err := gitx.WorktreeAdd(p.Repo, dest, ws.Alloc.TaskID, p.BaseBranch); err != nil {
+			done(err)
 			return fail(err)
 		}
+		done(nil)
 	}
 
 	if err := WriteEnvFile(cfg, ws, project); err != nil {
@@ -82,9 +107,13 @@ func EnsureProject(cfg *config.Config, ws Workspace, project string) error {
 	vars := RuntimeVars(cfg, ws.Alloc.TaskID, project, ws.Alloc.Index)
 	env := CommandEnv(cfg, project, ws.Alloc.TaskID, ws.Alloc.Index)
 	for _, cmd := range p.Setup {
-		if err := proc.Run(dest, Subst(cmd, vars), env); err != nil {
+		sub := Subst(cmd, vars)
+		done := begin(step, "setup: "+sub)
+		if err := proc.Run(dest, sub, env); err != nil {
+			done(err)
 			return fail(err) // proc.Run's message reads "command failed: <reason>"
 		}
+		done(nil)
 	}
 	if err := os.MkdirAll(filepath.Join(ws.Dir, stampDirName), 0o755); err != nil {
 		return fail(err)
