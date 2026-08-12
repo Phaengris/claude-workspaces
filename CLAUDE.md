@@ -17,7 +17,7 @@ CGO_ENABLED=0 go build -o ./workspace ./cmd/workspace     # build (binary is git
 go test ./...                                             # full suite (~11s; real processes, real git)
 go test -race ./internal/proc ./internal/wsp ./internal/cli
 gofmt -l . && go vet ./...                                # both must be clean before commit
-# release: -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=X.Y.Z", tag vX.Y.Z, ./workspace install
+# release: CHANGELOG.md entry first, then -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=X.Y.Z", tag vX.Y.Z, ./workspace install
 ```
 
 Conventional commits (`feat(cli): …`). The user's real install lives at
