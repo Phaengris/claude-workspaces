@@ -20,6 +20,38 @@ liveness degrades to pid-only by design).
 
 ---
 
+## Separation, not virtualization
+
+The first question worth answering before any command reference: how are
+workspaces isolated? **They aren't — they are *separated*, and the
+distinction is the design.** A workspace is ordinary processes in ordinary
+directories on your host: a git worktree per project, a block of numbered
+values no other live workspace holds, an environment built from those
+values, daemons started with that environment. No container, no VM, no
+namespace. Two workspaces don't collide because — and only because —
+everything collidable is routed through the allocated values: the server
+listens on `${PORT0}`, the database is `my_app_${WORKSPACE}`, and each
+workspace gets its own numbers and its own name.
+
+Which means the separation is exactly as complete as **your config** makes
+it. The tool guarantees no two live workspaces share an allocation; it
+cannot know that your app also hardcodes port 3000 somewhere or that two
+workspaces write to the same Redis keyspace. If workspaces fight over a
+resource, that resource is not yet routed through `values`/`env` — the fix
+is a config edit, and the starter config shows the patterns
+(per-workspace database names, teardown that drops them, ports everywhere a
+port appears).
+
+Why separation first instead of real isolation? Because it is simple and it
+runs anywhere: no daemon to install, no images to build, identical behavior
+on Linux and macOS — and native processes mean native tooling, so your
+debugger attaches, your shell works, and version-manager shims resolve each
+worktree's own `.ruby-version` without a translation layer. A
+container-based flavor (true isolation; explored during the predecessor's
+planning) is on the roadmap — just not today's trade.
+
+---
+
 ## Install
 
 ### 1. Build
@@ -858,9 +890,13 @@ fake `$HOME`.
 
 ## How this was built
 
-This tool is itself a product of the workflow it serves: it was written with
-[Claude Code](https://claude.com/claude-code), end to end, as a spec-driven
-agentic project — and the paper trail is checked in.
+This tool is itself a product of the workflow it serves. I designed and
+specified it and own every product and architecture decision in it — what
+it does, what it refuses to do, and why; the implementation was AI-driven
+([Claude Code](https://claude.com/claude-code), end to end) under per-task
+independent review, as a spec-driven agentic project. The paper trail is
+checked in — the commit trailers say who typed, the specs and decided-
+behaviors tables say who decided.
 
 - **Spec first**: the design was brainstormed and pinned in
   [`docs/superpowers/specs/`](docs/superpowers/specs/) before any code — every
