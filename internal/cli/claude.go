@@ -100,7 +100,10 @@ func requireIdentFirst(cmdName, noun string, args []string) error {
 // policy inputs come from extractSessionFlags at each entry point; rest is
 // already the user's claude args, post-`--` passthrough included). It probes
 // history for ws.Dir, builds the argv, runs claude in ws.Dir with INHERITED
-// stdio and sessionEnv, and turns the child's exit code into ours.
+// stdio and sessionEnv, and turns the child's exit code into ours. For the
+// session's duration it also names the terminal and tmux window after the
+// workspace (setSessionTitle, spec 2026-08-12), restoring tmux's automatic
+// naming on every exit path.
 //
 // SIGNALS — why the parent goes deaf while the child runs: claude owns the
 // terminal, and the shell delivers ^C (SIGINT) and ^\ (SIGQUIT) to the whole
@@ -140,6 +143,17 @@ func runClaudeSession(cfg *config.Config, ws wsp.Workspace, skipPerms, noResume 
 	absorbed := make(chan os.Signal, 1)
 	signal.Notify(absorbed, syscall.SIGINT, syscall.SIGQUIT)
 	defer signal.Stop(absorbed)
+
+	// Session titles (spec 2026-08-12): name the terminal and the tmux
+	// window after the workspace for the duration of the session. This is
+	// deliberately AFTER signal.Notify: by LIFO, defer runs restore() BEFORE
+	// signal.Stop, so the rename is undone while ^C/^\ are still absorbed —
+	// not after signal.Stop has already handed them back to their default
+	// disposition, where a ^C landing between Stop and restore could kill
+	// this process mid-restore. The rename itself likewise now happens after
+	// absorption has begun, not before.
+	restore := setSessionTitle(ws.Name())
+	defer restore()
 
 	if err := c.Run(); err != nil {
 		var ee *exec.ExitError
