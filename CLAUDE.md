@@ -2,14 +2,13 @@
 
 CLI tool (`workspace`) managing isolated dev workspaces for parallel Claude Code
 sessions: a git worktree per project, an allocated port block, generated env,
-and daemons — an *environment engine*. Clean-room Go rewrite (v1.0.x, complete,
-daily-driven) of a retired Ruby tool; **never consult or port Ruby code** —
-the spec and this repo are the only sources.
+and daemons — an *environment engine*. Clean-room Go rewrite (v1.1.x, complete,
+daily-driven) of an earlier personal Ruby tool, never publicly released and
+since retired; **never consult or port Ruby code** — the spec and this repo
+are the only sources.
 
-Module path is `github.com/Phaengris/claude-workspaces` — the intended public
-home, named ahead of publication (module paths are independent of where the
-code actually lives until someone `go install`s by that path). The git remote
-is still git.internal; publishing to GitHub requires no further rename.
+Module path is `github.com/Phaengris/claude-workspaces` — the public home.
+MIT-licensed.
 
 ## Commands
 

@@ -1,5 +1,9 @@
 # claude-workspaces (`workspace`)
 
+[![CI](https://github.com/Phaengris/claude-workspaces/actions/workflows/ci.yml/badge.svg)](https://github.com/Phaengris/claude-workspaces/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 An **environment engine**: it provisions N isolated, runnable instances of one
 stateful dev stack on a single machine — a git worktree per project, a private
 block of ports and other index-derived values, a curated per-instance
@@ -11,7 +15,8 @@ freshness and running daemons are all derived from git, the filesystem and
 `/proc` at the moment you ask, so there is no status machine, no "broken
 workspace" state, and every command is an idempotent ensure that converges when
 re-run. Single static Go binary, no runtime on the host, POSIX only (Linux
-first, macOS expected to work).
+first; macOS builds and is expected to work — where `/proc` is absent, daemon
+liveness degrades to pid-only by design).
 
 ---
 
@@ -19,8 +24,18 @@ first, macOS expected to work).
 
 ### 1. Build
 
+The quick path, straight from the module proxy:
+
 ```sh
-CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=1.0.0" -o workspace ./cmd/workspace
+go install github.com/Phaengris/claude-workspaces/cmd/workspace@latest
+```
+
+(`workspace --version` reports `dev` on a go-install'd binary — the version is
+stamped via `-ldflags`, which `go install` does not apply.) Or build from a
+checkout:
+
+```sh
+CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=1.1.0" -o workspace ./cmd/workspace
 ```
 
 `CGO_ENABLED=0` is the point of the exercise (one static file, no libc
@@ -742,7 +757,10 @@ unreadable registry (exit 1) are errors. `--json` gives `findings` and
 
 ## v1 divergences
 
-Consolidated, for anyone coming from the Ruby tool. This is a **new tool** with
+Consolidated, for anyone coming from the Ruby tool — "v1" throughout this
+README is an earlier personal Ruby tool of the same shape, never publicly
+released, whose documented behavior served as the oracle for this clean-room
+rewrite. This is a **new tool** with
 a new command surface and new on-disk formats, not a port: live v1 workspaces
 are not migrated (they finish on Ruby), and the two coexist — the skill here is
 installed under its own name, `claude-workspaces`.
@@ -818,3 +836,32 @@ extraction, index gap-filling, topo sort) and `testscript` scripts under
 `internal/*/testdata` for command flows, each in a tmpdir root isolated by
 `CLAUDE_WORKSPACES_ROOT_DIR`. Install/uninstall tests only ever run against a
 fake `$HOME`.
+
+---
+
+## How this was built
+
+This tool is itself a product of the workflow it serves: it was written with
+[Claude Code](https://claude.com/claude-code), end to end, as a spec-driven
+agentic project — and the paper trail is checked in.
+
+- **Spec first**: the design was brainstormed and pinned in
+  [`docs/superpowers/specs/`](docs/superpowers/specs/) before any code — every
+  decided behavior has a written row to point at.
+- **Milestone plans**: implementation ran in six milestones
+  ([`docs/superpowers/plans/`](docs/superpowers/plans/)), each plan carrying
+  binding contracts, named test cases, and a decided-behaviors table.
+- **Subagent-driven execution**: each task was implemented by a fresh AI
+  subagent against its plan brief, then gated by an independent AI review
+  (spec compliance + code quality), with whole-branch final reviews before
+  each merge. Findings were fixed in review loops, not waved through.
+- **TDD with mutation-checked pins**: failing test first, and load-bearing
+  assertions are verified to actually fail when the behavior they pin is
+  broken (the commit messages say when).
+- **Human owner in the loop**: design decisions, reviews of the reviews, and
+  every release call were made by a human; the git history's commit trailers
+  record the division of labor honestly.
+
+Post-1.0 changes follow the same loop in miniature — the lazy-daemons feature
+(v1.1.0) went brainstorm → spec → plan → subagent implementation → reviews →
+release in one session, driven by the first day of real-world use.

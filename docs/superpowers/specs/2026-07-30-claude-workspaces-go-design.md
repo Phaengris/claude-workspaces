@@ -26,7 +26,6 @@ without them.
 4. Clean-room shaped: behavior comes from this design and from the v1 tool's
    *documented, observable* behavior (README, rspec cases as behavioral
    oracle). No code translation. New on-disk formats. New command surface.
-   (Structural support for the "new tool" framing; not legal advice.)
 
 **Non-goals**
 
