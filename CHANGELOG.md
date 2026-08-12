@@ -4,6 +4,15 @@ All notable changes to `workspace` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] — 2026-08-12
+
+### Changed
+
+- Docs/history hygiene: internal host names scrubbed from the repository
+  and its history (module-proxy consumers should use this version or later).
+  README gains the "Separation, not virtualization" section and the
+  changelog itself. No code changes.
+
 ## [1.3.0] — 2026-08-12
 
 ### Added
@@ -93,6 +102,7 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
+[1.3.1]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.0.2...v1.1.0
