@@ -35,7 +35,7 @@ stamped via `-ldflags`, which `go install` does not apply.) Or build from a
 checkout:
 
 ```sh
-CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=1.2.0" -o workspace ./cmd/workspace
+CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=1.3.0" -o workspace ./cmd/workspace
 ```
 
 `CGO_ENABLED=0` is the point of the exercise (one static file, no libc
@@ -666,7 +666,11 @@ call it for whatever it actually needs. Reuse **ignores a supplied description
 silently** (the `using existing workspace <name>` line is the notice), and
 positional 2 is *always* the description slot on both paths — so when it
 happens to name a configured project, a note says what became of it, because
-you almost certainly meant `launch <id> <desc> <project…>`.
+you almost certainly meant `launch <id> <desc> <project…>`. On the **create**
+path, `launch` does not print `new`'s `hint: workspace cd <id>` — the terminal
+is about to become the session's, so a `cd` hint would read as a stale
+to-do — and instead prints `tip: in another terminal: workspace cd <id> —
+work alongside this session`. The reuse path prints neither.
 
 The installed **skill** (`~/.claude/skills/claude-workspaces/SKILL.md`) is
 the session-facing interface — "work on FIZZY-123" turns into

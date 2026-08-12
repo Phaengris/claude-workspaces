@@ -96,8 +96,11 @@ func newNewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = newWork(cmd, cfg, root, taskID, desc, args[2:])
-			return err
+			if _, err = newWork(cmd, cfg, root, taskID, desc, args[2:]); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "hint: workspace cd %s\n", taskID)
+			return nil
 		},
 	}
 }
@@ -260,6 +263,5 @@ func newWork(cmd *cobra.Command, cfg *config.Config, root, taskID, desc string, 
 			SetupCurrent: st.SetupCurrent,
 		}))
 	}
-	fmt.Fprintf(out, "hint: workspace cd %s\n", taskID)
 	return ws, nil
 }

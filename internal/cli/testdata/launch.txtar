@@ -51,6 +51,8 @@ exec workspace launch T-1 'fix thing' app
 stdout '  app: checking out \(branch T-1\)… ok \(\d+\.\d+s\)'
 stdout '  app: setup: true… ok \(\d+\.\d+s\)'
 stdout 'workspace T-1_fix-thing created \(index 0\)'
+stdout 'tip: in another terminal: workspace cd T-1 — work alongside this session'
+! stdout 'hint: workspace cd'
 ! stdout 'started'
 stdout 'argv: --dangerously-skip-permissions$'
 stdout 'cwd: '$WORK'/root/T-1_fix-thing$'
@@ -65,6 +67,8 @@ grep -count=1 'invoked' $WORK/claude.log
 # re-allocated; reuse no longer converges daemons either, so claude just runs
 # again.
 exec workspace launch T-1
+! stdout 'tip: in another terminal'
+! stdout 'hint: workspace cd'
 stdout 'using existing workspace T-1_fix-thing'
 ! stdout 'created'
 ! stdout 'started'
