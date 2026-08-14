@@ -130,6 +130,10 @@ top. Consequences worth remembering:
 - `workspace adopt [dir]` / `workspace release [dir]` provision or free an
   allocation for a checkout the tool did not create; `release` never deletes
   files.
+- A released workspace (files kept, allocation freed — the "archived" state)
+  is invisible to plain `ls`: it is not in the registry. `workspace ls -a`
+  lists such dirs (and strangers in the root); `workspace adopt <dir>`
+  re-provisions one; `doctor` notes them unconditionally.
 - `workspace gc` releases allocations whose directories are gone and clears
   stale pid files. `workspace gc --destroy-dirs` additionally destroys
   tool-created workspaces that are fully merged, clean and idle — the routine

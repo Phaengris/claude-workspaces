@@ -2,6 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -56,7 +59,7 @@ type lsEntry struct {
 // them ErrConfig → exit 4); a registry that exists but cannot be read is a
 // plain error → exit 1.
 func newLsCmd() *cobra.Command {
-	var withGit bool
+	var withGit, all bool
 	cmd := &cobra.Command{
 		Use:   "ls",
 		Short: "List all workspaces",
@@ -66,31 +69,112 @@ func newLsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cfg, reg, err := loadRoot()
+			root, cfg, reg, err := loadRootDir()
 			if err != nil {
 				return err
 			}
 			entries := lsEntries(cfg, reg, withGit)
+			var extra []lsUnregistered
+			if all {
+				extra = unregisteredDirs(root, reg)
+			}
 
 			out := cmd.OutOrStdout()
 			if asJSON {
-				return ui.PrintJSON(out, entries)
+				if !all {
+					return ui.PrintJSON(out, entries)
+				}
+				// One mixed array, name-sorted like the table: registered
+				// entries keep their exact shape (the pre--a contract),
+				// unregistered ones carry only what is derivable.
+				combined := make([]any, 0, len(entries)+len(extra))
+				for _, e := range entries {
+					combined = append(combined, e)
+				}
+				for _, u := range extra {
+					combined = append(combined, u)
+				}
+				return ui.PrintJSON(out, combined)
 			}
-			if len(entries) == 0 {
+			if len(entries) == 0 && len(extra) == 0 {
 				fmt.Fprintln(out, noWorkspaces)
 				return nil
 			}
-			rows := make([][]string, 0, len(entries)+1)
-			rows = append(rows, lsHeader(withGit))
+			rows := make([][]string, 0, len(entries)+len(extra)+1)
 			for _, e := range entries {
 				rows = append(rows, lsRow(e))
 			}
+			for _, u := range extra {
+				rows = append(rows, unregisteredRow(u))
+			}
+			sort.Slice(rows, func(i, j int) bool { return rows[i][0] < rows[j][0] })
+			rows = append([][]string{lsHeader(withGit)}, rows...)
 			ui.Table(out, rows)
 			return nil
 		},
 	}
 	cmd.Flags().BoolVarP(&withGit, "git", "g", false, "append per-project git branch and dirty state")
+	cmd.Flags().BoolVarP(&all, "all", "a", false, "also list root dirs without an allocation (released workspaces, strangers)")
 	return cmd
+}
+
+// lsUnregistered is a directory in the root that no allocation claims, as
+// `ls -a` reports it. Status is "released" — the dir carries the tool's
+// .workspace footprint, so it is what `release` leaves behind (v1 called this
+// archived) — or "unmanaged", a stranger. TaskID is DERIVED from the name's
+// `<task>_<slug>` shape the tool itself builds (released dirs only); there is
+// no description to report — the allocation owned it and the allocation is
+// gone. The slug shown in the human row is the description's shadow, not the
+// description.
+type lsUnregistered struct {
+	Dir    string `json:"dir"`
+	Name   string `json:"name"`
+	TaskID string `json:"task_id,omitempty"`
+	Status string `json:"status"`
+}
+
+// unregisteredDirs scans the root for directories no allocation claims —
+// derived visibility for what `release` leaves behind, with no registry
+// involvement (the decided fork: an archived workspace is a CONDITION of the
+// world, never a recorded status). Dot-entries are machine-owned or hidden
+// (.allocations.json's own temp files, .lock), non-dirs are config.yml and
+// friends; both are skipped. A scan failure yields nothing: `ls -a` degrades
+// to plain `ls` rather than failing the listing that mattered.
+func unregisteredDirs(root string, reg alloc.Registry) []lsUnregistered {
+	dirents, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	registered := make(map[string]bool, len(reg))
+	for _, ws := range wsp.List(reg) {
+		registered[ws.Name()] = true
+	}
+	var out []lsUnregistered
+	for _, d := range dirents {
+		name := d.Name()
+		if !d.IsDir() || strings.HasPrefix(name, ".") || registered[name] {
+			continue
+		}
+		u := lsUnregistered{Dir: filepath.Join(root, name), Name: name, Status: "unmanaged"}
+		if fi, err := os.Stat(filepath.Join(root, name, ".workspace")); err == nil && fi.IsDir() {
+			u.Status = "released"
+			u.TaskID, _, _ = strings.Cut(name, "_")
+		}
+		out = append(out, u)
+	}
+	return out
+}
+
+// unregisteredRow renders one unregistered dir as table cells shaped like
+// lsRow's: '-' where an allocation would have answered, and the label that
+// says what this dir is and how to act on it.
+func unregisteredRow(u lsUnregistered) []string {
+	if u.Status != "released" {
+		return []string{u.Name, "-", "-", "(unmanaged)"}
+	}
+	_, slug, _ := strings.Cut(u.Name, "_")
+	desc := strings.TrimSpace(slug + " (released — workspace adopt to reuse)")
+	return []string{u.Name, "-", u.TaskID, desc}
 }
 
 // lsEntries derives the full listing once, for both renderings — the human

@@ -41,6 +41,42 @@ stdout '^B-7_y +#2 +B-7 +add the widget \(adopted\)$'
 stdout '(?s)A-1_x.*B-7_y'
 ! stdout 'no workspaces'
 
+# --- ls -a: unregistered dirs in the root, derived and labeled ------------------
+# A released workspace keeps its files (release never deletes), so its
+# .workspace/ marker classifies it; its task id and description-slug are
+# derived from the NAME the tool itself built. A dir without the marker is a
+# stranger, shown honestly as unmanaged. Neither appears without -a.
+# Fabricated directly, like everything in this fixture: an unregistered dir
+# WITH the .workspace marker is what release leaves behind; one without is a
+# stranger.
+mkdir $WORK/root/C-3_to-be-archived/.workspace
+mkdir $WORK/root/stray-dir
+exec workspace ls
+! stdout 'C-3'
+! stdout 'stray-dir'
+exec workspace ls -a
+stdout '^C-3_to-be-archived +- +C-3 +to-be-archived \(released — workspace adopt to reuse\)$'
+stdout '^stray-dir +- +- +\(unmanaged\)$'
+stdout '(?s)A-1_x.*B-7_y.*C-3_to-be-archived.*stray-dir'
+exec workspace ls -a --json
+stdout '"status": "released"'
+stdout '"status": "unmanaged"'
+stdout '"task_id": "C-3"'
+exec workspace ls --json
+! stdout '"status"'
+
+# doctor notes every unregistered dir (uncounted — nothing is broken), so the
+# state is discoverable without knowing -a.
+exec workspace doctor
+stdout 'note: dir C-3_to-be-archived is not in the registry \(released workspace — workspace adopt to reuse, or delete it\)'
+stdout 'note: dir stray-dir is not in the registry \(not a workspace\)'
+# The count pins that the notes are UNCOUNTED: this fixture's fake /tmp repos
+# are 2 real findings, and the two unregistered-dir notes must not join them.
+stdout '^doctor: 2 finding\(s\)$'
+
+# cleanup: drop the extras so later blocks' listings stay as written
+exec rm -r $WORK/root/C-3_to-be-archived $WORK/root/stray-dir
+
 # -g appends one cell per CHECKED-OUT project: project@branch, '*' when dirty.
 # `lib` is configured but checked out nowhere, so it never appears.
 exec workspace ls -g

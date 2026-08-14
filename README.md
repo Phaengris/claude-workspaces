@@ -411,7 +411,7 @@ plain error listing the candidates.
 | | `logs <ws> <daemon> [-n N] [-f]` | Print one daemon's stdout log (`-n`, default 50; `-n 0` for none) and optionally follow it (`-f`, which also streams stderr). |
 | | `exec <ws> [project] <cmd> [args…]` | **Replace** this process (`execve`) with the command, in the workspace or a project worktree, under the curated environment. |
 | | `browse <ws> [project]` | Open `http://localhost:<browse_port>`; with no `xdg-open` on `PATH`, print the URL instead (exit 0 — the SSH-friendly path). |
-| **Observe** | `ls [-g]` | Every workspace, one line each; `-g` appends `project@branch` per checked-out project, `*` when dirty (git runs concurrently, bounded). |
+| **Observe** | `ls [-g] [-a]` | Every workspace, one line each; `-g` appends `project@branch` per checked-out project, `*` when dirty (git runs concurrently, bounded). `-a` also lists root dirs no allocation claims: released workspaces (identity derived from the dir name, `adopt` to reuse) and stranger dirs, labeled `(unmanaged)`. |
 | | `status [ws]` | One workspace in full, every field derived live; with no argument, the `ls` listing. |
 | | `env <ws> [project]` | The resolved environment as sorted `K=V`. |
 | | `ports` | Allocated value blocks across workspaces. |

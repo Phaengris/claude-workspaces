@@ -41,6 +41,7 @@ const (
 	kindDaemonsRunning        = "daemons_running"
 	kindDaemonNoDescription   = "daemon_no_description"
 	kindBrowsePortUnresolved  = "browse_port_unresolved"
+	kindUnregisteredDir       = "unregistered_dir"
 )
 
 // gcHint closes every finding `workspace gc` is the fix for. doctor reports and
@@ -219,6 +220,23 @@ func doctorObserve(root string, cfg *config.Config, reg alloc.Registry) []doctor
 					project, bp, resolved))
 			}
 		}
+	}
+
+	// Root-level: directories no allocation claims — what `release` leaves
+	// behind (the .workspace footprint says so; v1 called it archived) or a
+	// stranger. Notes, not findings: nothing is broken, the dirs are simply
+	// invisible to every registry-walking command, and this is the
+	// discoverability net for users who never learn `ls -a` (which shows the
+	// same derivation on demand). os.ReadDir's sorted order keeps the report
+	// deterministic.
+	for _, u := range unregisteredDirs(root, reg) {
+		if u.Status == "released" {
+			note(kindUnregisteredDir, "", fmt.Sprintf(
+				"note: dir %s is not in the registry (released workspace — workspace adopt to reuse, or delete it)", u.Name))
+			continue
+		}
+		note(kindUnregisteredDir, "", fmt.Sprintf(
+			"note: dir %s is not in the registry (not a workspace)", u.Name))
 	}
 
 	// Section 2 — allocations. wsp.List sorts by name, which is what makes the

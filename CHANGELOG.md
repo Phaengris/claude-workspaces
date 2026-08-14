@@ -4,6 +4,18 @@ All notable changes to `workspace` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] — 2026-08-14
+
+### Added
+
+- **`ls -a/--all`**: also lists root directories no allocation claims —
+  released workspaces (the tool's `.workspace` footprint identifies them;
+  task id derived from the dir name; `adopt` to reuse) and stranger dirs,
+  labeled `(unmanaged)`. The registry stays allocations-only: "archived" is
+  a condition of the world, derived on demand, never a recorded status.
+- `doctor` notes every unregistered dir in the root (uncounted) — the
+  always-on discoverability net for the same state.
+
 ## [1.4.0] — 2026-08-14
 
 ### Changed
@@ -165,6 +177,7 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
+[1.5.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.6...v1.4.0
 [1.3.6]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.4...v1.3.5
