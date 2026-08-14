@@ -17,8 +17,14 @@ CGO_ENABLED=0 go build -o ./workspace ./cmd/workspace     # build (binary is git
 go test ./...                                             # full suite (~11s; real processes, real git)
 go test -race ./internal/proc ./internal/wsp ./internal/cli
 gofmt -l . && go vet ./...                                # both must be clean before commit
-# release: CHANGELOG.md entry first, then -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=X.Y.Z", tag vX.Y.Z, ./workspace install
-# push master+tags to BOTH remotes: origin (the private mirror) and github (the public repo)
+# landing a change: commit, push master to BOTH remotes (origin = private mirror, github = public),
+#   add its CHANGELOG entry under "Unreleased". Do NOT tag per change.
+# daily-driver install between releases: build with
+#   -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=$(git describe --tags --always)"
+#   then ./workspace install — the user runs master, tags are for the world.
+# release (end of a day with user-visible changes, or on explicit need):
+#   retitle Unreleased to X.Y.Z in CHANGELOG.md, build with version=X.Y.Z,
+#   ./workspace install, tag vX.Y.Z, push master+tag to both remotes.
 ```
 
 Conventional commits (`feat(cli): …`). The user's real install lives at

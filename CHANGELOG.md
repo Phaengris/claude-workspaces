@@ -4,6 +4,12 @@ All notable changes to `workspace` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+(Changes land here as they merge; a release retitles the section. The
+installed daily driver may be ahead of the last tag — `workspace --version`
+says exactly how far when built with `git describe`.)
+
 ## [1.5.0] — 2026-08-14
 
 ### Added
