@@ -80,7 +80,8 @@ func newLsCmd() *cobra.Command {
 				fmt.Fprintln(out, noWorkspaces)
 				return nil
 			}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(entries)+1)
+			rows = append(rows, lsHeader(withGit))
 			for _, e := range entries {
 				rows = append(rows, lsRow(e))
 			}
@@ -160,6 +161,21 @@ func lsEntries(cfg *config.Config, reg alloc.Registry, withGit bool) []lsEntry {
 // machine consumer reads it, from the `adopted` field that has always been
 // there.
 const adoptedMarker = "(adopted)"
+
+// lsHeader labels lsRow's fixed columns — a row like any other, aligned by
+// the same tabwriter, uppercase and undecorated (no ANSI: piped output stays
+// byte-clean). `-g`'s per-project cells vary in count per row, so they get
+// ONE trailing PROJECTS label over the first rather than a column each; the
+// cells are self-describing (name@branch). The empty listing keeps its prose
+// "no workspaces" line INSTEAD of a lone header: labels with nothing under
+// them would dress an empty room.
+func lsHeader(withGit bool) []string {
+	h := []string{"WORKSPACE", "INDEX", "TASK", "DESCRIPTION"}
+	if withGit {
+		h = append(h, "PROJECTS")
+	}
+	return h
+}
 
 // lsRow renders one entry as table cells: NAME  #INDEX  TASK_ID  DESCRIPTION,
 // plus one PROJECT@BRANCH cell per checked-out project (with a '*' suffix when

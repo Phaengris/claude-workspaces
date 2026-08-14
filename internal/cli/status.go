@@ -106,7 +106,8 @@ func newStatusCmd() *cobra.Command {
 					fmt.Fprintln(out, noWorkspaces)
 					return nil
 				}
-				rows := make([][]string, 0, len(entries))
+				rows := make([][]string, 0, len(entries)+1)
+				rows = append(rows, lsHeader(false))
 				for _, e := range entries {
 					rows = append(rows, lsRow(e))
 				}

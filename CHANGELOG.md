@@ -4,6 +4,15 @@ All notable changes to `workspace` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.6] — 2026-08-14
+
+### Added
+
+- `workspace ls` (and the no-argument `status` listing) print column
+  headers: `WORKSPACE  INDEX  TASK  DESCRIPTION`, plus `PROJECTS` under
+  `-g`. The empty listing keeps its plain "no workspaces" line. `--json`
+  is unchanged.
+
 ## [1.3.5] — 2026-08-14
 
 ### Changed
@@ -141,6 +150,7 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
+[1.3.6]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.4...v1.3.5
 [1.3.4]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.2...v1.3.3
