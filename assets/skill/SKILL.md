@@ -97,6 +97,13 @@ Start exactly what the task needs (`workspace up <ws> rails`), check it
 with `workspace logs <ws> rails`, and `workspace down <ws>` when done.
 WORKSPACE.md carries the same service list per project.
 
+Lazy has one hard consequence: **start the serving daemon before anything
+that opens or judges the app** — `workspace browse`, visual verification of
+a change, screenshots. `browse` dials the port first and refuses when
+nothing is listening (the refusal names the `workspace up` to run), so the
+right sequence is always: `up` what serves → wait for it in `logs` if it
+boots slowly → then browse or verify.
+
 ## The environment contract
 
 Commands the tool spawns (`setup`, `start`, `stop`, `teardown`, `exec`, the

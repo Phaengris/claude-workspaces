@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -34,6 +35,7 @@ func TestScripts(t *testing.T) {
 			"wsenv":    cmdWsenv,
 			"workroot": cmdWorkroot,
 			"isexec":   cmdIsExec,
+			"listen":   cmdListen,
 		},
 	})
 }
@@ -71,6 +73,32 @@ func cmdIsExec(ts *testscript.TestScript, neg bool, args []string) {
 			ts.Fatalf("isexec %s: mode %v is not owner-executable", name, info.Mode())
 		}
 	}
+}
+
+// cmdListen opens a TCP listener on 127.0.0.1:<port> for the remainder of
+// the script. browse's dial-check needs a live socket on its success path,
+// and a goroutine in the TEST process is the hermetic way to provide one —
+// no external binary, no daemon fixture, and the listener dies with the
+// script (ts.Defer). Connections are accepted and closed immediately: browse
+// only asks whether the port answers, never speaks HTTP.
+func cmdListen(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) != 1 {
+		ts.Fatalf("usage: listen <port>")
+	}
+	l, err := net.Listen("tcp", "127.0.0.1:"+args[0])
+	if err != nil {
+		ts.Fatalf("listen %s: %v", args[0], err)
+	}
+	ts.Defer(func() { _ = l.Close() })
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
 }
 
 // cmdWorkroot copies src to dst substituting the literal WORKROOT with

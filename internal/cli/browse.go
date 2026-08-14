@@ -2,9 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"net"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -91,6 +93,20 @@ func newBrowseCmd() *cobra.Command {
 					project, cfg.Projects[project].BrowsePort, port)
 			}
 			url := "http://localhost:" + port
+
+			// The one thing browse promises is that the app at this URL
+			// answers, so ask the SOCKET, not the daemon records (spec's
+			// derive-don't-record, applied to ports): a hand-started server
+			// is as browsable as a managed daemon, and a managed daemon that
+			// died during boot is not — inference from pid files gets both
+			// wrong. The refusal carries the URL on purpose: a user who
+			// knows the app is seconds from serving can open it themselves.
+			if conn, err := net.DialTimeout("tcp", "localhost:"+port, 500*time.Millisecond); err != nil {
+				return fmt.Errorf("nothing is listening on localhost:%s — start the app (workspace up %s), then retry; or open %s yourself once it serves",
+					port, ws.Name(), url)
+			} else {
+				conn.Close()
+			}
 
 			out := cmd.OutOrStdout()
 			opener, err := exec.LookPath("xdg-open")

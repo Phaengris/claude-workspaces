@@ -626,8 +626,12 @@ instance) therefore shows an empty tail; when that happens and the `.err.log`
 is non-empty, one note points at it: `(no stdout output; stderr has output — try -f)`.
 A daemon that has never run is a note and exit 0, not a failure.
 
-**`browse`** substitutes `browse_port` for this workspace and opens
-`http://localhost:<port>` with `xdg-open`, detached. With no `xdg-open` on
+**`browse`** substitutes `browse_port` for this workspace, checks something
+is actually listening on the port (a quick TCP dial — the socket is asked
+directly, so a hand-started server counts and a daemon that died during
+boot does not), and opens `http://localhost:<port>` with `xdg-open`,
+detached. Nothing listening is a refusal that names the `workspace up` to
+run and hands over the URL for when the app serves. With no `xdg-open` on
 `PATH` it prints the URL and exits 0 — on a remote box, printing *is* the
 feature. With one project checked out it needs no argument; with several it
 asks you to pick.

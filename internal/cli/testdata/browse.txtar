@@ -29,6 +29,8 @@ env OLDPATH=$PATH
 env PATH=$WORK/bin
 
 # --- project defaulting: exactly one checked-out project ----------------------
+listen 18200
+listen 18201
 exec workspace browse T-1
 stdout '^http://localhost:18200$'
 ! stdout 'opening'
@@ -45,6 +47,15 @@ stdout '^http://localhost:18201$'
 ! exec workspace browse T-1 noport
 stderr 'project "noport"'
 stderr 'browse_port'
+
+# --- valid port, but nothing listening → refuse, hint at up, hand over the URL --
+# browse dials before opening (the socket is the truth — a hand-started server
+# passes, a managed daemon that died in boot does not); the refusal carries the
+# URL so a user who knows better can open it themselves.
+! exec workspace browse T-1 deadport
+stderr 'nothing is listening on localhost:18299'
+stderr 'workspace up'
+stderr 'http://localhost:18299'
 
 # --- browse_port whose ${...} token resolves to nothing → loud error, no open --
 # ${TYPO} names no value, so Subst passes it through untouched; before the
@@ -95,6 +106,9 @@ projects:
   badport:
     repo: WORKROOT/src/app
     browse_port: ${TYPO}
+  deadport:
+    repo: WORKROOT/src/app
+    browse_port: 18299
 -- xdg/xdg-open --
 #!/bin/sh
 echo "$1" > "$WORK/xdg-open-called"

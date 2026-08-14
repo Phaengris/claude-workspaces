@@ -4,6 +4,16 @@ All notable changes to `workspace` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.5] — 2026-08-14
+
+### Changed
+
+- `browse` dials the port before opening: nothing listening is a refusal
+  that names the `workspace up` to run (and hands over the URL), instead of
+  a browser tab pointing at a dead port. The socket is asked directly — a
+  hand-started server counts, daemon records are not consulted. The skill
+  teaches the sequence: start what serves, then browse or verify.
+
 ## [1.3.4] — 2026-08-14
 
 ### Added
@@ -131,6 +141,7 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
+[1.3.5]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.4...v1.3.5
 [1.3.4]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.1...v1.3.2
