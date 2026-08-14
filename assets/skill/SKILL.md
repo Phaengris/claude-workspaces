@@ -16,7 +16,8 @@ a directory under the root (`~/claude-workspaces` unless
 `CLAUDE_WORKSPACES_ROOT_DIR` says otherwise) holding:
 
 - **a git worktree per checked-out project** — its own branch, named after the
-  task id, so parallel tasks never share a checkout;
+  full workspace name (e.g. `PATED_patternima-editor-fixes`), so parallel
+  tasks never share a checkout and the branch says what it is about;
 - **an allocation index**, which derives the workspace's numbered values
   (`PORT0`, `PORT1`, … from `values:` in config) — no two live workspaces get
   the same ports;

@@ -228,7 +228,7 @@ workspace gc
 
 What just happened: `new` allocated index 0 (so `PORT0..PORT9` = 5000..5009),
 created `~/claude-workspaces/DEMO-1_try-the-tool`, wrote `WORKSPACE.md` and a
-one-line `CLAUDE.md`, added a `demo` worktree on branch `DEMO-1`, wrote the
+one-line `CLAUDE.md`, added a `demo` worktree on branch `DEMO-1_try-the-tool`, wrote the
 project's `.env`, and ran `setup:` once (stamped). `up` ran the bare `start:`
 entry to completion and then started the named daemon `web`. `cd` moved the
 shell (via the wrapper) and `which` confirmed where it landed. `exec` ran a
@@ -787,7 +787,7 @@ evidence — every gate must say yes:
 | Ownership | tool-created | **adopted** (never deleted, silently) |
 | Content | ≥ 1 project checked out | **nothing checked out** — an empty workspace has no branches, hence no merge evidence at all. A half-destroyed workspace reads as empty here too: finish it with `destroy` (or `destroy --force`). |
 | Daemons | nothing in the pids **directory** names a live process | any live record, config-known or not; an unreadable pids dir is an error and a skip |
-| Merged | every checked-out project's `<task_id>` branch is fully merged into its base | any unanswerable merge question — missing branch, missing base, moved repo, detached HEAD — reads as *not merged* |
+| Merged | every checked-out project's **actual** branch (read from the worktree, whatever it is named) is fully merged into its base | any unanswerable merge question — unreadable branch, missing base, moved repo, detached HEAD — reads as *not merged* |
 | Clean | no checked-out worktree is dirty (modified or untracked) | dirty, and **loudly**: `skipped <name> (uncommitted changes)`. `destroy` keeps the power to discard uncommitted work; a batch sweep does not. |
 
 The base for the merge check is the project's `base_branch`, or — when that is

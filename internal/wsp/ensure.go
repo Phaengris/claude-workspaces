@@ -89,8 +89,14 @@ func EnsureProject(cfg *config.Config, ws Workspace, project string, step Step) 
 
 	dest := ProjectDir(ws, cfg, project)
 	if !gitx.IsWorkTreeRoot(dest) {
-		done := begin(step, fmt.Sprintf("checking out (branch %s)", ws.Alloc.TaskID))
-		if err := gitx.WorktreeAdd(p.Repo, dest, ws.Alloc.TaskID, p.BaseBranch); err != nil {
+		// The branch is named after the FULL workspace name, not the bare
+		// task id: `PATED_patternima-editor-fixes` says in `git branch` and
+		// in a PR list what `PATED` alone cannot. Consumers never re-derive
+		// this — status/WORKSPACE.md/gc all read the worktree's actual
+		// branch — so workspaces created when the branch was the task id
+		// keep working untouched.
+		done := begin(step, fmt.Sprintf("checking out (branch %s)", ws.Name()))
+		if err := gitx.WorktreeAdd(p.Repo, dest, ws.Name(), p.BaseBranch); err != nil {
 			done(err)
 			return fail(err)
 		}

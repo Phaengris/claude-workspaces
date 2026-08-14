@@ -240,14 +240,21 @@ func flattenBatch(err error) error {
 	return fmt.Errorf("%v", err)
 }
 
-// allMerged reports whether EVERY checked-out project's branch <task_id> is
-// fully merged into that project's base. The base is the configured
-// base_branch, or — when empty — the source repo's own HEAD branch
-// (gitx.DefaultBranch), the same default WorktreeAdd branched from at
-// checkout time. Any failure to answer (missing branch, unresolvable
-// default, moved repo) is FALSE: gc destroys on evidence, never on doubt.
+// allMerged reports whether EVERY checked-out project's ACTUAL branch — the
+// one the worktree is on, already read into its ProjectState — is fully
+// merged into that project's base. Derived, never recomputed: recomputing
+// the branch from the task id silently broke the moment branch naming
+// changed (full workspace names since 1.4), and was always wrong for a
+// worktree someone switched by hand. The base is the configured base_branch,
+// or — when empty — the source repo's own HEAD branch (gitx.DefaultBranch),
+// the same default WorktreeAdd branched from at checkout time. Any failure
+// to answer (unreadable branch, missing branch, unresolvable default, moved
+// repo) is FALSE: gc destroys on evidence, never on doubt.
 func allMerged(cfg *config.Config, ws wsp.Workspace, states []wsp.ProjectState) bool {
 	for _, st := range states {
+		if st.Branch == "" {
+			return false // branch unreadable: doubt reads as keep
+		}
 		p := cfg.Projects[st.Name]
 		base := p.BaseBranch
 		if base == "" {
@@ -257,7 +264,7 @@ func allMerged(cfg *config.Config, ws wsp.Workspace, states []wsp.ProjectState) 
 			}
 			base = b
 		}
-		if !gitx.IsMerged(p.Repo, ws.Alloc.TaskID, base) {
+		if !gitx.IsMerged(p.Repo, st.Branch, base) {
 			return false
 		}
 	}

@@ -48,7 +48,7 @@ env CLAUDE_SHIM_LOG=$WORK/claude.log
 # --continue: this dir has no history under our fixture HOME). Daemons are
 # lazy: nothing starts, and the pids dir does not even exist yet.
 exec workspace launch T-1 'fix thing' app
-stdout '  app: checking out \(branch T-1\)… ok \(\d+\.\d+s\)'
+stdout '  app: checking out \(branch T-1_fix-thing\)… ok \(\d+\.\d+s\)'
 stdout '  app: setup: true… ok \(\d+\.\d+s\)'
 stdout 'workspace T-1_fix-thing created \(index 0\)'
 stdout 'tip: in another terminal: workspace cd T-1 — work alongside this session'
@@ -112,7 +112,7 @@ stdout 'or use checkout'
 # through the same ensure loop `checkout` uses.
 exec workspace launch T-1 'fix thing' api
 stdout 'using existing workspace T-1_fix-thing'
-stdout '  api: checking out \(branch T-1\)… ok \(\d+\.\d+s\)'
+stdout '  api: checking out \(branch T-1_fix-thing\)… ok \(\d+\.\d+s\)'
 exists $WORK/root/T-1_fix-thing/api/README
 exists $WORK/root/T-1_fix-thing/.workspace/setup-api.ok
 grep '### api' $WORK/root/T-1_fix-thing/WORKSPACE.md
@@ -154,7 +154,7 @@ stdout 'nothing checked out'
 # allocation — and claude is NOT launched onto a broken environment.
 env CLAUDE_SHIM_LOG=$WORK/no-claude-create.log
 ! exec workspace launch T-3 'broken' bad
-stdout '  bad: checking out \(branch T-3\)… ok \(\d+\.\d+s\)'
+stdout '  bad: checking out \(branch T-3_broken\)… ok \(\d+\.\d+s\)'
 stdout '  bad: setup: false… failed'
 stderr 'project "bad"'
 ! exists $WORK/root/T-3_broken

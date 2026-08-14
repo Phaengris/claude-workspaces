@@ -37,7 +37,7 @@ exec workspace up T-1 app:sleeper
 stdout 'started app:sleeper \(pid \d+\)'
 
 exec workspace status T-1
-stdout '^  app: checked out \(branch T-1\), setup current$'
+stdout '^  app: checked out \(branch T-1_x\), setup current$'
 stdout '^    sleeper: running \(pid \d+\) — naps on port 5000$'
 stdout '^    other: stopped$'
 # Daemon lines are indented UNDER their project and follow it in listed order

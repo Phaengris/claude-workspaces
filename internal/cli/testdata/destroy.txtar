@@ -45,8 +45,8 @@ exec git -C $WORK/root/src/api worktree list
 ! stdout T-1
 
 # Branches survive destroy (decided table: a branch is the user's work).
-exec git -C $WORK/root/src/app rev-parse --verify refs/heads/T-1
-exec git -C $WORK/root/src/api rev-parse --verify refs/heads/T-1
+exec git -C $WORK/root/src/app rev-parse --verify refs/heads/T-1_fix-thing
+exec git -C $WORK/root/src/api rev-parse --verify refs/heads/T-1_fix-thing
 
 # --- teardown failure: abort, NOTHING removed ---------------------------------
 # app's teardown is `false`; api's still succeeds first (reverse order), then

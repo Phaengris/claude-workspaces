@@ -25,7 +25,7 @@ func ensureFixture(t *testing.T, setup []string) (*config.Config, wsp.Workspace)
 	root := t.TempDir()
 	src := filepath.Join(root, "src", "app")
 	mkRepoAt(t, src, "main")
-	wsDir := filepath.Join(root, "T-1")
+	wsDir := filepath.Join(root, "T-1_add-widgets")
 	if err := os.MkdirAll(wsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -67,8 +67,8 @@ func TestEnsureProjectIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading worktree branch: %v", err)
 	}
-	if branch != "T-1" {
-		t.Errorf("worktree branch = %q, want %q (the task id)", branch, "T-1")
+	if branch != "T-1_add-widgets" {
+		t.Errorf("worktree branch = %q, want %q (the full workspace name)", branch, "T-1_add-widgets")
 	}
 	if got := setupLogLines(t, dest); got != 1 {
 		t.Errorf("setup.log has %d lines after first run, want 1", got)
@@ -118,8 +118,8 @@ func TestEnsureProjectReportsSteps(t *testing.T) {
 		t.Fatalf("EnsureProject: %v", err)
 	}
 	want := []string{
-		"begin checking out (branch " + ws.Alloc.TaskID + ")",
-		"end checking out (branch " + ws.Alloc.TaskID + ") ok",
+		"begin checking out (branch " + ws.Name() + ")",
+		"end checking out (branch " + ws.Name() + ") ok",
 		"begin setup: true",
 		"end setup: true ok",
 		"begin setup: echo " + ws.Alloc.TaskID,
@@ -151,8 +151,8 @@ func TestEnsureProjectReportsFailedStep(t *testing.T) {
 		t.Fatal("want setup failure")
 	}
 	want := []string{
-		"begin checking out (branch " + ws.Alloc.TaskID + ")",
-		"end checking out (branch " + ws.Alloc.TaskID + ") ok",
+		"begin checking out (branch " + ws.Name() + ")",
+		"end checking out (branch " + ws.Name() + ") ok",
 		"begin setup: false",
 		"end setup: false err",
 	}

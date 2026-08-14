@@ -49,7 +49,7 @@ cp stale-pid $WORK/root/T-2_live/.workspace/pids/app:ghost
 # (3) merged: real work on branch T-3, merged into main in the SOURCE repo.
 exec workspace new T-3 merged app
 exec git -C $WORK/root/T-3_merged/app commit --allow-empty -m work
-exec git -C $WORK/root/src/app merge T-3
+exec git -C $WORK/root/src/app merge T-3_merged
 
 # (4) unmerged: real work on branch T-4, NOT merged anywhere.
 exec workspace new T-4 unmerged app

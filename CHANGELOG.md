@@ -4,6 +4,21 @@ All notable changes to `workspace` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] — 2026-08-14
+
+### Changed
+
+- **Worktree branches are named after the full workspace name**
+  (`PATED_patternima-editor-fixes`), not the bare task id — the branch now
+  says in `git branch` and in a PR list what it is about. Applies to new
+  checkouts; existing workspaces keep their task-id branches and every
+  command keeps working with them (branches are always read from the
+  worktree, never recomputed).
+- `gc --destroy-dirs`'s merged gate now checks each project's **actual**
+  branch instead of recomputing it from the task id — which also makes the
+  gate honest for adopted workspaces and hand-switched worktrees, and reads
+  an unreadable branch as "keep".
+
 ## [1.3.6] — 2026-08-14
 
 ### Added
@@ -150,6 +165,7 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
+[1.4.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.6...v1.4.0
 [1.3.6]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.4...v1.3.5
 [1.3.4]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.3...v1.3.4
