@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -24,8 +25,12 @@ import (
 //
 // An empty browse_port (unset, or substituted to nothing) is a plain exit-1
 // error naming the project: the identifier was fine, the config just has
-// nothing to browse. Validation stays light on purpose — non-empty is the
-// contract, numeric-ish is the user's business (spec leaves the value free).
+// nothing to browse. A NON-NUMERIC result is the same exit-1, naming both the
+// configured value and what it resolved to: config validation already rejects
+// a template-free non-number at load, so reaching this guard means a ${…}
+// token failed to resolve (unknown tokens pass through Subst untouched) — and
+// opening http://localhost:${TYPO} instead of erroring is exactly the silent
+// wrongness real use caught when validation here was still "light on purpose".
 //
 // Opener: xdg-open when the process PATH has it — spawned DETACHED (started,
 // released, never waited on; the CLI exits immediately and init reaps it) with
@@ -80,6 +85,10 @@ func newBrowseCmd() *cobra.Command {
 			port := strings.TrimSpace(wsp.Subst(cfg.Projects[project].BrowsePort, vars))
 			if port == "" {
 				return fmt.Errorf("project %q has no browse_port configured", project)
+			}
+			if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+				return fmt.Errorf("project %q: browse_port %q resolves to %q, which is not a port number — check the ${...} token against your values",
+					project, cfg.Projects[project].BrowsePort, port)
 			}
 			url := "http://localhost:" + port
 

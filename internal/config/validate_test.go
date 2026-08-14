@@ -192,3 +192,38 @@ func TestValidateOK(t *testing.T) {
 		t.Errorf("valid config rejected: %v", err)
 	}
 }
+
+// TestValidateBrowsePort pins the browse_port shape rule: a set value must be
+// a port number or carry a ${VALUE} template. A bare value NAME (the real-use
+// mistake this guards: `browse_port: PORT0`) used to sail through and open
+// http://localhost:PORT0 — the error must carry the ${...} spelling instead.
+func TestValidateBrowsePort(t *testing.T) {
+	cases := map[string]struct {
+		port string
+		want string // "" = valid
+	}{
+		"unset is fine":     {port: "", want: ""},
+		"literal port":      {port: "3000", want: ""},
+		"template":          {port: "${PORT0}", want: ""},
+		"template composed": {port: "8${IDX}0", want: ""},
+		"bare value name": {port: "PORT0",
+			want: `project "p": browse_port "PORT0" is neither a port number nor a ${VALUE} template (did you mean "${PORT0}"?)`},
+		"zero":      {port: "0", want: `project "p": browse_port 0 is outside 1-65535`},
+		"too large": {port: "70000", want: `project "p": browse_port 70000 is outside 1-65535`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := &Config{Projects: map[string]*Project{"p": {Repo: "/r", BrowsePort: tc.port}}}
+			err := cfg.validate()
+			if tc.want == "" {
+				if err != nil {
+					t.Errorf("browse_port %q rejected: %v", tc.port, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("browse_port %q: want error containing %q, got %v", tc.port, tc.want, err)
+			}
+		})
+	}
+}

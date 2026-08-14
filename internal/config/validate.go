@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -45,6 +46,20 @@ func (c *Config) validate() error {
 		// overwrites the first's record and orphans its process. Caught here,
 		// before `up` can ever write a pid file. Bare entries (Name == "")
 		// are unnamed run-and-waits and repeat freely.
+		// browse_port, when set, must be a port number or carry a ${VALUE}
+		// template (resolved per workspace at browse time). A bare value NAME
+		// is the observed real-use typo — `browse_port: PORT0` — and letting
+		// it through meant browse opened http://localhost:PORT0; the error
+		// hands back the ${...} spelling the user almost certainly meant.
+		if bp := strings.TrimSpace(p.BrowsePort); bp != "" && !strings.Contains(bp, "${") {
+			if n, err := strconv.Atoi(bp); err != nil {
+				errs = append(errs, fmt.Errorf(
+					"project %q: browse_port %q is neither a port number nor a ${VALUE} template (did you mean \"${%s}\"?)",
+					name, bp, bp))
+			} else if n < 1 || n > 65535 {
+				errs = append(errs, fmt.Errorf("project %q: browse_port %d is outside 1-65535", name, n))
+			}
+		}
 		daemons := make(map[string]bool, len(p.Start))
 		for _, e := range p.Start {
 			if strings.Contains(e.Name, ":") {

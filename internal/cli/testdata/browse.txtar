@@ -46,6 +46,15 @@ stdout '^http://localhost:18201$'
 stderr 'project "noport"'
 stderr 'browse_port'
 
+# --- browse_port whose ${...} token resolves to nothing → loud error, no open --
+# ${TYPO} names no value, so Subst passes it through untouched; before the
+# guard this OPENED http://localhost:${TYPO} (real-use bug: a bare PORT0
+# produced http://localhost:PORT0 in a browser). Load validation cannot catch
+# a plausible-looking template, so the runtime guard is the last line.
+! exec workspace browse T-1 badport
+stderr 'not a port number'
+stderr 'TYPO'
+
 # --- unknown project → not configured (exit 3, pinned in the unit test) --------
 ! exec workspace browse T-1 nope
 stderr 'project "nope" is not configured'
@@ -83,6 +92,9 @@ projects:
     browse_port: ${PORT1}
   noport:
     repo: WORKROOT/src/app
+  badport:
+    repo: WORKROOT/src/app
+    browse_port: ${TYPO}
 -- xdg/xdg-open --
 #!/bin/sh
 echo "$1" > "$WORK/xdg-open-called"

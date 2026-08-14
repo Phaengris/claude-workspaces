@@ -4,6 +4,17 @@ All notable changes to `workspace` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.3] — 2026-08-14
+
+### Fixed
+
+- `browse` no longer opens impossible URLs. A `browse_port` that is neither
+  a number nor a `${VALUE}` template is now a config error at load with a
+  did-you-mean hint (`browse_port: PORT0` → *did you mean "${PORT0}"?* —
+  the observed real-use typo opened `http://localhost:PORT0`); a template
+  whose token fails to resolve is a loud error at browse time instead of a
+  browser tab full of garbage.
+
 ## [1.3.2] — 2026-08-14
 
 ### Changed
@@ -111,6 +122,7 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
+[1.3.3]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.2.0...v1.3.0
