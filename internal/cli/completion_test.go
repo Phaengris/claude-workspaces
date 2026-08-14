@@ -88,9 +88,12 @@ func assertCompletions(t *testing.T, args []string, want []string, wantDirective
 	}
 }
 
-// wsIdents is the fixture's full workspace-ident set: every full name and every
-// task id, sorted — both spellings complete because both resolve (wsp.Resolve).
-var wsIdents = []string{"A-1", "A-1_alpha", "B-2", "B-2_beta"}
+// wsIdents is the fixture's completed workspace set: full names ONLY, sorted.
+// Task ids still resolve (wsp.Resolve accepts both spellings) but are not
+// OFFERED: an id is by construction a prefix of its name (`new` builds
+// <id>_<slug>, `adopt`'s id IS the dir basename), so offering both listed
+// every workspace twice while a typed id-prefix reaches the name anyway.
+var wsIdents = []string{"A-1_alpha", "B-2_beta"}
 
 // TestDynamicCompletions pins one case per completed argument slot in the
 // command tree.
@@ -103,7 +106,7 @@ func TestDynamicCompletions(t *testing.T) {
 	}{
 		// The workspace slot: names and task ids, prefix-filtered.
 		"cd workspace":        {args: []string{"cd", ""}, want: wsIdents, directive: noFile},
-		"cd workspace prefix": {args: []string{"cd", "B"}, want: []string{"B-2", "B-2_beta"}, directive: noFile},
+		"cd workspace prefix": {args: []string{"cd", "B"}, want: []string{"B-2_beta"}, directive: noFile},
 		"status workspace":    {args: []string{"status", ""}, want: wsIdents, directive: noFile},
 		"destroy workspace":   {args: []string{"destroy", ""}, want: wsIdents, directive: noFile},
 		"up workspace":        {args: []string{"up", ""}, want: wsIdents, directive: noFile},

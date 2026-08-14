@@ -308,10 +308,13 @@ func resolvedFor(ident string) (*config.Config, bool) {
 	return cfg, true
 }
 
-// workspaceIdents lists every string wsp.Resolve accepts — each workspace's
-// full name and its task id — sorted and filtered by what is typed so far.
-// Both spellings are offered because both work, and the short one (the task id)
-// is what a user types by hand.
+// workspaceIdents lists each workspace's FULL NAME, sorted and filtered by
+// what is typed so far. Task ids resolve too (wsp.Resolve accepts both
+// spellings, and typing one by hand keeps working) but are not offered: an id
+// is by construction a prefix of its workspace's name — `new` names the dir
+// <id>_<slug>, and `adopt`'s id IS the dir basename — so offering both listed
+// every workspace twice while a typed id-prefix reaches the full name anyway,
+// and the name carries the description a bare task number lacks.
 //
 // No descriptions are attached: a completion's description is display-only
 // noise for identifiers this short, and workspace descriptions are free text
@@ -321,14 +324,11 @@ func workspaceIdents(toComplete string) []string {
 	if !ok {
 		return nil
 	}
-	idents := map[string]bool{}
+	names := make([]string, 0)
 	for _, ws := range wsp.List(reg) {
-		idents[ws.Name()] = true
-		if ws.Alloc.TaskID != "" {
-			idents[ws.Alloc.TaskID] = true
-		}
+		names = append(names, ws.Name())
 	}
-	return matching(slices.Sorted(maps.Keys(idents)), toComplete)
+	return matching(names, toComplete) // List is already Name()-sorted
 }
 
 // projectNames lists the CONFIGURED project names, sorted and prefix-filtered.

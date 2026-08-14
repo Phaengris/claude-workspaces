@@ -4,6 +4,15 @@ All notable changes to `workspace` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.2] — 2026-08-14
+
+### Changed
+
+- Workspace completion offers full names only. Task ids still resolve when
+  typed, but completing both listed every workspace twice — and an id is
+  always a prefix of its name, so a typed id-prefix reaches the full name
+  (which, unlike a bare task number, says what the workspace is about).
+
 ## [1.3.1] — 2026-08-12
 
 ### Changed
@@ -102,6 +111,7 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
+[1.3.2]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.1.0...v1.2.0
