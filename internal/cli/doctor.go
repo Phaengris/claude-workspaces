@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -39,6 +40,7 @@ const (
 	kindPidsUnreadable        = "pids_unreadable"
 	kindDaemonsRunning        = "daemons_running"
 	kindDaemonNoDescription   = "daemon_no_description"
+	kindBrowsePortUnresolved  = "browse_port_unresolved"
 )
 
 // gcHint closes every finding `workspace gc` is the fix for. doctor reports and
@@ -196,6 +198,25 @@ func doctorObserve(root string, cfg *config.Config, reg alloc.Registry) []doctor
 				note(kindDaemonNoDescription, "", fmt.Sprintf(
 					"note: daemon %s has no description — add description: under start: to tell sessions what it is for",
 					d.Key()))
+			}
+		}
+		// A ${}-bearing browse_port passes load validation (the template
+		// SHAPE is fine) but is provably broken when its tokens don't
+		// resolve — browse will refuse it in every workspace. Doctor is
+		// where that surfaces without waiting for a browse: resolve with a
+		// sample index — whether a token resolves is index-independent, only
+		// the number it becomes varies — and a finding, not a note, because
+		// something IS broken; like project_repo_missing, the fix lives in
+		// config.yml. This check cannot live in config validation: knowing
+		// that ${PORT7} derives from `values:` needs the values math, whose
+		// one home is alloc — a package config must not import.
+		if bp := cfg.Projects[project].BrowsePort; strings.Contains(bp, "${") {
+			vars := wsp.RuntimeVars(cfg, "sample", project, 0)
+			resolved := strings.TrimSpace(wsp.Subst(bp, vars))
+			if n, err := strconv.Atoi(resolved); err != nil || n < 1 || n > 65535 {
+				find(kindBrowsePortUnresolved, "", fmt.Sprintf(
+					"project %q: browse_port %q resolves to %q, not a port number — fix browse_port in config.yml",
+					project, bp, resolved))
 			}
 		}
 	}

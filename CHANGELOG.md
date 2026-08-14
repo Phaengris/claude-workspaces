@@ -4,6 +4,15 @@ All notable changes to `workspace` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.4] — 2026-08-14
+
+### Added
+
+- `doctor` reports a finding for a `browse_port` whose `${…}` template does
+  not resolve to a port number — the broken-config case load validation
+  cannot see (token resolution needs the values math). Complements 1.3.3:
+  the typo class is now caught at load, at doctor, and at browse.
+
 ## [1.3.3] — 2026-08-14
 
 ### Fixed
@@ -122,6 +131,7 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
+[1.3.4]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.0...v1.3.1

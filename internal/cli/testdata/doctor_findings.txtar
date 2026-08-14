@@ -46,7 +46,7 @@ cp stale-pid $WORK/root/T-2_daemons/.workspace/pids/vanished:ghost
 
 exec workspace doctor
 stdout '^config: OK$'
-stdout '^projects \(2\): app, gone$'
+stdout '^projects \(3\): app, badport, gone$'
 stdout '^stale allocation: '$WORK'/root/T-1_vanished \(run: workspace gc\)$'
 stdout '^allocation outside root: '$WORK'/side/A-9_adopted \(adopted\)$'
 stdout '^allocation outside root: '$WORK'/side/X-1_corrupt \(NOT adopted — possibly corrupt registry\)$'
@@ -54,7 +54,8 @@ stdout '^project "gone": repo does not exist: '$WORK'/root/src/gone$'
 stdout '^stale pid file: T-2_daemons/app:ghost \(run: workspace gc\)$'
 stdout '^stale pid file: T-2_daemons/vanished:ghost \(not in config\) \(run: workspace gc\)$'
 stdout 'note: daemon app:ghost has no description — add description: under start: to tell sessions what it is for'
-stdout '^doctor: 5 finding\(s\)$'
+stdout 'project "badport": browse_port "\$\{TYPO\}" resolves to "\$\{TYPO\}", not a port number — fix browse_port in config.yml'
+stdout '^doctor: 6 finding\(s\)$'
 
 # Nothing runs here, so no daemon note at all — the live count is reported only
 # when there IS something live.
@@ -88,6 +89,9 @@ projects:
       - ghost: sleep 30
   gone:
     repo: WORKROOT/src/gone
+  badport:
+    repo: WORKROOT/src/app
+    browse_port: ${TYPO}
 -- registry.tmpl --
 {
   "WORKROOT/T-1_vanished": {
