@@ -10,6 +10,8 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+## [1.6.0] — 2026-08-18
+
 ### Added
 
 - **`workspace try <description…>`** — one command to a thinking room: a
@@ -192,6 +194,8 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
+[Unreleased]: https://github.com/Phaengris/claude-workspaces/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.6...v1.4.0
 [1.3.6]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.5...v1.3.6
