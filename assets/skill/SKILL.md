@@ -46,6 +46,17 @@ open a Claude Code session in the workspace dir. **Daemons are not
 started.** An existing workspace is reused as-is (the description is
 ignored; listed projects are checked out). Pass session flags after `--`.
 
+**The thinking room.** For a draft or discussion that precedes real work:
+
+```
+workspace try websocket reconnect draft
+```
+
+creates a projectless workspace (generated `TRY-<n>` id; the words are the
+description, no quotes needed) and opens the session in it. It has allocated
+values like any workspace — a scratch server gets its ports — and graduates
+into project work in place via `workspace checkout TRY-<n> <project>`.
+
 **The steps, when you need them individually:**
 
 | Step | Command |

@@ -1,0 +1,70 @@
+# try: one word to a thinking room — a projectless workspace with an
+# auto-generated TRY-<n> id, straight into a claude session (the launch
+# machinery minus the ceremony). The description is REQUIRED and unquoted:
+# every positional word joins it, because the name is how a draft is
+# recalled later (TRY-225_serious-tsiolkovsky recalls nothing — the decided
+# reason there is no docker-style name generator here).
+#
+# The `claude` on PATH is the printing shim (PATH discipline: prepended
+# first, a real claude can never run); HOME is a fixture so the history
+# probe stays hermetic.
+wsenv
+workroot config.tmpl root/config.yml
+! grep WORKROOT root/config.yml
+
+env HOME=$WORK/home
+mkdir $WORK/home
+chmod 0755 $WORK/bin/claude
+env PATH=$WORK/bin:$PATH
+env CLAUDE_SHIM_LOG=$WORK/claude.log
+
+# --- first try: TRY-1, unquoted words join the description --------------------
+exec workspace try websocket reconnect draft
+stdout 'workspace TRY-1_websocket-reconnect-draft created \(index 0\)'
+# No "nothing checked out" nag: projectless is what try MEANS, not a mistake.
+! stdout 'nothing checked out'
+stdout 'tip: in another terminal: workspace cd TRY-1'
+stdout 'argv: --dangerously-skip-permissions$'
+stdout 'cwd: '$WORK'/root/TRY-1_websocket-reconnect-draft$'
+stdout 'WORKSPACE=TRY-1$'
+grep -count=1 'invoked' $WORK/claude.log
+
+# --- ids are monotonic over the registry ---------------------------------------
+exec workspace try another idea
+stdout 'workspace TRY-2_another-idea created \(index 1\)'
+
+# --- a RELEASED try still counts: the id generator scans unregistered dirs ----
+# TRY-2's allocation goes away but its dir survives; the next try must not
+# reuse the number, or two drafts would fight over one name-space.
+exec workspace release $WORK/root/TRY-2_another-idea
+exec workspace try third idea
+stdout 'workspace TRY-3_third-idea created'
+
+# --- -S is ours, `--` is claude's ----------------------------------------------
+exec workspace try flagged draft -S -- --model opus
+stdout 'workspace TRY-4_flagged-draft created'
+stdout 'argv: --model opus$'
+! stdout 'dangerously'
+
+# --- no description → usage error, nothing created ----------------------------
+env CLAUDE_SHIM_LOG=$WORK/no-claude.log
+! exec workspace try
+stderr 'description'
+! exists $WORK/no-claude.log
+! grep 'TRY-5' $WORK/root/.allocations.json
+
+-- config.tmpl --
+values:
+  PORT: { start: 18400, per_workspace: 2 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+-- bin/claude --
+#!/bin/sh
+echo "argv: $@"
+echo "cwd: $(pwd)"
+echo "WORKSPACE=$WORKSPACE"
+echo invoked >> "$CLAUDE_SHIM_LOG"
+exit 0
+-- root/src/app/README --
+app source

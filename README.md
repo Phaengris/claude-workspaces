@@ -417,6 +417,7 @@ plain error listing the candidates.
 | | `ports` | Allocated value blocks across workspaces. |
 | **Sessions** | `claude <ws> [-S] [-R] [claude args…]` | Claude Code in the workspace dir, with flag injection. |
 | | `launch <task_id> [<description> [project…]] [-S] [-R] [-- claude args…]` | `new`-or-reuse + `checkout` + `claude`, one shot. Daemons are lazy — not started here; use `up`. |
+| | `try <description…> [-S] [-R] [-- claude args…]` | A **draft workspace**: no projects, generated `TRY-<n>` id, description from every word you type (no quotes), straight into a session. Allocated values included — a draft's scratch server has its ports. Graduate with `checkout`, or `destroy` it. |
 | **Navigate** | `cd <ws> [project]` | Print the directory; the installed shell wrapper performs the `cd`. |
 | | `which` | The workspace containing the cwd (exit 3 when there is none — the scriptable "am I in a workspace?"). |
 | **Meta** | `doctor` | Config report + registry + allocations + missing repos + daemon health. Reports, never fixes. |

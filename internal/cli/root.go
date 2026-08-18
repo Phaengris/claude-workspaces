@@ -69,6 +69,7 @@ func Root() *cobra.Command {
 	root.AddCommand(newDoctorCmd())
 	root.AddCommand(newClaudeCmd())
 	root.AddCommand(newLaunchCmd())
+	root.AddCommand(newTryCmd())
 	root.AddCommand(newInstallCmd())
 	root.AddCommand(newUninstallCmd())
 	// Dynamic shell completions, wired in one table after the tree exists (see

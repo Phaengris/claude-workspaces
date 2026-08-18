@@ -10,6 +10,15 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+### Added
+
+- **`workspace try <description…>`** — one command to a thinking room: a
+  projectless workspace with a generated `TRY-<n>` id, the description
+  taken from every word you type (no quotes), and a session opened in it.
+  Allocated values included; graduate with `checkout`, discard with
+  `destroy`. The id generator counts released drafts too, so numbers are
+  never reused against a surviving directory.
+
 ## [1.5.0] — 2026-08-14
 
 ### Added

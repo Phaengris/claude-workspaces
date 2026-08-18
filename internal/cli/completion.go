@@ -93,6 +93,7 @@ func wireCompletions(root *cobra.Command) {
 		// positional grammar (see completeLaunch).
 		"claude": completeSessionWorkspace,
 		"launch": completeLaunch,
+		"try":    completeNothing, // free-text description — file names would be noise
 	}
 	for _, cmd := range root.Commands() {
 		if fn, ok := byName[cmd.Name()]; ok {
