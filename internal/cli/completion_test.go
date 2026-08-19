@@ -107,11 +107,16 @@ func TestDynamicCompletions(t *testing.T) {
 		// The workspace slot: names and task ids, prefix-filtered.
 		"cd workspace":        {args: []string{"cd", ""}, want: wsIdents, directive: noFile},
 		"cd workspace prefix": {args: []string{"cd", "B"}, want: []string{"B-2_beta"}, directive: noFile},
-		"status workspace":    {args: []string{"status", ""}, want: wsIdents, directive: noFile},
-		"destroy workspace":   {args: []string{"destroy", ""}, want: wsIdents, directive: noFile},
-		"up workspace":        {args: []string{"up", ""}, want: wsIdents, directive: noFile},
-		"logs workspace":      {args: []string{"logs", ""}, want: wsIdents, directive: noFile},
-		"exec workspace":      {args: []string{"exec", ""}, want: wsIdents, directive: noFile},
+		// Case-insensitive: the real-use miss was `cd try<TAB>` offering no
+		// TRY-* workspaces. The shell replaces the whole token with the
+		// candidate, so completing across case is safe everywhere.
+		"cd workspace prefix lowercase": {args: []string{"cd", "b"}, want: []string{"B-2_beta"}, directive: noFile},
+		"cd project prefix upcase":      {args: []string{"cd", "A-1", "L"}, want: []string{"lib"}, directive: noFile},
+		"status workspace":              {args: []string{"status", ""}, want: wsIdents, directive: noFile},
+		"destroy workspace":             {args: []string{"destroy", ""}, want: wsIdents, directive: noFile},
+		"up workspace":                  {args: []string{"up", ""}, want: wsIdents, directive: noFile},
+		"logs workspace":                {args: []string{"logs", ""}, want: wsIdents, directive: noFile},
+		"exec workspace":                {args: []string{"exec", ""}, want: wsIdents, directive: noFile},
 		// Session commands parse their own flags, so cobra hands the completer
 		// the raw argv: only the first slot is reliably identifiable.
 		"claude workspace":  {args: []string{"claude", ""}, want: wsIdents, directive: noFile},

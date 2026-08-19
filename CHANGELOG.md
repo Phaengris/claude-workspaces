@@ -10,6 +10,11 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+### Fixed
+
+- Completion matches case-insensitively: `cd try<TAB>` offers the `TRY-*`
+  workspaces. The completed word always carries the candidate's real casing.
+
 ## [1.6.0] — 2026-08-18
 
 ### Added

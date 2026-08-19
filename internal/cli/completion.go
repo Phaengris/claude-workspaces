@@ -375,11 +375,16 @@ func daemonSpellings(cfg *config.Config) []string {
 
 // matching keeps the candidates the user's partial word could still become.
 // Cobra hands the completions to the shell as-is, so this filtering is ours to
-// do (some shells filter again, none can be relied on to).
+// do (some shells filter again, none can be relied on to). CASE-INSENSITIVE
+// on purpose: task ids are conventionally upper-case (`TRY-1_…`, `FIZZY-80_…`)
+// and nobody reaches for shift at a prompt — `cd try<TAB>` must offer the
+// TRY-* workspaces. Safe because the shell replaces the typed token with the
+// candidate wholesale, so the completed word always carries the real casing.
 func matching(names []string, toComplete string) []string {
 	var out []string
+	want := strings.ToLower(toComplete)
 	for _, name := range names {
-		if strings.HasPrefix(name, toComplete) {
+		if strings.HasPrefix(strings.ToLower(name), want) {
 			out = append(out, name)
 		}
 	}
