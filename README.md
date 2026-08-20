@@ -255,6 +255,13 @@ misspelled key is an error with a `line:column` position — and validated at
 every load, so every command sees the same verdict. `workspace doctor` prints
 the full report. There is no reload step and no cache.
 
+Onboarding a real project is two halves: this file, and making the app
+*consume* what the workspace env provides (no hardcoded ports or database
+names). [`examples/rails.md`](examples/rails.md) walks a typical Rails +
+Vite + Sidekiq app through both — and the installed Claude Code skill
+teaches sessions the same procedure, so "configure workspaces for my
+project" is a thing you can simply ask a session to do.
+
 ```yaml
 # index-derived numbers. Workspace with index i gets
 #   NAME0 .. NAME<per_workspace-1>  =  start + i*per_workspace + n

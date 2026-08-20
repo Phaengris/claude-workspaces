@@ -5,7 +5,9 @@ description: >-
   worktree per project, its own port block, its own env and its own daemons.
   Use when the user says "create a workspace", "work on TASK-123", "spin up a
   workspace for this ticket", "start/stop the services", "tail the rails log",
-  "what's running", "destroy the workspace", or when the session is already
+  "what's running", "destroy the workspace", when they ask to set up or
+  onboard a project ("i installed workspace, now what", "configure workspaces
+  for my project", "add my app to config.yml"), or when the session is already
   inside a workspace directory and needs its identity, ports or processes.
 ---
 
@@ -132,6 +134,33 @@ top. Consequences worth remembering:
   does not.
 - `workspace env <ws> [project]` prints the resolved environment when
   something looks wrong.
+
+## Onboarding a project
+
+When the user asks to configure workspaces for their project, the work is a
+CONVERSATION with their repo — read it, don't interrogate them:
+
+1. **Learn how the app runs.** Read the repo (Procfile, bin/dev, docker
+   compose files, README): what commands boot it, which ports it binds, what
+   setup it needs (deps, database prepare), and — most important — every
+   SHARED resource two parallel copies would fight over: ports, database
+   names, redis keyspaces, cache/file paths.
+2. **Draft the project entry** in `<root>/config.yml` (the installed stub
+   documents every key): `repo`, `base_branch`, idempotent `setup:` commands,
+   `start:` daemons **with `description:`** (sessions read those), `stop:`/
+   `teardown:` if needed, `browse_port`. Route EVERY shared resource through
+   the workspace's values: ports as `${PORT0}`…, names as `…_${WORKSPACE}`.
+3. **Change the app to read what the env provides.** The tool sets the env;
+   the app must consume it — no hardcoded port 3000, no fixed database name.
+   This is usually the real work; `examples/` in the tool's repo has a
+   per-stack checklist (Rails: examples/rails.md).
+4. **Validate**: `workspace doctor` (it checks the config and hints at
+   missing descriptions or broken browse_ports), then prove it end to end
+   with a disposable workspace: `workspace new TEST-1 trial <project>`,
+   `workspace up TEST-1`, `workspace browse TEST-1`, `workspace destroy
+   TEST-1`.
+5. **Iterate freely**: editing `setup:` re-runs it on the next `up` (the
+   stamp notices), and every command converges on re-run.
 
 ## Hygiene
 

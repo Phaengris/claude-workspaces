@@ -10,6 +10,16 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+### Added
+
+- **Onboarding**: the Claude Code skill teaches sessions the configure-my-
+  project procedure (read the repo, draft the config entry, route every
+  shared resource through `${}` values, change the app to consume the env,
+  prove it with a disposable workspace) and triggers on "i installed it,
+  now what" / "configure workspaces for my project". A worked Rails + Vite
+  + Sidekiq example — config entry plus the app-side checklist — lives in
+  `examples/rails.md`, linked from the README.
+
 ### Fixed
 
 - Completion matches case-insensitively: `cd try<TAB>` offers the `TRY-*`
