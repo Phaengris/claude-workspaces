@@ -32,6 +32,19 @@ says exactly how far when built with `git describe`.)
   reopens the workspace. The tool records nothing: it displays a file
   sessions own, pids-dir style.
 
+### Changed
+
+- **The listing sheds its duplicate columns.** `ls` (and no-argument
+  `status`) show `WORKSPACE  INDEX  NOTE`: the name IS
+  `<task>_<description-slug>`, so the TASK and DESCRIPTION columns printed
+  it twice more and tripled the table's width (worse for adopted
+  workspaces, whose "task id" is the whole dir name). Names clip at 60
+  runes with a visible `…`; the NOTE cell carries `(adopted)` and the
+  `-a` labels; the real description stays in `status <ws>` and `--json`
+  (all fields unchanged). The skill now also tells sessions that a
+  workspace description is a NAME, not a summary — a few words, not a
+  sentence.
+
 ### Fixed
 
 - Completion matches case-insensitively: `cd try<TAB>` offers the `TRY-*`

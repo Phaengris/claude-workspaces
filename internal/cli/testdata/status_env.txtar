@@ -103,8 +103,8 @@ stdout '(?s)"name": "api".*"name": "app".*"name": "lib"'
 # --- status (no ws) -------------------------------------------------------
 # Exactly the `ls` one-line format (same row builder), no git columns.
 exec workspace status
-stdout '^A-1_x +#0 +A-1 +fix the thing$'
-stdout '^B-7_y +#2 +B-7'
+stdout '^A-1_x +#0 *$'
+stdout '^B-7_y +#2 +\(adopted\)$'
 stdout '(?s)A-1_x.*B-7_y'
 ! stdout 'workspace: '
 ! stdout 'app@'
@@ -195,7 +195,7 @@ env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
 chmod 0777 $WORK/shim/git
 env PATH=$WORK/shim:$PATH
 exec workspace status
-stdout '^A-1_x +#0 +A-1 +fix the thing$'
+stdout '^A-1_x +#0 *$'
 ! exists $WORK/git-calls
 exec workspace status --json
 stdout '"task_id": "A-1"'

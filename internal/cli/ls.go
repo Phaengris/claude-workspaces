@@ -170,11 +170,9 @@ func unregisteredDirs(root string, reg alloc.Registry) []lsUnregistered {
 // says what this dir is and how to act on it.
 func unregisteredRow(u lsUnregistered) []string {
 	if u.Status != "released" {
-		return []string{u.Name, "-", "-", "(unmanaged)"}
+		return []string{clipName(u.Name), "-", "(unmanaged)"}
 	}
-	_, slug, _ := strings.Cut(u.Name, "_")
-	desc := strings.TrimSpace(slug + " (released — workspace adopt to reuse)")
-	return []string{u.Name, "-", u.TaskID, desc}
+	return []string{clipName(u.Name), "-", "(released — workspace adopt to reuse)"}
 }
 
 // lsEntries derives the full listing once, for both renderings — the human
@@ -254,26 +252,50 @@ const adoptedMarker = "(adopted)"
 // "no workspaces" line INSTEAD of a lone header: labels with nothing under
 // them would dress an empty room.
 func lsHeader(withGit bool) []string {
-	h := []string{"WORKSPACE", "INDEX", "TASK", "DESCRIPTION"}
+	h := []string{"WORKSPACE", "INDEX", "NOTE"}
 	if withGit {
 		h = append(h, "PROJECTS")
 	}
 	return h
 }
 
-// lsRow renders one entry as table cells: NAME  #INDEX  TASK_ID  DESCRIPTION,
-// plus one PROJECT@BRANCH cell per checked-out project (with a '*' suffix when
-// the tree is dirty) for `-g`. Exported package-privately because `status`
+// lsNameMax is where the WORKSPACE column clips (with a visible …): names
+// carry the task id AND the description-slug, so they are the one honestly
+// wide column — but a 79-rune name wraps an 80-column terminal all by
+// itself. 60 keeps typical names (30-46 runes here in practice) whole, the
+// default table inside 80 columns, and the task-id prefix — the part you
+// type — always survives the cut. (tmux titles clip at 20, terminal titles
+// at 40, ls at 60: each surface its own budget.)
+const lsNameMax = 60
+
+// clipName applies lsNameMax. The ellipsis REPLACES the 60th rune, so a
+// clipped name is still exactly 60 cells and visibly incomplete — silent
+// truncation would read as a real, shorter name.
+func clipName(name string) string {
+	if len([]rune(name)) <= lsNameMax {
+		return name
+	}
+	return truncateRunes(name, lsNameMax-1) + "…"
+}
+
+// lsRow renders one entry as table cells: NAME  #INDEX  NOTE, plus one
+// PROJECT@BRANCH cell per checked-out project (with a '*' suffix when the
+// tree is dirty) for `-g`. Task id and description are NOT columns: the name
+// IS <task>_<description-slug> by construction, and printing its halves
+// again tripled the table's width (the real-use complaint that shaped this).
+// The full description keeps living in `status <ws>` and in --json, whose
+// fields are all untouched. Exported package-privately because `status`
 // without a workspace argument reuses this exact one-line format.
 //
-// An adopted workspace's description cell carries adoptedMarker — usually
-// alone, since `adopt` takes no description.
+// NOTE is empty for an ordinary workspace; adoptedMarker for adopted ones
+// (an adopted "task id" is the whole dir name, which made the old TASK
+// column enormous); the released/unmanaged labels for -a rows.
 func lsRow(e lsEntry) []string {
-	desc := e.Description
+	note := ""
 	if e.Adopted {
-		desc = strings.TrimSpace(desc + " " + adoptedMarker)
+		note = adoptedMarker
 	}
-	row := []string{e.Name, "#" + strconv.Itoa(e.Index), e.TaskID, desc}
+	row := []string{clipName(e.Name), "#" + strconv.Itoa(e.Index), note}
 	if e.Projects == nil {
 		return row
 	}

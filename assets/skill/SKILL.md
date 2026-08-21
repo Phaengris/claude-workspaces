@@ -48,6 +48,12 @@ open a Claude Code session in the workspace dir. **Daemons are not
 started.** An existing workspace is reused as-is (the description is
 ignored; listed projects are checked out). Pass session flags after `--`.
 
+**Naming.** The workspace name is `<task id>_<description-slug>` and doubles
+as the branch name; listings clip it at 60 characters. When YOU create a
+workspace, the description is a NAME, not a summary: a few words that
+distinguish it ("editor fixes"), never a sentence ("rewrite agentic specs
+into gestalt format paper prototype" — a real offender).
+
 **The thinking room.** For a draft or discussion that precedes real work:
 
 ```

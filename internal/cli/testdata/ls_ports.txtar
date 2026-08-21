@@ -35,9 +35,9 @@ exec git -C $WORK/root/B-7_y/app commit -m init
 # ADOPTED workspace, so its description cell carries the `(adopted)` marker —
 # the human counterpart of the `"adopted": true` field asserted below.
 exec workspace ls
-stdout '^WORKSPACE +INDEX +TASK +DESCRIPTION$'
-stdout '^A-1_x +#0 +A-1 +fix the thing$'
-stdout '^B-7_y +#2 +B-7 +add the widget \(adopted\)$'
+stdout '^WORKSPACE +INDEX +NOTE$'
+stdout '^A-1_x +#0 *$'
+stdout '^B-7_y +#2 +\(adopted\)$'
 stdout '(?s)A-1_x.*B-7_y'
 ! stdout 'no workspaces'
 
@@ -51,12 +51,15 @@ stdout '(?s)A-1_x.*B-7_y'
 # stranger.
 mkdir $WORK/root/C-3_to-be-archived/.workspace
 mkdir $WORK/root/stray-dir
+# names clip at 60 runes with a visible ellipsis (the task-id prefix survives)
+mkdir $WORK/root/stray-very-long-name-padding-padding-padding-padding-padding-padding
 exec workspace ls
 ! stdout 'C-3'
 ! stdout 'stray-dir'
 exec workspace ls -a
-stdout '^C-3_to-be-archived +- +C-3 +to-be-archived \(released — workspace adopt to reuse\)$'
-stdout '^stray-dir +- +- +\(unmanaged\)$'
+stdout '^C-3_to-be-archived +- +\(released — workspace adopt to reuse\)$'
+stdout '^stray-dir +- +\(unmanaged\)$'
+stdout '^stray-very-long-name-padding-padding-padding-padding-paddin… +- +\(unmanaged\)$'
 stdout '(?s)A-1_x.*B-7_y.*C-3_to-be-archived.*stray-dir'
 exec workspace ls -a --json
 stdout '"status": "released"'
@@ -75,14 +78,14 @@ stdout 'note: dir stray-dir is not in the registry \(not a workspace\)'
 stdout '^doctor: 2 finding\(s\)$'
 
 # cleanup: drop the extras so later blocks' listings stay as written
-exec rm -r $WORK/root/C-3_to-be-archived $WORK/root/stray-dir
+exec rm -r $WORK/root/C-3_to-be-archived $WORK/root/stray-dir $WORK/root/stray-very-long-name-padding-padding-padding-padding-padding-padding
 
 # -g appends one cell per CHECKED-OUT project: project@branch, '*' when dirty.
 # `lib` is configured but checked out nowhere, so it never appears.
 exec workspace ls -g
-stdout '^WORKSPACE +INDEX +TASK +DESCRIPTION +PROJECTS$'
-stdout '^A-1_x +#0 +A-1 +fix the thing +app@main$'
-stdout '^B-7_y +#2 +B-7 +add the widget \(adopted\) +app@main\*$'
+stdout '^WORKSPACE +INDEX +NOTE +PROJECTS$'
+stdout '^A-1_x +#0 +app@main$'
+stdout '^B-7_y +#2 +\(adopted\) +app@main\*$'
 ! stdout 'lib'
 
 # --json is an array sorted by name; no `projects` key without -g.
@@ -166,7 +169,7 @@ env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
 chmod 0777 $WORK/shim/git
 env PATH=$WORK/shim:$PATH
 exec workspace ls
-stdout '^A-1_x +#0 +A-1 +fix the thing$'
+stdout '^A-1_x +#0 *$'
 ! exists $WORK/git-calls
 exec workspace ls --json
 stdout '"task_id": "A-1"'
@@ -177,7 +180,7 @@ stdout '^PORT +A-1_x +5000-5009$'
 # -g does reach for git — and degrades (no branch cells) when it fails.
 exec workspace ls -g
 exists $WORK/git-calls
-stdout '^A-1_x +#0 +A-1 +fix the thing$'
+stdout '^A-1_x +#0 *$'
 ! stdout 'app@'
 
 -- shim/git --

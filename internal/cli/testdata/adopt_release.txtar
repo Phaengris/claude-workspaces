@@ -50,7 +50,7 @@ stdout '^APP_PORT=5000$'
 
 # ls marks it adopted (the description cell); tool-created rows never do.
 exec workspace ls
-stdout 'foreign\s+#0\s+foreign\s+\(adopted\)'
+stdout 'foreign\s+#0\s+\(adopted\)'
 
 # --- re-adopt of the SAME dir: idempotent no-op success (spec §2) -----------
 exec workspace adopt $WORK/foreign
