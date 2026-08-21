@@ -185,6 +185,28 @@ long — importance beats brevity; omission is the only real failure. Write
 the report in full human sentences, not telegraphic fragments — the user
 reads it cold, mid-context-switch.
 
+**Persist it.** The user may return DAYS later, to the workspace rather than
+to this conversation, so keep the report durable too: maintain a `## Status`
+section in this workspace's `CLAUDE.md` (the tool never touches that file —
+it is yours) and refresh it at the end of every substantial turn:
+
+```markdown
+## Status
+
+About: one line — what this workspace exists for. (as of 2026-08-21)
+Now: where things stand.
+Next: the plan, in order.
+Needs: decisions or input from the user — with urgency (blocked on you /
+can simmer).
+```
+
+`workspace status <ws>` renders this section verbatim (so the user answers
+"should I get back to it?" from OUTSIDE any session), and the session-start
+hook delivers it to every session that reopens the workspace — including
+you. When the user asks "what was this all about?", don't just echo it:
+check it against reality first (git log/status since the section's as-of
+date), update it, then give the handoff report.
+
 ## Hygiene
 
 - `workspace down <ws>` when you are done working but keeping the workspace.

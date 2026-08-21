@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -69,6 +72,11 @@ type statusEntry struct {
 	CreatedAt   string          `json:"created_at"`
 	Adopted     bool            `json:"adopted"`
 	Projects    []statusProject `json:"projects"`
+	// Status is the workspace CLAUDE.md's `## Status` section, verbatim —
+	// the durable handoff note sessions maintain (the skill's convention).
+	// The tool never writes it; like a pid file, it is a fact of the world
+	// the tool only displays. Absent when the file or section is.
+	Status string `json:"status,omitempty"`
 }
 
 // newStatusCmd builds `workspace status [workspace]`. With an identifier it
@@ -167,7 +175,35 @@ func statusOf(cfg *config.Config, ws wsp.Workspace) statusEntry {
 		CreatedAt:   ws.Alloc.CreatedAt,
 		Adopted:     ws.Alloc.Adopted,
 		Projects:    projects,
+		Status:      recordedStatus(ws),
 	}
+}
+
+// recordedStatus extracts the `## Status` section of the workspace's
+// CLAUDE.md — the durable handoff note the skill has sessions maintain
+// (About / Now / Next / Needs, with an as-of date). Verbatim, heading
+// stripped, ended by the next `##` heading or EOF; the rest of CLAUDE.md is
+// the agent's private space and is deliberately NOT shown. Any failure —
+// no file, no section — is simply "no status recorded", an empty string:
+// re-entry help is a bonus, never an error.
+func recordedStatus(ws wsp.Workspace) string {
+	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
+	if err != nil {
+		return ""
+	}
+	var body []string
+	in := false
+	for _, line := range strings.Split(string(data), "\n") {
+		switch {
+		case strings.EqualFold(strings.TrimSpace(line), "## status"):
+			in = true
+		case in && strings.HasPrefix(line, "## "):
+			return strings.TrimSpace(strings.Join(body, "\n"))
+		case in:
+			body = append(body, line)
+		}
+	}
+	return strings.TrimSpace(strings.Join(body, "\n"))
 }
 
 // statusDaemonsOf measures one checked-out project's configured daemons, in
@@ -229,6 +265,12 @@ func printStatus(w io.Writer, entry statusEntry) {
 		for _, d := range *p.Daemons {
 			fmt.Fprintf(w, "    %s: %s\n", d.Name, statusDaemonDetail(d))
 		}
+	}
+	// The recorded status note comes LAST: it is the "should I get back to
+	// this?" answer, and last is what the eye lands on. Absent section,
+	// absent block — no nag; the skill drives the convention.
+	if entry.Status != "" {
+		fmt.Fprintf(w, "\nstatus (from CLAUDE.md):\n%s\n", entry.Status)
 	}
 }
 

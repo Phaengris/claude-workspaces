@@ -54,6 +54,21 @@ stdout '^  app: checked out \(branch main\), setup current$'
 stdout '^  lib: not checked out$'
 stdout '(?s)workspace:.*task:.*dir:.*index:.*projects:'
 stdout '(?s)  api:.*  app:.*  lib:'
+# No ## Status section in this workspace's CLAUDE.md → no status block at all.
+! stdout 'status \(from CLAUDE.md\)'
+
+# --- the recorded status note: sessions maintain it, status renders it ---------
+# The ## Status section of the workspace's CLAUDE.md (the agent-owned durable
+# file) is displayed VERBATIM, heading stripped — the tool records nothing,
+# it shows a fact of the world, pids-dir style. Ends at the next ## heading.
+exec sh -c 'printf "See @WORKSPACE.md.\n\n## Status\n\nAbout: fixing the thing (as of 2026-08-21)\nNext: wire the frobnicator\n\n## Notes\nprivate scribbles\n" > "$WORK/root/A-1_x/CLAUDE.md"'
+exec workspace status A-1
+stdout 'status \(from CLAUDE.md\):'
+stdout 'About: fixing the thing \(as of 2026-08-21\)'
+stdout 'Next: wire the frobnicator'
+! stdout 'private scribbles'
+exec workspace status A-1 --json
+stdout '"status": "About: fixing the thing'
 
 # A task id resolves to the same workspace as its full name.
 exec workspace status A-1

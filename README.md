@@ -419,7 +419,7 @@ plain error listing the candidates.
 | | `exec <ws> [project] <cmd> [args…]` | **Replace** this process (`execve`) with the command, in the workspace or a project worktree, under the curated environment. |
 | | `browse <ws> [project]` | Open `http://localhost:<browse_port>`; with no `xdg-open` on `PATH`, print the URL instead (exit 0 — the SSH-friendly path). |
 | **Observe** | `ls [-g] [-a]` | Every workspace, one line each; `-g` appends `project@branch` per checked-out project, `*` when dirty (git runs concurrently, bounded). `-a` also lists root dirs no allocation claims: released workspaces (identity derived from the dir name, `adopt` to reuse) and stranger dirs, labeled `(unmanaged)`. |
-| | `status [ws]` | One workspace in full, every field derived live; with no argument, the `ls` listing. |
+| | `status [ws]` | One workspace in full, every field derived live; with no argument, the `ls` listing. Renders the workspace CLAUDE.md's `## Status` section verbatim when present — the durable handoff note sessions maintain, answering "where was I with this?" from outside any session. |
 | | `env <ws> [project]` | The resolved environment as sorted `K=V`. |
 | | `ports` | Allocated value blocks across workspaces. |
 | **Sessions** | `claude <ws> [-S] [-R] [claude args…]` | Claude Code in the workspace dir, with flag injection. |

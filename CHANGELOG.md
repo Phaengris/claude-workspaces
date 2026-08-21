@@ -24,6 +24,14 @@ says exactly how far when built with `git describe`.)
   Done / Needs you / Watch out — asks self-contained and decidable,
   journeys compressed, decisions never omitted.
 
+- **The status note**: sessions maintain a `## Status` section in the
+  workspace's CLAUDE.md (About / Now / Next / Needs, with an as-of date —
+  the handoff report made durable); `workspace status <ws>` renders it
+  verbatim, so "should I get back to this?" is answerable from outside any
+  session — and the session-start hook delivers it to every session that
+  reopens the workspace. The tool records nothing: it displays a file
+  sessions own, pids-dir style.
+
 ### Fixed
 
 - Completion matches case-insensitively: `cd try<TAB>` offers the `TRY-*`
