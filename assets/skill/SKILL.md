@@ -162,6 +162,29 @@ CONVERSATION with their repo — read it, don't interrogate them:
 5. **Iterate freely**: editing `setup:` re-runs it on the next `up` (the
    stamp notices), and every command converges on re-run.
 
+## Handoff reports
+
+The user runs several workspaces in parallel; your LAST message is what they
+see when they switch back, and its job is re-entry in under a minute: they
+must be able to pick the next action without opening a file. End every
+substantial turn with a short report:
+
+- **Done:** what changed, one or two sentences of outcome — never the
+  reasoning journey (offer it: "ask for details").
+- **Needs you:** each ask SELF-CONTAINED and decidable: what the thing is
+  (one clause of context), the options, your recommendation and why, in one
+  breath. "get_user (fetches the session's user) can return nil after
+  expiry — (a) return 401, (b) auto-refresh; recommend (a): callers already
+  handle 401." Never "what do you think about the approach in auth.go?"
+- **Watch out:** problems found, with severity (blocked / risky / cosmetic,
+  deferred) — flagged, not narrated.
+
+Compress the JOURNEY, never the DECISIONS: every fact the user needs must
+appear, at one-sentence altitude. A detail that resists compression stays
+long — importance beats brevity; omission is the only real failure. Write
+the report in full human sentences, not telegraphic fragments — the user
+reads it cold, mid-context-switch.
+
 ## Hygiene
 
 - `workspace down <ws>` when you are done working but keeping the workspace.

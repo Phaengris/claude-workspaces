@@ -19,6 +19,10 @@ says exactly how far when built with `git describe`.)
   now what" / "configure workspaces for my project". A worked Rails + Vite
   + Sidekiq example — config entry plus the app-side checklist — lives in
   `examples/rails.md`, linked from the README.
+- The skill teaches **handoff reports**: a session's last message is what
+  the user sees when switching back to a workspace, so it ends with
+  Done / Needs you / Watch out — asks self-contained and decidable,
+  journeys compressed, decisions never omitted.
 
 ### Fixed
 
