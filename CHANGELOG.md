@@ -10,6 +10,14 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+### Changed
+
+- **README rewritten as a front door** (~400 lines, short sentences, primary
+  info only); the deep contracts moved to `docs/reference.md`, linked
+  per-section. The v1-divergences appendix is gone — readers have no v1;
+  every still-relevant behavior is stated as a plain fact where it belongs.
+  No behavioral claims were added or dropped (independently audited).
+
 ## [1.7.0] — 2026-08-21
 
 ### Added

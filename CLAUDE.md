@@ -99,8 +99,10 @@ internal/assets ← assets/ (//go:embed carrier; skill, hook, wrappers, config s
   probe in claude.go). `${WORKSPACE}` = task id, NOT the dir name.
 - `--` in session commands is the sniff-suppressor ONLY at the slot after the
   workspace; later `--` reaches the child verbatim.
-- v1 divergences are consolidated in README's appendix (biggest: `stop:` runs
-  AFTER daemons stop).
+- The public docs never mention v1/the Ruby predecessor beyond one line in
+  README's "How this was built" — readers have no v1. Behavior details that
+  used to live in the v1-divergences appendix are plain facts in
+  docs/reference.md now (biggest: `stop:` runs AFTER daemons stop).
 
 ## Doc map
 
@@ -112,5 +114,8 @@ internal/assets ← assets/ (//go:embed carrier; skill, hook, wrappers, config s
   this public repo). The md backlog below is historical.
 - `docs/superpowers/plans/2026-08-10-m5-deferred-items.md` — the post-v1.0
   backlog + standing decisions (do not re-litigate without cause).
-- `README.md` — user-facing; its claims are accuracy-audited against the code.
-  If behavior changes, the README changes in the same commit.
+- `README.md` — the front door: short sentences, primary info only, links out.
+  `docs/reference.md` — the deep contracts behind it. BOTH are
+  accuracy-audited against the code; if behavior changes, whichever documents
+  it changes in the same commit (README for headline behavior, reference for
+  details).
