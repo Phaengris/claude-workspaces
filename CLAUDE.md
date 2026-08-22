@@ -107,6 +107,9 @@ internal/assets ← assets/ (//go:embed carrier; skill, hook, wrappers, config s
 - `docs/superpowers/specs/2026-07-30-claude-workspaces-go-design.md` — THE
   spec; decided behaviors live here and in each milestone plan's
   Decided-behaviors table (`docs/superpowers/plans/*-m[0-5]-*.md`).
+- Ideas/backlog now live on the user's Fizzy board named `claude-workspaces`
+  (internal tracker; find it via `fizzy board list` — never put its URL in
+  this public repo). The md backlog below is historical.
 - `docs/superpowers/plans/2026-08-10-m5-deferred-items.md` — the post-v1.0
   backlog + standing decisions (do not re-litigate without cause).
 - `README.md` — user-facing; its claims are accuracy-audited against the code.
