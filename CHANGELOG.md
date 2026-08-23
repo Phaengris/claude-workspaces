@@ -10,6 +10,8 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+## [1.7.1] — 2026-08-24
+
 ### Changed
 
 - **README rewritten as a front door** (~400 lines, short sentences, primary
@@ -244,7 +246,8 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
-[Unreleased]: https://github.com/Phaengris/claude-workspaces/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/Phaengris/claude-workspaces/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/Phaengris/claude-workspaces/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.4.0...v1.5.0
