@@ -10,6 +10,17 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+### Added
+
+- The skill teaches **coordinating with sibling sessions** via Claude
+  Code's native cross-session messaging: before reworking or removing a
+  shared interface (and after landing a breaking change), a session warns
+  the sessions whose workspaces have that project checked out (`ls -g`
+  names them; a bare directory under the root is not a reason); an incoming
+  warning is weighed as advisory peer input. Live-only by design — durable
+  cross-session facts stay in the workspace's `## Status` note. (The
+  durable announcements board is a separate, future feature.)
+
 ## [1.7.1] — 2026-08-24
 
 ### Changed

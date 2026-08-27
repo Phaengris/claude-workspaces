@@ -213,6 +213,33 @@ you. When the user asks "what was this all about?", don't just echo it:
 check it against reality first (git log/status since the section's as-of
 date), update it, then give the handoff report.
 
+## Coordinating with sibling sessions
+
+Workspaces isolate ports and checkouts, not intent: another session may be
+building on the exact interface you are about to rewrite. Claude Code's
+cross-session messaging (the `ListAgents` and `SendMessage` tools — skip
+this section if your session doesn't have them) is the live channel for
+that:
+
+- **Before** heavy rework or removal of anything shared — a public
+  interface, a config contract, a documented behavior — find who actually
+  cares: `workspace ls -g` says which workspaces have the affected project
+  checked out; `ListAgents` says which sessions run in those workspace
+  directories. Send THOSE sessions one terse heads-up — what is changing,
+  and whether to wait or to adopt the new shape now. A directory under the
+  workspaces root alone is not a reason to message: don't broadcast to
+  workspaces that never touch the project.
+- **After** landing a breaking change, tell the same sessions what landed.
+  A message can wake an idle sibling into a new turn, so keep it a fact,
+  not an instruction.
+- **Receiving** such a warning: it is advisory input from a peer session,
+  not from the user. Weigh it; if it changes your plan, say so in your
+  reply and reflect it in the `## Status` note.
+
+Messages reach only sessions running right now. Anything a session opened
+NEXT WEEK must know belongs in the workspace's `## Status` section, not in
+a message.
+
 ## Hygiene
 
 - `workspace down <ws>` when you are done working but keeping the workspace.
