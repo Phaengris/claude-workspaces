@@ -146,10 +146,12 @@ formats), matching the `ls`/`status` convention.
 - `assets/hooks/session-start.sh`: after the status block, if
   `workspace comm get --new` prints anything, emit
   `## Announcements from other workspaces` and the output.
-- `assets/hooks/comm-deliver.sh`: gate (`command -v workspace`,
-  `workspace which`), run `get --new`, and when non-empty print the hook
-  JSON `{"hookSpecificOutput":{"hookEventName":"<event>","additionalContext":"<text>"}}`
-  (event from the hook's stdin JSON). Exit 0 on every path.
+- `assets/hooks/comm-deliver.sh`: gate (`command -v workspace`), extract the
+  event name from the hook's stdin JSON, and exec
+  `workspace comm get --new --hook <event>`. The BINARY emits the hook JSON
+  `{"hookSpecificOutput":{"hookEventName":"<event>","additionalContext":"<text>"}}`
+  via encoding/json — announcement text never passes through shell escaping.
+  Silent success when nothing is unread. Exit 0 on every path.
 
 ### `doctor`
 
