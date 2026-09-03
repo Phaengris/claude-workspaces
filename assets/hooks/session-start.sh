@@ -36,6 +36,18 @@ name=$(workspace which 2>/dev/null) || exit 0
 printf '# claude-workspaces\n\n'
 printf 'This session is inside workspace %s.\n\n' "$name"
 workspace status "$name" 2>/dev/null
+# Workspaces created before the seeded frame (v1.8) have no ## Status section
+# in CLAUDE.md; nag until a session starts one. Read-only: a grep, no writes.
+# The pattern mirrors recordedStatus's predicate (case-insensitive, the
+# trimmed line is exactly "## status") so the nag and the renderer cannot
+# disagree about whether a note exists.
+dir=$(workspace cd "$name" 2>/dev/null)
+if [ -n "$dir" ] && ! grep -qi '^[[:space:]]*## status[[:space:]]*$' "$dir/CLAUDE.md" 2>/dev/null; then
+	printf '\nThis workspace has no "## Status" section in its CLAUDE.md. Start one\n'
+	printf '(About / Now / Next / Needs, with an as-of date) and refresh it at the end\n'
+	printf 'of every substantial turn — the user reads it via `workspace status`.\n'
+fi
+
 printf '\nWORKSPACE.md holds the task, the allocated values and per-project instructions.\n'
 printf 'Manage this workspace with: workspace status|up|down|logs|exec %s\n' "$name"
 printf 'Daemons are not auto-started; start what you need with: workspace up %s <daemon>\n' "$name"

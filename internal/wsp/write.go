@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Phaengris/claude-workspaces/internal/alloc"
 	"github.com/Phaengris/claude-workspaces/internal/config"
@@ -20,12 +21,53 @@ const (
 	envFileName     = ".env"
 )
 
-// claudeMDBody is the entire generated CLAUDE.md: one line pointing at the
-// generated file. Everything a workspace knows about itself lives in
-// WORKSPACE.md, which is regenerated wholesale; CLAUDE.md is written once and
-// then belongs to the agent, so anything the tool wants to say later has to be
-// said through the reference, never by editing this file (spec §5).
-const claudeMDBody = "See @WORKSPACE.md for this workspace's task, projects, values, and per-project instructions.\n"
+// claudeMDBody is the entire generated CLAUDE.md: the reference to the
+// generated file, plus the seeded `## Status` frame. Everything a workspace
+// knows about itself lives in WORKSPACE.md, which is regenerated wholesale;
+// CLAUDE.md is written once and then belongs to the agent, so anything the
+// tool wants to say later has to be said through the reference, never by
+// editing this file (spec §5) — the seed happens at the only moment the tool
+// ever writes here.
+//
+// The frame exists because sessions update an existing section far more
+// reliably than they invent one (0/17 real workspaces had a note before the
+// seed). The maintenance instruction sits ABOVE the heading: `workspace
+// status` renders the section verbatim to the user, and the instruction is
+// addressed to sessions.
+func claudeMDBody(ws Workspace) string {
+	// The description is an untrimmed CLI positional and this is the first
+	// place CLAUDE.md is ever machine-parsed (recordedStatus ends the section
+	// at the next ## line), so an embedded newline must not be able to smuggle
+	// a heading into the frame. Fields also normalizes stray whitespace.
+	about := strings.Join(strings.Fields(ws.Alloc.Description), " ")
+	if about == "" {
+		about = "(what this workspace exists for — fill in)"
+	}
+	// Parse rather than slice: the registry can be hand-edited, and a garbled
+	// "(as of …)" would outlive the mistake. Not a date → no as-of at all.
+	if t, err := time.Parse(time.RFC3339, ws.Alloc.CreatedAt); err == nil {
+		about += " (as of " + t.Format("2006-01-02") + ")"
+	}
+	// Adopt provisions directories the tool did NOT create — usually carrying
+	// real work already — so "just created, nothing here" would be wrong at
+	// the moment of writing, not merely stale.
+	now := "workspace just created — no work recorded yet."
+	if ws.Alloc.Adopted {
+		now = "directory adopted — any existing work predates this note."
+	}
+	return "See @WORKSPACE.md for this workspace's task, projects, values, and per-project instructions.\n" +
+		"\n" +
+		"Sessions: keep the Status section below current — refresh it at the end of\n" +
+		"every substantial turn. The user reads it from outside via `workspace status`,\n" +
+		"and every session that reopens this workspace receives it at session start.\n" +
+		"\n" +
+		"## Status\n" +
+		"\n" +
+		"About: " + about + "\n" +
+		"Now: " + now + "\n" +
+		"Next: —\n" +
+		"Needs: —\n"
+}
 
 // WriteWorkspaceMD regenerates <ws.Dir>/WORKSPACE.md from scratch. Every fact
 // in it is derived at call time — the allocation, alloc.ComputeValues, and
@@ -132,7 +174,7 @@ func EnsureClaudeMD(ws Workspace) error {
 	if err != nil {
 		return fmt.Errorf("creating %s: %w", path, err)
 	}
-	if _, err := f.WriteString(claudeMDBody); err != nil {
+	if _, err := f.WriteString(claudeMDBody(ws)); err != nil {
 		f.Close()
 		return fmt.Errorf("writing %s: %w", path, err)
 	}

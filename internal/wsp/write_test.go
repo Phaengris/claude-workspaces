@@ -166,6 +166,100 @@ func TestWriteWorkspaceMDRegenerates(t *testing.T) {
 }
 
 func TestEnsureClaudeMDCreates(t *testing.T) {
+	ws := wsp.Workspace{Dir: t.TempDir(), Alloc: alloc.Allocation{
+		TaskID:      "T-1",
+		Description: "fix the thing",
+		CreatedAt:   "2026-09-03T12:00:00+03:00",
+	}}
+	if err := wsp.EnsureClaudeMD(ws); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	if !strings.Contains(s, "WORKSPACE.md") {
+		t.Errorf("CLAUDE.md must reference WORKSPACE.md, got %q", s)
+	}
+	// The seeded status frame: description and creation date pre-filled, the
+	// empty slots ready to be updated rather than invented.
+	for _, want := range []string{
+		"## Status",
+		"About: fix the thing (as of 2026-09-03)",
+		"Now:",
+		"Next:",
+		"Needs:",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("CLAUDE.md must seed %q, got:\n%s", want, s)
+		}
+	}
+	// The maintenance instruction must sit ABOVE the ## Status heading:
+	// recordedStatus renders the section verbatim to the user, and the
+	// instruction is addressed to sessions, not to the user.
+	instr, heading := strings.Index(s, "refresh"), strings.Index(s, "## Status")
+	if instr < 0 {
+		t.Errorf("CLAUDE.md must instruct sessions to refresh the note, got:\n%s", s)
+	} else if instr > heading {
+		t.Errorf("the refresh instruction must come before the ## Status heading (it is for sessions, not for status output), got:\n%s", s)
+	}
+}
+
+// A multi-line description must not smuggle a heading into the frame:
+// recordedStatus ends the rendered section at the next ## line, so an
+// unflattened "\n## x" in About would truncate `workspace status` output for
+// the life of the workspace. MUTATION-CHECKED: dropping the flattening fails
+// this.
+func TestEnsureClaudeMDFlattensDescription(t *testing.T) {
+	ws := wsp.Workspace{Dir: t.TempDir(), Alloc: alloc.Allocation{
+		Description: "fix\n## pwned\r\nthing",
+	}}
+	if err := wsp.EnsureClaudeMD(ws); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	if !strings.Contains(s, "About: fix ## pwned thing") {
+		t.Errorf("description must be flattened to one line, got:\n%s", s)
+	}
+	for _, line := range strings.Split(s, "\n") {
+		if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "## ") && trimmed != "## Status" {
+			t.Errorf("no heading other than ## Status may appear, got line %q", line)
+		}
+	}
+}
+
+// Adopted dirs hold work the tool did not create, so the seeded Now line must
+// not claim the workspace is freshly created and empty.
+func TestEnsureClaudeMDAdoptedWording(t *testing.T) {
+	ws := wsp.Workspace{Dir: t.TempDir(), Alloc: alloc.Allocation{
+		CreatedAt: "2026-09-03T12:00:00+03:00",
+		Adopted:   true,
+	}}
+	if err := wsp.EnsureClaudeMD(ws); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	if !strings.Contains(s, "Now: directory adopted") {
+		t.Errorf("adopted workspaces must get the adopted wording, got:\n%s", s)
+	}
+	if strings.Contains(s, "just created") {
+		t.Errorf("adopted workspaces must not claim to be just created, got:\n%s", s)
+	}
+}
+
+// A workspace with no description or creation time (possible for adopted
+// dirs and hand-edited registries) still gets a well-formed frame — never
+// empty parentheses or a bare "About:" trailing space artifact.
+func TestEnsureClaudeMDSeedsWithoutAllocationFacts(t *testing.T) {
 	ws := wsp.Workspace{Dir: t.TempDir()}
 	if err := wsp.EnsureClaudeMD(ws); err != nil {
 		t.Fatal(err)
@@ -174,11 +268,12 @@ func TestEnsureClaudeMDCreates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "WORKSPACE.md") {
-		t.Errorf("CLAUDE.md must reference WORKSPACE.md, got %q", data)
+	s := string(data)
+	if !strings.Contains(s, "## Status") || !strings.Contains(s, "About:") {
+		t.Errorf("frame must be seeded even without allocation facts, got:\n%s", s)
 	}
-	if n := strings.Count(strings.TrimSuffix(string(data), "\n"), "\n"); n != 0 {
-		t.Errorf("CLAUDE.md must be a single line, got %q", data)
+	if strings.Contains(s, "(as of )") || strings.Contains(s, "About:  ") {
+		t.Errorf("empty allocation facts must not leave artifacts, got:\n%s", s)
 	}
 }
 

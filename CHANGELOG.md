@@ -21,6 +21,21 @@ says exactly how far when built with `git describe`.)
   cross-session facts stay in the workspace's `## Status` note. (The
   durable announcements board is a separate, future feature.)
 
+### Fixed
+
+- **The status note now actually gets written.** A field audit found 0 of 17
+  real workspaces carried a `## Status` note: the instruction lived only in
+  the skill, which a session doing pure project work may never load. Two
+  fixes, same delivery principle as everything else (put it where sessions
+  cannot miss it): the scaffolded CLAUDE.md now seeds the `## Status` frame
+  (About pre-filled from the allocation, Now/Next/Needs seeded with
+  placeholders — "adopted" wording for adopted dirs — and the refresh
+  instruction above the heading: sessions update an existing section far
+  more reliably than they invent one), and the session-start hook nags —
+  read-only — when a workspace's CLAUDE.md has no such section (covers
+  workspaces created before the seed). Existing CLAUDE.md files are never
+  touched, as ever.
+
 ## [1.7.1] — 2026-08-24
 
 ### Changed
