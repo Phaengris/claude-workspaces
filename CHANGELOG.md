@@ -35,6 +35,12 @@ says exactly how far when built with `git describe`.)
   read-only — when a workspace's CLAUDE.md has no such section (covers
   workspaces created before the seed). Existing CLAUDE.md files are never
   touched, as ever.
+- **Handoff reports get the same delivery fix**: the seeded CLAUDE.md also
+  carries a short "Working agreements" section teaching the report shape
+  (Done / Needs you / Watch out, refresh the Status note in the same
+  moment) — the rule previously lived only in the skill, which
+  pure-project sessions never load. Placed below the Status frame, so
+  `workspace status` output never includes it.
 
 ## [1.7.1] — 2026-08-24
 

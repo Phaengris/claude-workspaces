@@ -190,10 +190,19 @@ func TestEnsureClaudeMDCreates(t *testing.T) {
 		"Now:",
 		"Next:",
 		"Needs:",
+		"## Working agreements",
+		"Needs you",
+		"Watch out",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("CLAUDE.md must seed %q, got:\n%s", want, s)
 		}
+	}
+	// The agreements section must come AFTER the Status frame: recordedStatus
+	// renders from ## Status to the next ## heading, so this placement is
+	// what keeps the agreements out of `workspace status` output.
+	if strings.Index(s, "## Working agreements") < strings.Index(s, "Needs:") {
+		t.Errorf("## Working agreements must follow the Status frame, got:\n%s", s)
 	}
 	// The maintenance instruction must sit ABOVE the ## Status heading:
 	// recordedStatus renders the section verbatim to the user, and the
@@ -227,8 +236,9 @@ func TestEnsureClaudeMDFlattensDescription(t *testing.T) {
 		t.Errorf("description must be flattened to one line, got:\n%s", s)
 	}
 	for _, line := range strings.Split(s, "\n") {
-		if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "## ") && trimmed != "## Status" {
-			t.Errorf("no heading other than ## Status may appear, got line %q", line)
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## ") && trimmed != "## Status" && trimmed != "## Working agreements" {
+			t.Errorf("no heading beyond the seeded ones may appear, got line %q", line)
 		}
 	}
 }

@@ -22,12 +22,14 @@ const (
 )
 
 // claudeMDBody is the entire generated CLAUDE.md: the reference to the
-// generated file, plus the seeded `## Status` frame. Everything a workspace
-// knows about itself lives in WORKSPACE.md, which is regenerated wholesale;
-// CLAUDE.md is written once and then belongs to the agent, so anything the
-// tool wants to say later has to be said through the reference, never by
-// editing this file (spec §5) — the seed happens at the only moment the tool
-// ever writes here.
+// generated file, the seeded `## Status` frame, and the working agreements
+// (the handoff-report shape — same delivery reasoning: the skill that
+// teaches it is not loaded by pure-project sessions, this file always is).
+// Everything a workspace knows about itself lives in WORKSPACE.md, which is
+// regenerated wholesale; CLAUDE.md is written once and then belongs to the
+// agent, so anything the tool wants to say later has to be said through the
+// reference, never by editing this file (spec §5) — the seed happens at the
+// only moment the tool ever writes here.
 //
 // The frame exists because sessions update an existing section far more
 // reliably than they invent one (0/17 real workspaces had a note before the
@@ -66,7 +68,16 @@ func claudeMDBody(ws Workspace) string {
 		"About: " + about + "\n" +
 		"Now: " + now + "\n" +
 		"Next: —\n" +
-		"Needs: —\n"
+		"Needs: —\n" +
+		"\n" +
+		"## Working agreements\n" +
+		"\n" +
+		"End every substantial turn with a handoff report — Done (outcomes, never\n" +
+		"the journey), Needs you (each ask self-contained: context, options and a\n" +
+		"recommendation in one breath), Watch out (problems found, with severity) —\n" +
+		"and refresh the Status section above in the same moment. Your LAST message\n" +
+		"is what the user reads when they switch back to this workspace; its job is\n" +
+		"re-entry in under a minute.\n"
 }
 
 // WriteWorkspaceMD regenerates <ws.Dir>/WORKSPACE.md from scratch. Every fact
