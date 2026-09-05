@@ -190,19 +190,10 @@ func TestEnsureClaudeMDCreates(t *testing.T) {
 		"Now:",
 		"Next:",
 		"Needs:",
-		"## Working agreements",
-		"Needs you",
-		"Watch out",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("CLAUDE.md must seed %q, got:\n%s", want, s)
 		}
-	}
-	// The agreements section must come AFTER the Status frame: recordedStatus
-	// renders from ## Status to the next ## heading, so this placement is
-	// what keeps the agreements out of `workspace status` output.
-	if strings.Index(s, "## Working agreements") < strings.Index(s, "Needs:") {
-		t.Errorf("## Working agreements must follow the Status frame, got:\n%s", s)
 	}
 	// The maintenance instruction must sit ABOVE the ## Status heading:
 	// recordedStatus renders the section verbatim to the user, and the
@@ -212,6 +203,33 @@ func TestEnsureClaudeMDCreates(t *testing.T) {
 		t.Errorf("CLAUDE.md must instruct sessions to refresh the note, got:\n%s", s)
 	} else if instr > heading {
 		t.Errorf("the refresh instruction must come before the ## Status heading (it is for sessions, not for status output), got:\n%s", s)
+	}
+}
+
+// CLAUDE.md is written once and then belongs to the agent (spec §5): the tool
+// promises never to touch it again, so it can never revise what it seeded.
+// That makes the file the wrong home for any TOOL-owned convention, which is
+// versioned with the tool — a copy seeded here is frozen at the workspace's
+// birth, in every workspace, with no path to reconcile them. Only the
+// agent-owned Status FRAME is seeded (a container the tool never needs to
+// change); the handoff-report convention is delivered by the SessionStart
+// hook, which is recomputed from scratch every session and therefore
+// back-propagates for free.
+// MUTATION-CHECKED: re-adding the agreements block fails this.
+func TestEnsureClaudeMDSeedsNoToolOwnedConventions(t *testing.T) {
+	ws := wsp.Workspace{Dir: t.TempDir(), Alloc: alloc.Allocation{Description: "fix the thing"}}
+	if err := wsp.EnsureClaudeMD(ws); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	for _, unwanted := range []string{"Working agreements", "handoff report", "Needs you", "Watch out"} {
+		if strings.Contains(s, unwanted) {
+			t.Errorf("the seed must not carry the tool-owned convention %q — it cannot be revised once written; the hook delivers it. Got:\n%s", unwanted, s)
+		}
 	}
 }
 
@@ -237,7 +255,7 @@ func TestEnsureClaudeMDFlattensDescription(t *testing.T) {
 	}
 	for _, line := range strings.Split(s, "\n") {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "## ") && trimmed != "## Status" && trimmed != "## Working agreements" {
+		if strings.HasPrefix(trimmed, "## ") && trimmed != "## Status" {
 			t.Errorf("no heading beyond the seeded ones may appear, got line %q", line)
 		}
 	}

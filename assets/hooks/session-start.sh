@@ -52,4 +52,21 @@ printf '\nWORKSPACE.md holds the task, the allocated values and per-project inst
 printf 'Manage this workspace with: workspace status|up|down|logs|exec %s\n' "$name"
 printf 'Daemons are not auto-started; start what you need with: workspace up %s <daemon>\n' "$name"
 
+# The handoff-report convention, delivered here rather than seeded into the
+# workspace's CLAUDE.md. CLAUDE.md is written once and then belongs to the
+# agent (spec §5), so a convention seeded there is frozen at the workspace's
+# birth and cannot be revised — while this hook stores nothing, is recomputed
+# every session, and updates for every workspace at once the moment the binary
+# does. Hence unconditional, unlike the nag above: the nag is about a section
+# the AGENT owns and must start, this is a rule the TOOL owns and must be able
+# to change. The skill carries the same rule at length for sessions that load
+# it; this is the short form, and last in the block because it is the
+# instruction that has to survive to the end of the turn.
+printf '\nEnd every substantial turn with a handoff report — Done (outcomes, never the\n'
+printf 'journey), Needs you (each ask self-contained: context, options and a\n'
+printf 'recommendation in one breath), Watch out (problems found, with severity) — and\n'
+printf 'refresh the ## Status section of CLAUDE.md in the same moment. Your LAST\n'
+printf 'message is what the user reads when they switch back to this workspace; its\n'
+printf 'job is re-entry in under a minute.\n'
+
 exit 0

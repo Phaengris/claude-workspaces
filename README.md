@@ -345,7 +345,10 @@ This is the part built *for* running agent fleets:
   report (done / needs you / watch out).
 - **The SessionStart hook** prints the workspace's identity and live status
   into every session that opens inside one — including each daemon's
-  description and the status note.
+  description and the status note — and closes with the handoff-report
+  convention. Conventions ride the hook rather than the scaffolded
+  `CLAUDE.md`, which is written once and then belongs to the agent: the hook
+  stores nothing, so a change reaches every workspace at once.
 - **The status note**: sessions maintain a `## Status` section in the
   workspace's `CLAUDE.md` (the tool writes that file once and never touches it
   again). `workspace status` renders it, the hook delivers it — so both you

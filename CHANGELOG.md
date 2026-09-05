@@ -35,12 +35,21 @@ says exactly how far when built with `git describe`.)
   read-only — when a workspace's CLAUDE.md has no such section (covers
   workspaces created before the seed). Existing CLAUDE.md files are never
   touched, as ever.
-- **Handoff reports get the same delivery fix**: the seeded CLAUDE.md also
-  carries a short "Working agreements" section teaching the report shape
-  (Done / Needs you / Watch out, refresh the Status note in the same
-  moment) — the rule previously lived only in the skill, which
-  pure-project sessions never load. Placed below the Status frame, so
-  `workspace status` output never includes it.
+- **Handoff reports get their own delivery fix — through the hook.** The
+  report shape (Done / Needs you / Watch out, refresh the Status note in the
+  same moment) previously lived only in the skill, which pure-project
+  sessions never load. It is now printed by the SessionStart hook, at the end
+  of the context block, for every workspace unconditionally.
+
+  It is deliberately NOT seeded into the workspace's CLAUDE.md. That file is
+  written once and then belongs to the agent (spec §5), so a convention
+  seeded there is frozen at the workspace's birth, in every workspace, with
+  no path to revise it — the tool has promised not to, and the agent has no
+  reason to. The hook stores nothing and is recomputed every session, so it
+  reaches existing workspaces immediately and back-propagates every later
+  change for free. The rule of thumb: CLAUDE.md may be seeded with FRAMES the
+  agent owns and fills (the `## Status` section), never with conventions the
+  tool owns and will want to change.
 
 ## [1.7.1] — 2026-08-24
 

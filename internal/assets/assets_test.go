@@ -3,6 +3,7 @@ package assets_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -308,9 +309,71 @@ index: 0
 WORKSPACE.md holds the task, the allocated values and per-project instructions.
 Manage this workspace with: workspace status|up|down|logs|exec A-1_x
 Daemons are not auto-started; start what you need with: workspace up A-1_x <daemon>
+
+End every substantial turn with a handoff report — Done (outcomes, never the
+journey), Needs you (each ask self-contained: context, options and a
+recommendation in one breath), Watch out (problems found, with severity) — and
+refresh the ## Status section of CLAUDE.md in the same moment. Your LAST
+message is what the user reads when they switch back to this workspace; its
+job is re-entry in under a minute.
 `
 	if stdout != want {
 		t.Errorf("hook stdout mismatch\n--- got ---\n%s\n--- want ---\n%s", stdout, want)
+	}
+}
+
+// cdShim is the shim for the branches that read the workspace's CLAUDE.md:
+// it answers `cd` with dir, so the hook can find the file the nag greps.
+func cdShim(dir string) string {
+	return fmt.Sprintf(`#!/bin/sh
+case "$1" in
+which)  printf 'A-1_x\n' ;;
+status) printf 'workspace: %%s\n' "$2" ;;
+cd)     printf '%%s\n' %q ;;
+*)      exit 1 ;;
+esac
+`, dir)
+}
+
+// The handoff rule is delivered UNCONDITIONALLY, unlike the status nag: it is
+// a tool-owned convention, so the hook — which stores nothing and is
+// recomputed every session — is the only channel that can revise it later.
+// A workspace whose CLAUDE.md is fully in order still gets it, and gets no
+// nag. MUTATION-CHECKED: making the rule conditional on the file fails this.
+func TestHookPrintsHandoffRuleWithStatusSection(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("## Status\n\nAbout: x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, code := runHook(t, shimBin(t, cdShim(dir)))
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
+	}
+	if !strings.Contains(stdout, "End every substantial turn with a handoff report") {
+		t.Errorf("the handoff rule must be printed for every workspace, got:\n%s", stdout)
+	}
+	if strings.Contains(stdout, `no "## Status" section`) {
+		t.Errorf("a workspace WITH a Status section must not be nagged, got:\n%s", stdout)
+	}
+}
+
+// The other branch: no Status section yet (every workspace created before the
+// seed). The nag appears AND the rule still does — they are separate
+// deliveries, and a missing section must not cost the session the convention.
+func TestHookNagsWithoutStatusSectionAndStillPrintsRule(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("See @WORKSPACE.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, code := runHook(t, shimBin(t, cdShim(dir)))
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
+	}
+	if !strings.Contains(stdout, `no "## Status" section`) {
+		t.Errorf("a workspace without a Status section must be nagged, got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "End every substantial turn with a handoff report") {
+		t.Errorf("the handoff rule must survive the nag branch, got:\n%s", stdout)
 	}
 }
 
