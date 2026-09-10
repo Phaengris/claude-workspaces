@@ -10,6 +10,8 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+## [1.8.0] — 2026-09-10
+
 ### Added
 
 - The skill teaches **coordinating with sibling sessions** via Claude
