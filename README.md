@@ -417,3 +417,9 @@ typed, the specs say who decided.
 Post-1.0 development runs the same loop in miniature, driven by daily use —
 see the [CHANGELOG](CHANGELOG.md): most entries trace to a real moment at a
 real terminal.
+
+---
+
+claude-workspaces is an independent open-source project (MIT), not affiliated
+with, endorsed by or sponsored by Anthropic. Claude and Claude Code are
+trademarks of Anthropic.
