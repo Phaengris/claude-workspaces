@@ -156,6 +156,11 @@ CONVERSATION with their repo — read it, don't interrogate them:
    `start:` daemons **with `description:`** (sessions read those), `stop:`/
    `teardown:` if needed, `browse_port`. Route EVERY shared resource through
    the workspace's values: ports as `${PORT0}`…, names as `…_${WORKSPACE}`.
+   Open `instructions:` with a 3–4 line brief of what the app is (from its
+   README), then "Read <path>/CLAUDE.md first" if the repo has one. Sessions
+   start in the workspace root, so Claude Code doesn't load that file until
+   something under the project is read, and a session working through the
+   shell may never see it.
 3. **Change the app to read what the env provides.** The tool sets the env;
    the app must consume it — no hardcoded port 3000, no fixed database name.
    This is usually the real work; `examples/` in the tool's repo has a

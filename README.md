@@ -230,7 +230,9 @@ projects:
       DATABASE_URL: postgres:///my_app_${WORKSPACE}
       PORT: ${PORT0}
     browse_port: ${PORT0}
-    instructions: |                # appended verbatim to WORKSPACE.md
+    instructions: |                # verbatim into WORKSPACE.md: what the app is, where its docs are
+      A booking system for small clinics. Rails 8, PostgreSQL.
+      Read my-app/CLAUDE.md first.
       Tests: `bin/rspec`.
   shared-lib:
     repo: ~/dev/shared-lib

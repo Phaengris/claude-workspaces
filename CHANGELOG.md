@@ -10,6 +10,15 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+### Changed
+
+- The config stub's `instructions:` example, and the README's, now open
+  with a short brief of the app followed by "Read my-app/CLAUDE.md first".
+  Sessions start in the workspace root, and Claude Code doesn't load a
+  project's own `CLAUDE.md` until a file under it is read, so
+  WORKSPACE.md is where a session first meets the project. When the skill
+  onboards a project, it now drafts that brief from the repo's README.
+
 ## [1.8.0] — 2026-09-10
 
 ### Added

@@ -118,10 +118,14 @@ projects: {}
 #       PORT: ${PORT0}
 #     env_allow: [MY_APP_SECRET]
 #     browse_port: ${PORT0}     # `workspace browse` opens http://localhost:<it>
-#     # `instructions` is appended verbatim to the workspace's WORKSPACE.md —
-#     # tell the agent whatever it needs to know about this project:
+#     # Copied into WORKSPACE.md, read at session start. Say what the app is.
+#     # Sessions start in the workspace root and don't load my-app/CLAUDE.md:
 #     instructions: |
-#       Tests: `bin/rspec`. The API is in app/controllers/api.
+#       A booking system for small clinics: patients book slots, staff
+#       manage calendars, reminders go out by SMS. Rails 8, PostgreSQL,
+#       Sidekiq.
+#       Read my-app/CLAUDE.md first - commands, architecture, conventions.
+#       Tests: `bin/rspec`. Ask before changing the database schema.
 #   shared-lib:
 #     repo: ~/dev/shared-lib
 #   acme:                       # a project built from the template above
