@@ -19,6 +19,13 @@ says exactly how far when built with `git describe`.)
   WORKSPACE.md is where a session first meets the project. When the skill
   onboards a project, it now drafts that brief from the repo's README.
 
+### Fixed
+
+- A session started in a background tmux window renamed the window you
+  were working in, not its own; its exit then switched that window's
+  auto-naming back on. Both tmux calls now target the session's own pane
+  (`$TMUX_PANE`); without one, tmux is left alone.
+
 ## [1.8.0] — 2026-09-10
 
 ### Added

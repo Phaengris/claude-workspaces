@@ -101,19 +101,31 @@ env CLAUDE_SHIM_EXIT=
 # rename-before-claude-spawn, which nothing here observes) — and unsets
 # automatic-rename AFTER the session exits: rename-window is what turned that
 # option off, so unsetting is the exact undo (spec 2026-08-12 rows 4-5).
+# Both commands target $TMUX_PANE explicitly: without -t, tmux resolves "the
+# current window" to the one the user is looking at, not the session's own.
 chmod 0755 $WORK/bin/tmux
 env TMUX_SHIM_LOG=$WORK/tmux.log
 env TMUX=/tmp/fake-socket,1234,0
+env TMUX_PANE=%42
 exec workspace claude T-1
-grep -count=1 'rename-window T-1_x' $WORK/tmux.log
-grep -count=1 'set-option -w -u automatic-rename' $WORK/tmux.log
-exec sh -c 'test "$(sed -n 1p "$TMUX_SHIM_LOG")" = "rename-window T-1_x"'
+grep -count=1 'rename-window -t %42 T-1_x' $WORK/tmux.log
+grep -count=1 'set-option -w -t %42 -u automatic-rename' $WORK/tmux.log
+exec sh -c 'test "$(sed -n 1p "$TMUX_SHIM_LOG")" = "rename-window -t %42 T-1_x"'
 
 # --- titles: the tmux window name is truncated to 20 runes --------------------
 env TMUX_SHIM_LOG=$WORK/tmux-long.log
 exec workspace new T-2 abcdefghijklmnopqrstuvwxyz app
 exec workspace claude T-2
-grep -count=1 'rename-window T-2_abcdefghijklmnop$' $WORK/tmux-long.log
+grep -count=1 'rename-window -t %42 T-2_abcdefghijklmnop$' $WORK/tmux-long.log
+
+# --- titles: $TMUX without $TMUX_PANE renames nothing -------------------------
+# No pane id means no safe target; an untargeted rename would hit whatever
+# window the user is looking at, so the tmux half is skipped entirely.
+env TMUX_SHIM_LOG=$WORK/tmux-nopane.log
+env TMUX_PANE=
+exec workspace claude T-1
+! exists $WORK/tmux-nopane.log
+env TMUX_PANE=%42
 
 # --- titles: outside tmux nothing is renamed; piped stdout stays clean --------
 env TMUX_SHIM_LOG=$WORK/tmux-none.log

@@ -45,13 +45,19 @@ func stdoutIsTerminal() bool {
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
-// setSessionTitle names the terminal and (inside tmux) the current tmux
-// window after the workspace, returning the restore to run when the session
-// ends. The restore is never nil; when nothing was renamed it is a no-op.
+// setSessionTitle names the terminal and (inside tmux) the session's own
+// tmux window after the workspace, returning the restore to run when the
+// session ends. The restore is never nil; when nothing was renamed it is a
+// no-op.
 //
 // Terminal: OSC 0 to stdout, only when stdout is a tty (decided row 3).
-// tmux: `tmux rename-window` in argv form when $TMUX is set — NOT the \x1bk
-// escape, which needs allow-rename (off by default in modern tmux) (row 4).
+// tmux: `tmux rename-window` in argv form when $TMUX and $TMUX_PANE are set
+// — NOT the \x1bk escape, which needs allow-rename (off by default in modern
+// tmux) (row 4).
+// Both tmux commands target $TMUX_PANE (the pane tmux started this process
+// in) explicitly: untargeted, tmux resolves "current" to the window the user
+// is looking at, so a session launched in a background window renamed the
+// user's window instead. No $TMUX_PANE, no safe target: tmux is left alone.
 //
 // The restore UNSETS the window's automatic-rename option rather than
 // re-enabling it: rename-window is what set that option off, so unsetting it
@@ -65,13 +71,14 @@ func setSessionTitle(name string) (restore func()) {
 	if stdoutIsTerminal() {
 		fmt.Fprint(os.Stdout, oscTitle(truncateRunes(name, oscTitleMax)))
 	}
-	if os.Getenv("TMUX") == "" {
+	pane := os.Getenv("TMUX_PANE")
+	if os.Getenv("TMUX") == "" || pane == "" {
 		return func() {}
 	}
-	if exec.Command("tmux", "rename-window", truncateRunes(name, tmuxTitleMax)).Run() != nil {
+	if exec.Command("tmux", "rename-window", "-t", pane, truncateRunes(name, tmuxTitleMax)).Run() != nil {
 		return func() {}
 	}
 	return func() {
-		_ = exec.Command("tmux", "set-option", "-w", "-u", "automatic-rename").Run()
+		_ = exec.Command("tmux", "set-option", "-w", "-t", pane, "-u", "automatic-rename").Run()
 	}
 }
