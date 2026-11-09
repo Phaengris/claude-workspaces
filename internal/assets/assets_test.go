@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/assets"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/internal/assets"
+	"github.com/Phaengris/chaban/internal/config"
+	"github.com/Phaengris/chaban/internal/wsp"
 )
 
 // TestAccessorsCarryTheirContent is the embed round-trip: every accessor must

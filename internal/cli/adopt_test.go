@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/proc"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/internal/proc"
+	"github.com/Phaengris/chaban/internal/wsp"
 )
 
 // mkdirIn creates <parent>/<name> and returns it, for the adopt cases whose

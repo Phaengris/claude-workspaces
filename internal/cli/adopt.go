@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/gitx"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/internal/alloc"
+	"github.com/Phaengris/chaban/internal/config"
+	"github.com/Phaengris/chaban/internal/gitx"
+	"github.com/Phaengris/chaban/internal/wsp"
 )
 
 // newAdoptCmd builds `workspace adopt [dir] [--projects a,b]`: give an

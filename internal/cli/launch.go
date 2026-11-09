@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/internal/config"
+	"github.com/Phaengris/chaban/internal/wsp"
+	"github.com/Phaengris/chaban/internal/xerr"
 )
 
 // newLaunchCmd builds `workspace launch <task_id> [<description> [project…]]

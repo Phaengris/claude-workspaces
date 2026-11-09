@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	embedded "github.com/Phaengris/claude-workspaces/assets"
+	embedded "github.com/Phaengris/chaban/assets"
 )
 
 // The files are read once, at package init: an embedded FS cannot change

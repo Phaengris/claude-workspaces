@@ -3,7 +3,7 @@ package alloc
 import (
 	"strconv"
 
-	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/chaban/internal/config"
 )
 
 // NextIndex returns the lowest index not currently allocated. Gap-filling —

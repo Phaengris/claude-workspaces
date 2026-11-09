@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/internal/wsp"
+	"github.com/Phaengris/chaban/internal/xerr"
 )
 
 // newCdCmd builds `workspace cd <workspace> [project]`: the absolute directory

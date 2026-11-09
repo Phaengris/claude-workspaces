@@ -8,7 +8,7 @@ import (
 
 	"github.com/rogpeppe/go-internal/testscript"
 
-	"github.com/Phaengris/claude-workspaces/internal/cli"
+	"github.com/Phaengris/chaban/internal/cli"
 )
 
 // TestMain installs "workspace" as a command available inside the txtar

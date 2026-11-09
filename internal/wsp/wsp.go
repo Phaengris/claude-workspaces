@@ -10,10 +10,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/gitx"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/internal/alloc"
+	"github.com/Phaengris/chaban/internal/config"
+	"github.com/Phaengris/chaban/internal/gitx"
+	"github.com/Phaengris/chaban/internal/xerr"
 )
 
 // stampDirName holds the tool's per-workspace bookkeeping (spec §3). M1 only

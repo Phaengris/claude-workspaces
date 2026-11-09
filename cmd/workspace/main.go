@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/Phaengris/claude-workspaces/internal/cli"
+	"github.com/Phaengris/chaban/internal/cli"
 )
 
 func main() {

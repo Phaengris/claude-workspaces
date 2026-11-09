@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/internal/wsp"
 )
 
 // newRestartCmd builds `workspace restart <workspace> [target…]`: the down

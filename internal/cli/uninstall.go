@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/chaban/internal/config"
 )
 
 // newUninstallCmd builds `workspace uninstall`: remove EXACTLY the paths the

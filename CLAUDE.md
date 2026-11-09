@@ -20,7 +20,7 @@ gofmt -l . && go vet ./...                                # both must be clean b
 # landing a change: commit, push master to BOTH remotes (origin = private mirror, github = public),
 #   add its CHANGELOG entry under "Unreleased". Do NOT tag per change.
 # daily-driver install between releases: build with
-#   -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=$(git describe --tags --always)"
+#   -ldflags "-X github.com/Phaengris/chaban/internal/cli.version=$(git describe --tags --always)"
 #   then ./workspace install — the user runs master, tags are for the world.
 # release (end of a day with user-visible changes, or on explicit need):
 #   retitle Unreleased to X.Y.Z in CHANGELOG.md, build with version=X.Y.Z,

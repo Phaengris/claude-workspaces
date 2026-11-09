@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/internal/xerr"
 )
 
 // runCLI drives Root() for the given args with all output discarded and

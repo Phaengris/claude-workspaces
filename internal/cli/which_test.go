@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
+	"github.com/Phaengris/chaban/internal/alloc"
 )
 
 // siblingRoot builds a root holding projectConfig plus four allocations whose

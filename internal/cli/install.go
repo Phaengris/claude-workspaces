@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/assets"
-	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/chaban/internal/assets"
+	"github.com/Phaengris/chaban/internal/config"
 )
 
 // `workspace install` / `workspace uninstall` (spec §2, §9) are the one place
