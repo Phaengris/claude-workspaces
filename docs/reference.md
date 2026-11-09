@@ -493,11 +493,36 @@ root. Both are exit 4 (config error).
 - **Legacy default root.** No override is set, `~/workspaces` does not exist,
   and `~/claude-workspaces` does. The message is `<abs legacy path> exists,
   but the default root is now ~/workspaces: set CHABAN_ROOT_DIR=<abs legacy
-  path> to keep using it, or move it`. It also stops `chaban install`, which
+  path> to keep using it`. It also stops `chaban install`, which
   would otherwise create an empty `~/workspaces` and hide your workspaces.
 
-Either way the fix is to set `CHABAN_ROOT_DIR` (to the old path, to keep it)
-or to move the directory to `~/workspaces`. Once `~/workspaces` exists, or
-any override is set, the legacy-root guard stays quiet. The step-by-step upgrade,
-including the `settings.json` entries and the one seeded `CLAUDE.md` line, is
-in the [README](../README.md#upgrading-from-claude-workspaces).
+Either way the fix is to set `CHABAN_ROOT_DIR`, to the old path to keep it.
+Once `~/workspaces` exists, or any override is set, the legacy-root guard
+stays quiet. The step-by-step upgrade, including the `settings.json` entries
+and the one seeded `CLAUDE.md` line, is in the
+[README](../README.md#upgrading-from-claude-workspaces).
+
+### The variable must reach every process
+
+If you keep an old root through `CHABAN_ROOT_DIR`, every process that runs
+`chaban` needs it.
+
+- User commands (`setup`, `start`, `stop`, `teardown`, `exec`) get the
+  curated env, which does not carry it. If those commands call `chaban`, add
+  `CHABAN_ROOT_DIR` to `env_allow` in `config.yml` (a list of names, global or
+  per project).
+- Claude Code launched outside your shell (an IDE, the desktop app) does not
+  see a shell-only variable. Set it session-wide instead, for example in
+  `~/.config/environment.d/`.
+
+### Moving a root
+
+Don't. Use `CHABAN_ROOT_DIR`. A root with live worktrees breaks when moved:
+each source repo keeps stale worktree records, `destroy` fails, and
+`git worktree prune` from `destroy --force` orphans the other moved
+worktrees. Claude session history is keyed by absolute path and stays with
+the old path.
+
+If you must: `chaban down` every workspace, move the directory, then in each
+source repo run `git -C <repo> worktree repair <new worktree paths...>`.
+Accept that the session history stays behind.

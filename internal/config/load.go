@@ -42,7 +42,7 @@ func RootDir() (string, error) {
 	if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
 		legacy := filepath.Join(home, "claude-workspaces")
 		if _, lerr := os.Stat(legacy); lerr == nil {
-			return "", xerr.Wrap(xerr.ErrConfig, fmt.Errorf("%s exists, but the default root is now ~/workspaces: set CHABAN_ROOT_DIR=%s to keep using it, or move it", legacy, legacy))
+			return "", xerr.Wrap(xerr.ErrConfig, fmt.Errorf("%s exists, but the default root is now ~/workspaces: set CHABAN_ROOT_DIR=%s to keep using it", legacy, legacy))
 		}
 	}
 	return root, nil

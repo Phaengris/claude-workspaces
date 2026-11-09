@@ -177,7 +177,7 @@ func TestRootDir(t *testing.T) {
 		{name: "default exists, legacy dir too", dirs: []string{"workspaces", "claude-workspaces"}, want: "$HOME/workspaces"},
 		{name: "legacy var", legacyVar: "/old", wantErrMsg: legacyVarMsg},
 		{name: "legacy var, new default exists", legacyVar: "/old", dirs: []string{"workspaces"}, wantErrMsg: legacyVarMsg},
-		{name: "legacy dir only", dirs: []string{"claude-workspaces"}, wantErrMsg: legacyDirMsg + "$HOME/claude-workspaces"},
+		{name: "legacy dir only", dirs: []string{"claude-workspaces"}, wantErrMsg: legacyDirMsg + "$HOME/claude-workspaces to keep using it"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -197,6 +197,9 @@ func TestRootDir(t *testing.T) {
 				}
 				if want := strings.ReplaceAll(tc.wantErrMsg, "$HOME", home); !strings.Contains(err.Error(), want) {
 					t.Errorf("error %q must contain %q", err, want)
+				}
+				if tc.name == "legacy dir only" && !strings.HasSuffix(err.Error(), "to keep using it") {
+					t.Errorf("guard 6 message must end at %q (no move advice); got: %v", "to keep using it", err)
 				}
 				return
 			}
