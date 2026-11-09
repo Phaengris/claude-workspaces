@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/chaban/internal/envx"
-	"github.com/Phaengris/chaban/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/envx"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // version is stamped at release time via -ldflags "-X …/internal/cli.version=v…".

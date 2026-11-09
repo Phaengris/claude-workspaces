@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/chaban/internal/wsp"
-	"github.com/Phaengris/chaban/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // defaultLogLines is how much history `logs` prints without -n: the decided

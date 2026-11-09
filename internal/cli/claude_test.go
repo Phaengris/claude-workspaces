@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/alloc"
-	"github.com/Phaengris/chaban/internal/config"
-	"github.com/Phaengris/chaban/internal/wsp"
-	"github.com/Phaengris/chaban/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // TestExtractSessionFlags pins the hand-written extractor: only the region

@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Phaengris/chaban/internal/config"
-	"github.com/Phaengris/chaban/internal/envx"
-	"github.com/Phaengris/chaban/internal/gitx"
-	"github.com/Phaengris/chaban/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/envx"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/proc"
 )
 
 // CommandEnv composes the complete curated environment for one spawned

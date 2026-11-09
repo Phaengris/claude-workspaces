@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // TestDestroyExitCodes pins the codes destroy.txtar can only assert as

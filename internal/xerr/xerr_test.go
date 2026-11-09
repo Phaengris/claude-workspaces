@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 func TestExitCode(t *testing.T) {

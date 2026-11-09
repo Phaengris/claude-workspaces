@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/proc"
-	"github.com/Phaengris/chaban/internal/wsp"
-	"github.com/Phaengris/chaban/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // TestGCExitCodes pins the codes gc.txtar can only assert as "non-zero" or

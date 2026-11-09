@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/alloc"
-	"github.com/Phaengris/chaban/internal/proc"
-	"github.com/Phaengris/chaban/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // doctorStdout runs the CLI capturing stdout, for the doctor contracts that are

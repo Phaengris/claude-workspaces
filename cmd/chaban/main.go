@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/Phaengris/chaban/internal/cli"
+	"github.com/Phaengris/chaban/v2/internal/cli"
 )
 
 func main() {

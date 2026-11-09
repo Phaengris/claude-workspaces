@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/chaban/internal/alloc"
-	"github.com/Phaengris/chaban/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // alreadyReleased is the no-arg no-op-success line: the cwd is not inside any

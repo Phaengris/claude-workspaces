@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Phaengris/chaban/internal/alloc"
-	"github.com/Phaengris/chaban/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
 )
 
 const (

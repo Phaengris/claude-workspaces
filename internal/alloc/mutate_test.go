@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
 )
 
 const testNow = "2026-08-09T12:00:00+03:00"

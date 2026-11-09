@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/chaban/internal/alloc"
-	"github.com/Phaengris/chaban/internal/config"
-	"github.com/Phaengris/chaban/internal/gitx"
-	"github.com/Phaengris/chaban/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // newAdoptCmd builds `chaban adopt [dir] [--projects a,b]`: give an

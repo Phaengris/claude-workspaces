@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
 )
 
 // mkRepo builds a real repo in a temp dir, hermetically sealed against the

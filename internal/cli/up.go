@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/chaban/internal/config"
-	"github.com/Phaengris/chaban/internal/proc"
-	"github.com/Phaengris/chaban/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // newUpCmd builds `chaban up <workspace> [target…]` (alias `start`):

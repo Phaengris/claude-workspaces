@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/alloc"
-	"github.com/Phaengris/chaban/internal/config"
-	"github.com/Phaengris/chaban/internal/gitx"
-	"github.com/Phaengris/chaban/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // ensureFixture builds the smallest real world EnsureProject can act on: a

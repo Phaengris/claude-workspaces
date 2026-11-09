@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/chaban/internal/assets"
-	"github.com/Phaengris/chaban/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/assets"
+	"github.com/Phaengris/chaban/v2/internal/config"
 )
 
 // `chaban install` / `chaban uninstall` (spec §2, §9) are the one place

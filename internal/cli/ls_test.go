@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // validConfig is the smallest config the query commands accept: one value

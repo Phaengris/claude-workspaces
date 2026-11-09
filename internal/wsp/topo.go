@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/Phaengris/chaban/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/config"
 )
 
 // TopoOrder orders the given project names so that every project comes after

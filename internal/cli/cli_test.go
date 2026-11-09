@@ -8,7 +8,7 @@ import (
 
 	"github.com/rogpeppe/go-internal/testscript"
 
-	"github.com/Phaengris/chaban/internal/cli"
+	"github.com/Phaengris/chaban/v2/internal/cli"
 )
 
 // TestMain installs "chaban" as a command available inside the txtar

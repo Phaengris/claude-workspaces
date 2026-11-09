@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 func writeConfig(t *testing.T, yml string) string {

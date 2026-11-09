@@ -14,8 +14,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/Phaengris/chaban/internal/envx"
-	"github.com/Phaengris/chaban/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/envx"
+	"github.com/Phaengris/chaban/v2/internal/proc"
 )
 
 // All daemon tests use REAL processes with bounded lifetimes (≤30s: every

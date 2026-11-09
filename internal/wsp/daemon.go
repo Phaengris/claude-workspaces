@@ -10,9 +10,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Phaengris/chaban/internal/config"
-	"github.com/Phaengris/chaban/internal/proc"
-	"github.com/Phaengris/chaban/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // The daemon model (spec §2/§3): which long-running processes a project

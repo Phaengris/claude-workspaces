@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/envx"
-	"github.com/Phaengris/chaban/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/envx"
+	"github.com/Phaengris/chaban/v2/internal/proc"
 )
 
 // All Run tests pin SHELL to /bin/sh: the developer's login shell may be fish,

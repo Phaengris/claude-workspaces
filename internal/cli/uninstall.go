@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/chaban/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/config"
 )
 
 // newUninstallCmd builds `chaban uninstall`: remove EXACTLY the paths the

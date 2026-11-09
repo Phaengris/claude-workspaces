@@ -7,7 +7,7 @@ daily-driven) of an earlier personal Ruby tool, never publicly released and
 since retired; **never consult or port Ruby code** — the spec and this repo
 are the only sources.
 
-Module path is `github.com/Phaengris/chaban` — the public home.
+Module path is `github.com/Phaengris/chaban/v2` — the public home.
 MIT-licensed.
 
 ## Commands
@@ -20,7 +20,7 @@ gofmt -l . && go vet ./...                                # both must be clean b
 # landing a change: commit, push master to BOTH remotes (origin = private mirror, github = public),
 #   add its CHANGELOG entry under "Unreleased". Do NOT tag per change.
 # daily-driver install between releases: build with
-#   -ldflags "-X github.com/Phaengris/chaban/internal/cli.version=$(git describe --tags --always)"
+#   -ldflags "-X github.com/Phaengris/chaban/v2/internal/cli.version=$(git describe --tags --always)"
 #   then ./chaban install — the user runs master, tags are for the world.
 # release (end of a day with user-visible changes, or on explicit need):
 #   retitle Unreleased to X.Y.Z in CHANGELOG.md, build with version=X.Y.Z,

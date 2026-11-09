@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/chaban/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 func TestDirName(t *testing.T) {

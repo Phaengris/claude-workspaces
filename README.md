@@ -69,14 +69,14 @@ inside environment separation.
 ## Install
 
 ```sh
-go install github.com/Phaengris/chaban/cmd/chaban@latest
+go install github.com/Phaengris/chaban/v2/cmd/chaban@latest
 chaban install
 ```
 
 (A go-install'd binary reports version `dev` — `go install` cannot apply
 `-ldflags`. To build from a checkout: `CGO_ENABLED=0 go build -o chaban
 ./cmd/chaban`, plus `-ldflags "-X
-github.com/Phaengris/chaban/internal/cli.version=X.Y.Z"` if the
+github.com/Phaengris/chaban/v2/internal/cli.version=X.Y.Z"` if the
 version matters. Prerequisites: a Go toolchain and `git`.)
 
 `chaban install` copies the running binary and writes:
@@ -426,7 +426,7 @@ The exact gates, `--force`'s narrow meaning, and doctor's checks:
 go test ./... -count=1      # table tests + testscript command flows
 gofmt -l .                  # must print nothing
 go vet ./...
-CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/chaban/internal/cli.version=$(git describe --tags --always)" -o chaban ./cmd/chaban
+CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/chaban/v2/internal/cli.version=$(git describe --tags --always)" -o chaban ./cmd/chaban
 ```
 
 Runtime dependencies: `spf13/cobra`, `goccy/go-yaml`, `golang.org/x/sys` (and

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Phaengris/chaban/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // daemonConfig is a config whose projects declare daemons, so the target
