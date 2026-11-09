@@ -1,13 +1,13 @@
-# claude-workspaces (Go)
+# chaban (Go)
 
-CLI tool (`workspace`) managing isolated dev workspaces for parallel Claude Code
+CLI tool (`chaban`) managing isolated dev workspaces for parallel Claude Code
 sessions: a git worktree per project, an allocated port block, generated env,
 and daemons — an *environment engine*. Clean-room Go rewrite (v1.1.x, complete,
 daily-driven) of an earlier personal Ruby tool, never publicly released and
 since retired; **never consult or port Ruby code** — the spec and this repo
 are the only sources.
 
-Module path is `github.com/Phaengris/claude-workspaces` — the public home.
+Module path is `github.com/Phaengris/chaban` — the public home.
 MIT-licensed.
 
 ## Commands
@@ -28,13 +28,13 @@ gofmt -l . && go vet ./...                                # both must be clean b
 ```
 
 Conventional commits (`feat(cli): …`). The user's real install lives at
-`~/.local/bin/workspace` — after user-facing fixes, rebuild with a bumped
+`~/.local/bin/chaban` — after user-facing fixes, rebuild with a bumped
 version and run `./chaban install` (idempotent, manifest-driven).
 
 ## Architecture (dependency flow strictly downward)
 
 ```
-cmd/workspace → internal/cli (one file per command; cobra)
+cmd/chaban → internal/cli (one file per command; cobra)
   → internal/wsp    workspace domain: identity/Resolve, ensure-chain, writers,
                     daemon model, ResolveTargets grammar, CommandEnv (SOLE
                     spawn-env composer), runtime ${} substitution

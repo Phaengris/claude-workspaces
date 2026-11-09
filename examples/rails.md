@@ -7,7 +7,7 @@ app *consume* what the workspace provides (the actual onboarding).
 
 Everything here describes a *typical* shape — treat it as a crib, not
 gospel. Your app's boot commands and shared resources are what count; a
-Claude session with the `claude-workspaces` skill can read your repo and
+Claude session with the `chaban` skill can read your repo and
 adapt this for you.
 
 ## The config entry
@@ -115,12 +115,12 @@ workspaces waiting to happen.
 ## Prove it
 
 ```sh
-workspace doctor                       # config parses; hints if something's off
-workspace new TEST-1 "onboarding trial" myapp
-workspace up TEST-1                    # setup runs with live progress, daemons start
-workspace browse TEST-1                # dials the port first — refuses if dead
-workspace exec TEST-1 myapp env | sort # exactly what the daemons see
-workspace destroy TEST-1               # teardown drops the db, dir and allocation go
+chaban doctor                       # config parses; hints if something's off
+chaban new TEST-1 "onboarding trial" myapp
+chaban up TEST-1                    # setup runs with live progress, daemons start
+chaban browse TEST-1                # dials the port first — refuses if dead
+chaban exec TEST-1 myapp env | sort # exactly what the daemons see
+chaban destroy TEST-1               # teardown drops the db, dir and allocation go
 ```
 
 Two of these at once — `TEST-1` and `TEST-2` — is the whole point: different

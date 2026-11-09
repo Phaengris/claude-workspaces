@@ -1,19 +1,41 @@
 # Changelog
 
-All notable changes to `workspace` are documented here. The format follows
+All notable changes to `chaban` (called claude-workspaces before 2.0) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
 (Changes land here as they merge; a release retitles the section. The
-installed daily driver may be ahead of the last tag — `workspace --version`
+installed daily driver may be ahead of the last tag — `chaban --version`
 says exactly how far when built with `git describe`.)
+
+### Changed (breaking)
+
+- The tool is renamed from claude-workspaces to chaban (Persian *chupan*,
+  "shepherd"). The command is `chaban`, the module is
+  `github.com/Phaengris/chaban`, and the stderr prefix is `chaban:`. The
+  `claude` and `launch` subcommands keep their names.
+- Installed paths move: `~/.local/bin/chaban`, `~/.local/share/chaban/`, the
+  fish wrapper and completions as `chaban.fish`, and the skill as
+  `~/.claude/skills/chaban/`. The SessionStart hook path changes, so redo the
+  `settings.json` entry.
+- The root env var is `CHABAN_ROOT_DIR`. `CLAUDE_WORKSPACES_ROOT_DIR` is no
+  longer read.
+- The default root is `~/workspaces` (was `~/claude-workspaces`).
+- Two guards, both exit 4, catch a stale setup. The old env var set without
+  the new one is refused with the rename to make. A missing `~/workspaces`
+  next to an existing `~/claude-workspaces` is refused with the
+  `CHABAN_ROOT_DIR` to set, so `install` never creates an empty root beside
+  your real one.
+- New workspaces' seeded `CLAUDE.md` says `chaban status`. Existing ones keep
+  the old line; the README's "Upgrading from claude-workspaces" section has
+  the one-line fix.
 
 ### Changed
 
 - Workspace-name completion also offers names that contain what you typed:
-  in fish, `workspace cd 430<TAB>` completes to `FIZZY-430_…`. fish shows
+  in fish, `chaban cd 430<TAB>` completes to `FIZZY-430_…`. fish shows
   such matches only when no name starts with your text. bash still matches
   by prefix only; zsh does too unless your `matcher-list` allows substrings.
   Project and daemon names stay prefix-only.
@@ -315,23 +337,23 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
-[Unreleased]: https://github.com/Phaengris/claude-workspaces/compare/v1.8.1...HEAD
-[1.8.1]: https://github.com/Phaengris/claude-workspaces/compare/v1.8.0...v1.8.1
-[1.8.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.7.1...v1.8.0
-[1.7.1]: https://github.com/Phaengris/claude-workspaces/compare/v1.7.0...v1.7.1
-[1.7.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.6.0...v1.7.0
-[1.6.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.5.0...v1.6.0
-[1.5.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.4.0...v1.5.0
-[1.4.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.6...v1.4.0
-[1.3.6]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.5...v1.3.6
-[1.3.5]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.4...v1.3.5
-[1.3.4]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.3...v1.3.4
-[1.3.3]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.2...v1.3.3
-[1.3.2]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.1...v1.3.2
-[1.3.1]: https://github.com/Phaengris/claude-workspaces/compare/v1.3.0...v1.3.1
-[1.3.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.2.0...v1.3.0
-[1.2.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/Phaengris/claude-workspaces/compare/v1.0.2...v1.1.0
-[1.0.2]: https://github.com/Phaengris/claude-workspaces/compare/v1.0.1...v1.0.2
-[1.0.1]: https://github.com/Phaengris/claude-workspaces/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/Phaengris/claude-workspaces/releases/tag/v1.0.0
+[Unreleased]: https://github.com/Phaengris/chaban/compare/v1.8.1...HEAD
+[1.8.1]: https://github.com/Phaengris/chaban/compare/v1.8.0...v1.8.1
+[1.8.0]: https://github.com/Phaengris/chaban/compare/v1.7.1...v1.8.0
+[1.7.1]: https://github.com/Phaengris/chaban/compare/v1.7.0...v1.7.1
+[1.7.0]: https://github.com/Phaengris/chaban/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/Phaengris/chaban/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/Phaengris/chaban/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/Phaengris/chaban/compare/v1.3.6...v1.4.0
+[1.3.6]: https://github.com/Phaengris/chaban/compare/v1.3.5...v1.3.6
+[1.3.5]: https://github.com/Phaengris/chaban/compare/v1.3.4...v1.3.5
+[1.3.4]: https://github.com/Phaengris/chaban/compare/v1.3.3...v1.3.4
+[1.3.3]: https://github.com/Phaengris/chaban/compare/v1.3.2...v1.3.3
+[1.3.2]: https://github.com/Phaengris/chaban/compare/v1.3.1...v1.3.2
+[1.3.1]: https://github.com/Phaengris/chaban/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/Phaengris/chaban/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/Phaengris/chaban/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/Phaengris/chaban/compare/v1.0.2...v1.1.0
+[1.0.2]: https://github.com/Phaengris/chaban/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/Phaengris/chaban/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/Phaengris/chaban/releases/tag/v1.0.0
