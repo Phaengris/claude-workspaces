@@ -3,8 +3,8 @@ package alloc_test
 import (
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
 )
 
 func TestNextIndexFillsGaps(t *testing.T) {
@@ -31,7 +31,7 @@ func TestNextIndexFillsGaps(t *testing.T) {
 	}
 }
 
-// TestBlock pins the allocation arithmetic ComputeValues and `workspace ports`
+// TestBlock pins the allocation arithmetic ComputeValues and `chaban ports`
 // share: the block is inclusive, and a workspace's index — not its position in
 // any listing — decides where its block starts.
 func TestBlock(t *testing.T) {

@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/ui"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/ui"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
-// newEnvCmd builds `workspace env <workspace> [project]`: the environment a
+// newEnvCmd builds `chaban env <workspace> [project]`: the environment a
 // command would actually run with, as sorted K=V lines.
 //
 // The semantic this command exists to make visible (spec §4): runtime tokens —
@@ -20,7 +20,7 @@ import (
 // INPUTS, not environment variables. They appear inside values (DB_NAME=app_A-1_dev)
 // and never as keys of their own. What gets exported is exactly cfg.Env overlaid
 // with the project's env, nothing more; a caller that wants the numbers
-// themselves asks `workspace ports`.
+// themselves asks `chaban ports`.
 //
 // Project omitted → global env only, so ${PROJECT} has no value to substitute
 // and passes through untouched (unknown tokens always do).

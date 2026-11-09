@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/ui"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/ui"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // portRange is one value's block for one workspace, inclusive on both ends.
@@ -19,7 +19,7 @@ type portRange struct {
 	Last  int `json:"last"`
 }
 
-// newPortsCmd builds `workspace ports`: the allocated value blocks across every
+// newPortsCmd builds `chaban ports`: the allocated value blocks across every
 // workspace — value name × workspace, both sorted. The numbers come from
 // alloc.Block (the same arithmetic that produces the runtime PORT0…PORTn), NOT
 // from parsing alloc.ComputeValues' strings: a block is a first/last pair here,

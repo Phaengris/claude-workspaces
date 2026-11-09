@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // daemonConfig is a config whose projects declare daemons, so the target
@@ -228,7 +228,7 @@ func lastBytes(s string, n int) string {
 	return "…" + s[len(s)-n:]
 }
 
-// TestFollowLogs pins -f at the unit level, deliberately: `workspace logs -f`
+// TestFollowLogs pins -f at the unit level, deliberately: `chaban logs -f`
 // runs until interrupted, and a txtar script that backgrounds it has to guess
 // how long to wait before killing it — a timing race in the suite. followLogs
 // takes its poll interval and its stop channel as parameters precisely so the

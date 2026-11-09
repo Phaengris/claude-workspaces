@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/envx"
+	"github.com/Phaengris/chaban/v2/internal/envx"
 )
 
 func TestSanitizePATH(t *testing.T) {

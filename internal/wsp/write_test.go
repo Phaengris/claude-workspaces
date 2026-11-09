@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // update regenerates the golden files instead of comparing against them:
@@ -99,8 +99,8 @@ func TestWriteWorkspaceMDGolden(t *testing.T) {
 		"PORT0=5002", "PORT1=5003", // values, sorted
 		"branch: T-1",                                        // per-project branch
 		"Ask before touching the schema.",                    // instructions verbatim
-		"`workspace up T-1_add-widgets <daemon>`",            // services block names the workspace itself
-		"`workspace logs T-1_add-widgets <daemon>`",          //   ditto, for logs
+		"`chaban up T-1_add-widgets <daemon>`",               // services block names the workspace itself
+		"`chaban logs T-1_add-widgets <daemon>`",             //   ditto, for logs
 		"- rails — app server — UI at http://localhost:5002", // description, ${PORT0} substituted
 		"- worker", // description-less daemon, name only
 	} {
@@ -235,7 +235,7 @@ func TestEnsureClaudeMDSeedsNoToolOwnedConventions(t *testing.T) {
 
 // A multi-line description must not smuggle a heading into the frame:
 // recordedStatus ends the rendered section at the next ## line, so an
-// unflattened "\n## x" in About would truncate `workspace status` output for
+// unflattened "\n## x" in About would truncate `chaban status` output for
 // the life of the workspace. MUTATION-CHECKED: dropping the flattening fails
 // this.
 func TestEnsureClaudeMDFlattensDescription(t *testing.T) {

@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // defaultLogLines is how much history `logs` prints without -n: the decided
@@ -25,7 +25,7 @@ const defaultLogLines = 50
 // log tail has no latency requirement worth a platform-specific watcher.
 const followInterval = 500 * time.Millisecond
 
-// newLogsCmd builds `workspace logs <workspace> <daemon> [-n N] [-f]`: print
+// newLogsCmd builds `chaban logs <workspace> <daemon> [-n N] [-f]`: print
 // one daemon's stdout log, optionally streaming what comes next.
 //
 // The target must designate EXACTLY ONE daemon — a bare daemon name unique

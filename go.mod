@@ -1,4 +1,4 @@
-module github.com/Phaengris/claude-workspaces
+module github.com/Phaengris/chaban/v2
 
 go 1.26.0
 

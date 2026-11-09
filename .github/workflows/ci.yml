@@ -1,4 +1,4 @@
-# CI for claude-workspaces.
+# CI for chaban.
 #
 # Linux carries the full suite: the tests spawn real processes and real git
 # repos, and daemon liveness is verified against /proc/<pid>/stat — which is

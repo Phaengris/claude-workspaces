@@ -1,6 +1,6 @@
 # launch: the one-shot — create (or reuse) + checkout + claude session. Daemons
 # are lazy (spec 2026-08-11): launch does not start them, on either the create
-# or the reuse path — `workspace up` is the explicit start.
+# or the reuse path — `chaban up` is the explicit start.
 #
 # The `claude` on PATH is a shim that prints its argv and cwd and APPENDS a line
 # to $CLAUDE_SHIM_LOG — PATH discipline (it is prepended first, so a real claude
@@ -13,7 +13,7 @@
 #
 # Daemon lifetime discipline (as up.txtar): the one daemon this script starts
 # (via an explicit `up`, at the end) is `sleep 30` and the script ends with
-# `workspace down` for the workspace it started it in.
+# `chaban down` for the workspace it started it in.
 #
 # `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
 # (hermetic git env + root at $WORK/root; WORKROOT template substitution).
@@ -47,12 +47,12 @@ env CLAUDE_SHIM_LOG=$WORK/claude.log
 # session ran LAST, in the workspace dir, with the decided injection (no
 # --continue: this dir has no history under our fixture HOME). Daemons are
 # lazy: nothing starts, and the pids dir does not even exist yet.
-exec workspace launch T-1 'fix thing' app
+exec chaban launch T-1 'fix thing' app
 stdout '  app: checking out \(branch T-1_fix-thing\)… ok \(\d+\.\d+s\)'
 stdout '  app: setup: true… ok \(\d+\.\d+s\)'
 stdout 'workspace T-1_fix-thing created \(index 0\)'
-stdout 'tip: in another terminal: workspace cd T-1 — work alongside this session'
-! stdout 'hint: workspace cd'
+stdout 'tip: in another terminal: chaban cd T-1 — work alongside this session'
+! stdout 'hint: chaban cd'
 ! stdout 'started'
 stdout 'argv: --dangerously-skip-permissions$'
 stdout 'cwd: '$WORK'/root/T-1_fix-thing$'
@@ -66,9 +66,9 @@ grep -count=1 'invoked' $WORK/claude.log
 # The workspace is found by task id, so nothing is created and nothing is
 # re-allocated; reuse no longer converges daemons either, so claude just runs
 # again.
-exec workspace launch T-1
+exec chaban launch T-1
 ! stdout 'tip: in another terminal'
-! stdout 'hint: workspace cd'
+! stdout 'hint: chaban cd'
 stdout 'using existing workspace T-1_fix-thing'
 ! stdout 'created'
 ! stdout 'started'
@@ -77,7 +77,7 @@ stdout 'argv: --dangerously-skip-permissions$'
 grep -count=2 'invoked' $WORK/claude.log
 
 # One row in ls, one entry in the registry: the reuse path allocated nothing.
-exec workspace ls
+exec chaban ls
 stdout -count=1 'T-1_fix-thing'
 ! stdout '#1'
 
@@ -86,12 +86,12 @@ stdout -count=1 'T-1_fix-thing'
 # description slot, and an ordinary description handed to an existing workspace
 # is ignored SILENTLY — the `using existing workspace` line is the notice, and
 # no `note:` line appears.
-exec workspace launch T-1 'some other words'
+exec chaban launch T-1 'some other words'
 stdout 'using existing workspace T-1_fix-thing'
 ! stdout 'created'
 ! stdout 'note:'
 ! exists $WORK/root/T-1_some-other-words
-exec workspace ls
+exec chaban ls
 stdout -count=1 'T-1_fix-thing'
 ! stdout '#1'
 
@@ -101,7 +101,7 @@ stdout -count=1 'T-1_fix-thing'
 # still reused and the session still runs — but a note says the word landed in
 # the description slot, and the project is NOT checked out (bad's setup is
 # `false`, so checking it out would also have failed the command outright).
-exec workspace launch T-1 bad
+exec chaban launch T-1 bad
 stdout 'using existing workspace T-1_fix-thing'
 stdout 'note: "bad" is in the description slot and was ignored'
 stdout 'or use checkout'
@@ -110,7 +110,7 @@ stdout 'or use checkout'
 # --- reuse + an extra project: checked out -------------------------------------
 # api is listed after the (ignored) description, so the reuse path checks it out
 # through the same ensure loop `checkout` uses.
-exec workspace launch T-1 'fix thing' api
+exec chaban launch T-1 'fix thing' api
 stdout 'using existing workspace T-1_fix-thing'
 stdout '  api: checking out \(branch T-1_fix-thing\)… ok \(\d+\.\d+s\)'
 exists $WORK/root/T-1_fix-thing/api/README
@@ -121,7 +121,7 @@ grep '### api' $WORK/root/T-1_fix-thing/WORKSPACE.md
 # -S is OURS (before the separator): it suppresses the skip-permissions
 # injection. Everything after `--` is claude's, verbatim — including a token
 # spelled like our own flag.
-exec workspace launch T-1 -S -- -S --model opus
+exec chaban launch T-1 -S -- -S --model opus
 stdout 'using existing workspace T-1_fix-thing'
 stdout 'argv: -S --model opus$'
 ! stdout 'dangerously'
@@ -130,7 +130,7 @@ stdout 'argv: -S --model opus$'
 # Exit 2 is pinned in TestLaunchExitCodes; here: the refusal names the missing
 # description, no dir and no allocation appear, and claude never runs.
 env CLAUDE_SHIM_LOG=$WORK/no-claude-usage.log
-! exec workspace launch T-9
+! exec chaban launch T-9
 stderr 'description'
 ! exists $WORK/root/T-9
 ! grep 'T-9' $WORK/root/.allocations.json
@@ -142,7 +142,7 @@ stderr 'description'
 # "api", with api NOT checked out. The grammar still does not bend — the word IS
 # the description — but the note makes the reading explicit.
 env CLAUDE_SHIM_LOG=$WORK/claude-create-note.log
-exec workspace launch T-9 api
+exec chaban launch T-9 api
 stdout 'workspace T-9_api created'
 stdout 'note: "api" is in the description slot'
 stdout 'or use checkout'
@@ -153,7 +153,7 @@ stdout 'nothing checked out'
 # bad's setup is `false`, so `new`'s transaction undoes itself: no dir, no
 # allocation — and claude is NOT launched onto a broken environment.
 env CLAUDE_SHIM_LOG=$WORK/no-claude-create.log
-! exec workspace launch T-3 'broken' bad
+! exec chaban launch T-3 'broken' bad
 stdout '  bad: checking out \(branch T-3_broken\)… ok \(\d+\.\d+s\)'
 stdout '  bad: setup: false… failed'
 stderr 'project "bad"'
@@ -163,18 +163,18 @@ stderr 'project "bad"'
 
 # --- no up phase: a project whose start would fail launches fine --------------
 # flaky's run-and-wait is `false`; with launch lazy it never runs — the session
-# starts, and the failure is deferred to an explicit `workspace up`.
+# starts, and the failure is deferred to an explicit `chaban up`.
 env CLAUDE_SHIM_LOG=$WORK/claude-flaky.log
-exec workspace launch T-1 'fix thing' flaky
+exec chaban launch T-1 'fix thing' flaky
 exists $WORK/root/T-1_fix-thing/flaky/README
 grep -count=1 'invoked' $WORK/claude-flaky.log
-! exec workspace up T-1 flaky
+! exec chaban up T-1 flaky
 stderr 'project "flaky"'
 
 # --- daemons start only when asked ---------------------------------------
-exec workspace up T-1 app
+exec chaban up T-1 app
 stdout 'started app:sleeper \(pid \d+\)'
-exec workspace down T-1
+exec chaban down T-1
 stdout 'stopped app:sleeper \(TERM\)'
 
 -- config.tmpl --

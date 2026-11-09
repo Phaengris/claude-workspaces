@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/proc"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // doctorStdout runs the CLI capturing stdout, for the doctor contracts that are
@@ -61,7 +61,7 @@ func livePidRecord(t *testing.T) string {
 // daemon is the healthy state, so a workspace full of them still reports
 // `no findings` (and exits 0). A live record under a key the config no longer
 // names is still not a finding, but it IS noted on the count line: it is the
-// one thing about it a user can act on (they cannot `workspace down` it by
+// one thing about it a user can act on (they cannot `chaban down` it by
 // name), and doctor reports rather than fixes.
 //
 // Needs a real live process, which is why this is a Go test and not a txtar

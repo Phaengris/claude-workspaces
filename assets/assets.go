@@ -1,6 +1,6 @@
-// Package assets carries the files `workspace install` writes to disk — the
+// Package assets carries the files `chaban install` writes to disk — the
 // Claude Code skill, the SessionStart hook, the shell wrappers and the config
-// stub — compiled into the binary. An installed `workspace` therefore never
+// stub — compiled into the binary. An installed `chaban` therefore never
 // references the repository it was built from (spec §9): copying the binary
 // somewhere copies its assets with it.
 //
@@ -21,7 +21,7 @@ import (
 // accessor and a test — rather than something the binary silently starts
 // carrying.
 //
-//go:embed skill/SKILL.md hooks/session-start.sh shell/workspace.fish shell/workspace.bash config_stub.yml
+//go:embed skill/SKILL.md hooks/session-start.sh shell/chaban.fish shell/chaban.bash config_stub.yml
 var files embed.FS
 
 // FS returns the embedded asset tree, rooted at the assets directory (so

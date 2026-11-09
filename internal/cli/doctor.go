@@ -15,11 +15,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/proc"
-	"github.com/Phaengris/claude-workspaces/internal/ui"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/ui"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // Observation kinds — the machine handle a --json consumer branches on, and
@@ -44,12 +44,12 @@ const (
 	kindUnregisteredDir       = "unregistered_dir"
 )
 
-// gcHint closes every finding `workspace gc` is the fix for. doctor reports and
+// gcHint closes every finding `chaban gc` is the fix for. doctor reports and
 // gc/down fix (the decided doctor row), so the actionable findings all end with
 // the SAME trailing hint — the position is invariant across classes, which is
 // what makes the human output greppable and keeps a reader from having to know
 // which command handles which class.
-const gcHint = "(run: workspace gc)"
+const gcHint = "(run: chaban gc)"
 
 // doctorEntry is one observation as --json renders it.
 //
@@ -96,7 +96,7 @@ type doctorObs struct {
 	note      bool
 }
 
-// newDoctorCmd builds `workspace doctor`: the read-only health report for a
+// newDoctorCmd builds `chaban doctor`: the read-only health report for a
 // whole root (spec §2). It CHECKS and it never fixes — `gc` collects stale
 // records, `down` stops daemons — so findings are not failures: the command
 // exits 0 no matter how many it prints. Only the two pre-existing failure modes
@@ -133,7 +133,7 @@ type doctorObs struct {
 //     Liveness row gc applies). A key the config cannot name is noted, never
 //     hidden: for a dead record as a suffix on its line, for live ones as a
 //     count on the workspace's note — a live daemon under an unlisted key cannot
-//     be addressed by `workspace down <key>`, which is the one thing about it a
+//     be addressed by `chaban down <key>`, which is the one thing about it a
 //     user needs to know.
 //
 // Summary: `doctor: N finding(s)` counting the findings only, or `doctor: no
@@ -232,7 +232,7 @@ func doctorObserve(root string, cfg *config.Config, reg alloc.Registry) []doctor
 	for _, u := range unregisteredDirs(root, reg) {
 		if u.Status == "released" {
 			note(kindUnregisteredDir, "", fmt.Sprintf(
-				"note: dir %s is not in the registry (released workspace — workspace adopt to reuse, or delete it)", u.Name))
+				"note: dir %s is not in the registry (released workspace — chaban adopt to reuse, or delete it)", u.Name))
 			continue
 		}
 		note(kindUnregisteredDir, "", fmt.Sprintf(

@@ -11,7 +11,7 @@ env GIT_AUTHOR_NAME=t
 env GIT_AUTHOR_EMAIL=t@t
 env GIT_COMMITTER_NAME=t
 env GIT_COMMITTER_EMAIL=t@t
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+env CHABAN_ROOT_DIR=$WORK/root
 
 # The registry keys on ABSOLUTE workspace dirs, and txtar file bodies are
 # extracted verbatim (no env expansion), so the registry is shipped as a
@@ -34,7 +34,7 @@ exec git -C $WORK/root/B-7_y/app commit -m init
 # One row per workspace, sorted by name, index prefixed with '#'. B-7_y is an
 # ADOPTED workspace, so its description cell carries the `(adopted)` marker —
 # the human counterpart of the `"adopted": true` field asserted below.
-exec workspace ls
+exec chaban ls
 stdout '^WORKSPACE +INDEX +NOTE$'
 stdout '^A-1_x +#0 *$'
 stdout '^B-7_y +#2 +\(adopted\)$'
@@ -53,25 +53,25 @@ mkdir $WORK/root/C-3_to-be-archived/.workspace
 mkdir $WORK/root/stray-dir
 # names clip at 60 runes with a visible ellipsis (the task-id prefix survives)
 mkdir $WORK/root/stray-very-long-name-padding-padding-padding-padding-padding-padding
-exec workspace ls
+exec chaban ls
 ! stdout 'C-3'
 ! stdout 'stray-dir'
-exec workspace ls -a
-stdout '^C-3_to-be-archived +- +\(released — workspace adopt to reuse\)$'
+exec chaban ls -a
+stdout '^C-3_to-be-archived +- +\(released — chaban adopt to reuse\)$'
 stdout '^stray-dir +- +\(unmanaged\)$'
 stdout '^stray-very-long-name-padding-padding-padding-padding-paddin… +- +\(unmanaged\)$'
 stdout '(?s)A-1_x.*B-7_y.*C-3_to-be-archived.*stray-dir'
-exec workspace ls -a --json
+exec chaban ls -a --json
 stdout '"status": "released"'
 stdout '"status": "unmanaged"'
 stdout '"task_id": "C-3"'
-exec workspace ls --json
+exec chaban ls --json
 ! stdout '"status"'
 
 # doctor notes every unregistered dir (uncounted — nothing is broken), so the
 # state is discoverable without knowing -a.
-exec workspace doctor
-stdout 'note: dir C-3_to-be-archived is not in the registry \(released workspace — workspace adopt to reuse, or delete it\)'
+exec chaban doctor
+stdout 'note: dir C-3_to-be-archived is not in the registry \(released workspace — chaban adopt to reuse, or delete it\)'
 stdout 'note: dir stray-dir is not in the registry \(not a workspace\)'
 # The count pins that the notes are UNCOUNTED: this fixture's fake /tmp repos
 # are 2 real findings, and the two unregistered-dir notes must not join them.
@@ -82,14 +82,14 @@ exec rm -r $WORK/root/C-3_to-be-archived $WORK/root/stray-dir $WORK/root/stray-v
 
 # -g appends one cell per CHECKED-OUT project: project@branch, '*' when dirty.
 # `lib` is configured but checked out nowhere, so it never appears.
-exec workspace ls -g
+exec chaban ls -g
 stdout '^WORKSPACE +INDEX +NOTE +PROJECTS$'
 stdout '^A-1_x +#0 +app@main$'
 stdout '^B-7_y +#2 +\(adopted\) +app@main\*$'
 ! stdout 'lib'
 
 # --json is an array sorted by name; no `projects` key without -g.
-exec workspace ls --json
+exec chaban ls --json
 stdout '"name": "A-1_x"'
 stdout '"task_id": "B-7"'
 stdout '"index": 2'
@@ -100,7 +100,7 @@ stdout '(?s)"name": "A-1_x".*"name": "B-7_y"'
 ! stdout '"projects"'
 
 # -g --json adds the per-project array with branch and dirty flags.
-exec workspace ls -g --json
+exec chaban ls -g --json
 stdout '"projects"'
 stdout '"branch": "main"'
 stdout '"dirty": false'
@@ -109,12 +109,12 @@ stdout '"dirty": true'
 
 # --- ports ----------------------------------------------------------------
 # VALUE  WORKSPACE  FIRST-LAST, derived from start + index*per_workspace.
-exec workspace ports
+exec chaban ports
 stdout '^PORT +A-1_x +5000-5009$'
 stdout '^PORT +B-7_y +5020-5029$'
 stdout '(?s)A-1_x.*B-7_y'
 
-exec workspace ports --json
+exec chaban ports --json
 stdout '"PORT"'
 stdout '"A-1_x"'
 stdout '"first": 5000'
@@ -125,36 +125,36 @@ stdout '"last": 5029'
 # --- empty registry -------------------------------------------------------
 # A root with a valid config and no allocations is not an error: both commands
 # say so on stdout and exit 0. --json stays machine-parseable (empty container).
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/empty
-exec workspace ls
+env CHABAN_ROOT_DIR=$WORK/empty
+exec chaban ls
 stdout '^no workspaces$'
-exec workspace ports
+exec chaban ports
 stdout '^no workspaces$'
-exec workspace ls --json
+exec chaban ls --json
 stdout '^\[\]$'
-exec workspace ports --json
+exec chaban ports --json
 stdout '^\{\}$'
 
 # --- error paths ----------------------------------------------------------
 # Missing config.yml → config error (exit 4, pinned in Go by TestQueryExitCodes).
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/no-config
+env CHABAN_ROOT_DIR=$WORK/no-config
 mkdir $WORK/no-config
-! exec workspace ls
+! exec chaban ls
 stderr 'config.yml'
-! exec workspace ports
+! exec chaban ports
 stderr 'config.yml'
 
 # Unreadable registry → plain error naming the registry (exit 1).
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/broken
-! exec workspace ls
+env CHABAN_ROOT_DIR=$WORK/broken
+! exec chaban ls
 stderr 'registry'
-! exec workspace ports
+! exec chaban ports
 stderr 'registry'
 
 # Extra positional args are a usage error on both commands.
-! exec workspace ls extra
+! exec chaban ls extra
 stderr 'unknown command'
-! exec workspace ports extra
+! exec chaban ports extra
 stderr 'unknown command'
 
 # --- git is scoped to -g --------------------------------------------------
@@ -163,22 +163,22 @@ stderr 'unknown command'
 # subprocesses outside the bounded stats walk, for output that shows none of it.
 # A logging `git` shim PREPENDED to PATH makes that observable — no log file
 # after plain ls, a log file after -g. (The rest of PATH must stay: testscript
-# resolves the `workspace` command itself through it. This block runs last, so
+# resolves the `chaban` command itself through it. This block runs last, so
 # the shim shadows real git for everything that follows.)
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+env CHABAN_ROOT_DIR=$WORK/root
 chmod 0777 $WORK/shim/git
 env PATH=$WORK/shim:$PATH
-exec workspace ls
+exec chaban ls
 stdout '^A-1_x +#0 *$'
 ! exists $WORK/git-calls
-exec workspace ls --json
+exec chaban ls --json
 stdout '"task_id": "A-1"'
 ! exists $WORK/git-calls
-exec workspace ports
+exec chaban ports
 stdout '^PORT +A-1_x +5000-5009$'
 ! exists $WORK/git-calls
 # -g does reach for git — and degrades (no branch cells) when it fails.
-exec workspace ls -g
+exec chaban ls -g
 exists $WORK/git-calls
 stdout '^A-1_x +#0 *$'
 ! stdout 'app@'

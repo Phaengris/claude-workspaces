@@ -10,13 +10,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/gitx"
-	"github.com/Phaengris/claude-workspaces/internal/proc"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
-// newDownCmd builds `workspace down <workspace> [target…]` (alias `stop`):
+// newDownCmd builds `chaban down <workspace> [target…]` (alias `stop`):
 // converge the targeted daemons to stopped — the mirror of `up`, walked
 // BACKWARDS (the decided Order row): projects in reverse topological order,
 // and within each project its daemons in reverse listed order, so dependents

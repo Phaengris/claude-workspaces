@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/proc"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // daemonCfg is the fixture the daemon/target tests share. Two deliberate

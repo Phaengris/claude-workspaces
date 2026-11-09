@@ -9,12 +9,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
-// newTryCmd builds `workspace try <description words…> [-S] [-R] [-- claude
+// newTryCmd builds `chaban try <description words…> [-S] [-R] [-- claude
 // args…]`: one command to a thinking room. It is launch's create path minus
 // the ceremony — no projects, and the task id is generated (`TRY-<n>`) — for
 // the draft/discussion that precedes real work (the "legitimate place to
@@ -44,7 +44,7 @@ func newTryCmd() *cobra.Command {
 			"discuss or draft before real work — and open a Claude Code session in it.\n\n" +
 			"The task id is generated (TRY-<n>); the description is required and is " +
 			"all the words you type (no quotes needed). Graduate the draft later with " +
-			"`workspace checkout`, or `workspace destroy` it.",
+			"`chaban checkout`, or `chaban destroy` it.",
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
@@ -54,7 +54,7 @@ func newTryCmd() *cobra.Command {
 			skipPerms, noResume, words := extractSessionFlags(pre)
 			if len(words) == 0 {
 				return xerr.Wrap(xerr.ErrUsage, errors.New(
-					"a description is required — it is how you will recall the draft: workspace try <description words...>"))
+					"a description is required — it is how you will recall the draft: chaban try <description words...>"))
 			}
 
 			root, cfg, reg, err := loadRootDir()
@@ -66,7 +66,7 @@ func newTryCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "tip: in another terminal: workspace cd %s — work alongside this session\n", ws.Alloc.TaskID)
+			fmt.Fprintf(out, "tip: in another terminal: chaban cd %s — work alongside this session\n", ws.Alloc.TaskID)
 			return runClaudeSession(cfg, ws, skipPerms, noResume, claudeArgs)
 		},
 	}

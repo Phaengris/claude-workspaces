@@ -7,21 +7,21 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // Shell completions (spec §2). Two halves:
 //
-//   - The SCRIPTS come from cobra: `workspace completion bash|zsh|fish` is
+//   - The SCRIPTS come from cobra: `chaban completion bash|zsh|fish` is
 //     cobra's own generated subcommand, deliberately kept rather than
 //     hand-rolled — the scripts are the client side of cobra's `__complete`
 //     protocol and hand-maintaining them would mean re-deriving that protocol
 //     on every cobra upgrade. Nothing in this file registers the command; it
 //     exists because the tree has subcommands and completion is not disabled.
 //     M5's installer writes the generated fish script to fish's
-//     `completions/` directory; `functions/workspace.fish` is the cd WRAPPER
+//     `completions/` directory; `functions/chaban.fish` is the cd WRAPPER
 //     and must not be overwritten with a completion script.
 //
 //   - The dynamic SUGGESTIONS live here: one ValidArgsFunction per command,
@@ -112,7 +112,7 @@ func wireCompletions(root *cobra.Command) {
 
 // completeNothing suggests nothing and suppresses file completion. It is the
 // deliberate answer for the commands that take no positionals — the shell
-// offering file names after `workspace ls` would be pure noise.
+// offering file names after `chaban ls` would be pure noise.
 func completeNothing(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }

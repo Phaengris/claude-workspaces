@@ -1,20 +1,20 @@
-# claude-workspaces shell wrapper (fish).
+# chaban shell wrapper (fish).
 #
-# `workspace cd <ws> [project]` PRINTS a directory — a child process cannot
+# `chaban cd <ws> [project]` PRINTS a directory — a child process cannot
 # change its parent shell's working directory, so this function performs the
 # chdir with the path the binary resolved. Every other subcommand is handed
 # straight to the binary.
 #
-# `command workspace` is what makes that safe: it bypasses this function, so
+# `command chaban` is what makes that safe: it bypasses this function, so
 # the wrapper cannot recurse into itself, and the binary keeps the terminal,
 # stdin/stdout and its exit code (2 usage, 3 not found, 4 config — callers
 # script against those).
 #
-# Installed by `workspace install` to
-#   ~/.config/fish/functions/workspace.fish
+# Installed by `chaban install` to
+#   ~/.config/fish/functions/chaban.fish
 # where fish autoloads it on first use; no sourcing and no shell restart.
 
-function workspace --description 'claude-workspaces (with a working `cd`)'
+function chaban --description 'chaban (with a working `cd`)'
     if test (count $argv) -gt 0; and test "$argv[1]" = cd
         # `cd --help` prints a help page, not a path. `--json` is accepted and
         # deliberately ignored by `cd` today (a lone absolute path already IS
@@ -24,7 +24,7 @@ function workspace --description 'claude-workspaces (with a working `cd`)'
         for arg in $argv
             switch $arg
                 case --json --help -h
-                    command workspace $argv
+                    command chaban $argv
                     return $status
             end
         end
@@ -33,7 +33,7 @@ function workspace --description 'claude-workspaces (with a working `cd`)'
         # code intact. (`set` reports the command substitution's status —
         # fish 3.4+. On an older fish the status would be lost, but then `dir`
         # is empty and the guard below still refuses to move.)
-        set -l dir (command workspace $argv)
+        set -l dir (command chaban $argv)
         set -l rc $status
         if test $rc -ne 0
             return $rc
@@ -44,5 +44,5 @@ function workspace --description 'claude-workspaces (with a working `cd`)'
         cd "$dir"
         return $status
     end
-    command workspace $argv
+    command chaban $argv
 end

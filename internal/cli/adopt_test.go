@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/proc"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // mkdirIn creates <parent>/<name> and returns it, for the adopt cases whose
@@ -236,7 +236,7 @@ func TestReleaseRefusesWhileDaemonsRun(t *testing.T) {
 	if err == nil {
 		t.Fatal("release with a running daemon succeeded; it must refuse")
 	}
-	for _, want := range []string{"A-1_x", "workspace down A-1_x"} {
+	for _, want := range []string{"A-1_x", "chaban down A-1_x"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}

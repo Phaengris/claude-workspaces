@@ -10,11 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/gitx"
-	"github.com/Phaengris/claude-workspaces/internal/ui"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/ui"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // gitStatWorkers bounds the concurrent `git` invocations behind `ls -g`
@@ -54,7 +54,7 @@ type lsEntry struct {
 	Projects    *[]lsProject `json:"projects,omitempty"`
 }
 
-// newLsCmd builds `workspace ls`: every workspace in the registry, one line
+// newLsCmd builds `chaban ls`: every workspace in the registry, one line
 // each, sorted by name. Config errors pass through unwrapped (Load already tags
 // them ErrConfig → exit 4); a registry that exists but cannot be read is a
 // plain error → exit 1.
@@ -172,7 +172,7 @@ func unregisteredRow(u lsUnregistered) []string {
 	if u.Status != "released" {
 		return []string{clipName(u.Name), "-", "(unmanaged)"}
 	}
-	return []string{clipName(u.Name), "-", "(released — workspace adopt to reuse)"}
+	return []string{clipName(u.Name), "-", "(released — chaban adopt to reuse)"}
 }
 
 // lsEntries derives the full listing once, for both renderings — the human

@@ -38,6 +38,13 @@ projects:
 func completionFixture(t *testing.T) string {
 	t.Helper()
 	root := fixtureRoot(t, map[string]string{"config.yml": completionConfig})
+	writeCompletionRegistry(t, root)
+	return root
+}
+
+// writeCompletionRegistry writes the two-workspace registry into root.
+func writeCompletionRegistry(t *testing.T, root string) {
+	t.Helper()
 	reg := `{"` + filepath.Join(root, "A-1_alpha") + `": {"index": 0, "task_id": "A-1", ` +
 		`"description": "alpha", "created_at": "2026-08-01T09:00:00Z", "adopted": false}, ` +
 		`"` + filepath.Join(root, "B-2_beta") + `": {"index": 1, "task_id": "B-2", ` +
@@ -45,7 +52,6 @@ func completionFixture(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(root, ".allocations.json"), []byte(reg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return root
 }
 
 // complete drives cobra's own completion protocol — the hidden `__complete`
@@ -231,15 +237,57 @@ func TestCompletionsSurviveBrokenRoot(t *testing.T) {
 	}
 }
 
+// homeWithRoot makes a temp HOME holding a VALID root (config plus
+// allocations) at HOME/dir, with both root variables unset. Such a root would
+// produce suggestions if it were resolved, which is what lets the guard tests
+// below fail when their guard is removed.
+func homeWithRoot(t *testing.T, dir string) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CHABAN_ROOT_DIR", "")
+	t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", "")
+	root := filepath.Join(home, dir)
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config.yml"), []byte(completionConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeCompletionRegistry(t, root)
+	return root
+}
+
+// TestCompletionsSurviveRootGuards pins that the legacy-variable guard in
+// config.RootDir stays silent for completion. The fixture holds a valid root
+// that WOULD complete if the guard did not fire (control case proves it).
+func TestCompletionsSurviveRootGuards(t *testing.T) {
+	t.Run("control: valid default root completes", func(t *testing.T) {
+		homeWithRoot(t, "workspaces")
+		got, _ := complete(t, "cd", "")
+		if len(got) == 0 {
+			t.Fatal("fixture is not discriminating: valid root gave no suggestions")
+		}
+	})
+	t.Run("legacy var set", func(t *testing.T) {
+		homeWithRoot(t, "workspaces")
+		t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", t.TempDir())
+		assertCompletions(t, []string{"cd", ""}, nil, cobra.ShellCompDirectiveNoFileComp)
+	})
+	// Guard 6 (legacy dir only) cannot be pinned here: without it the root
+	// resolves to the missing ~/workspaces, which completes to nothing too.
+	// TestRootGuardExitCode and TestRootDir pin it instead.
+}
+
 // TestCompletionScripts pins that the generated scripts exist and are the real
 // thing (cobra's generators, kept rather than hand-rolled). The sentinels are
 // the entry points each shell needs, so a truncated or wrong-shell script
 // fails here.
 func TestCompletionScripts(t *testing.T) {
 	cases := map[string]string{
-		"bash": "complete -o default -F __start_workspace workspace",
-		"zsh":  "#compdef workspace",
-		"fish": "function __workspace_perform_completion",
+		"bash": "complete -o default -F __start_chaban chaban",
+		"zsh":  "#compdef chaban",
+		"fish": "function __chaban_perform_completion",
 	}
 	for shell, sentinel := range cases {
 		t.Run(shell, func(t *testing.T) {

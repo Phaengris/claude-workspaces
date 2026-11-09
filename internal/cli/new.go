@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/gitx"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // undoStack collects compensating actions for `new`, the one transactional
@@ -69,7 +69,7 @@ func (u undoStack) run() error {
 	return errors.Join(errs...)
 }
 
-// newNewCmd builds `workspace new <task_id> <desc> [project…]`: the CLI shell
+// newNewCmd builds `chaban new <task_id> <desc> [project…]`: the CLI shell
 // around newWork (shared with `launch`, whose create path is this same
 // transaction). Argument shape and the config load live here; the contract
 // lives on newWork.
@@ -80,7 +80,7 @@ func newNewCmd() *cobra.Command {
 		// A task id plus a description; fewer is a usage error → exit 2 (spec §9).
 		Args: usageArgs(cobra.MinimumNArgs(2)),
 		// --json is inherited and deliberately unused: spec §2 scopes it to the
-		// query commands. Accepting and ignoring it keeps `workspace --json new
+		// query commands. Accepting and ignoring it keeps `chaban --json new
 		// T-1 desc` working for a caller that sets the flag globally, rather
 		// than failing on a command with no query result to serialize.
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -99,7 +99,7 @@ func newNewCmd() *cobra.Command {
 			if _, err = newWork(cmd, cfg, root, taskID, desc, args[2:]); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "hint: workspace cd %s\n", taskID)
+			fmt.Fprintf(cmd.OutOrStdout(), "hint: chaban cd %s\n", taskID)
 			return nil
 		},
 	}

@@ -14,12 +14,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
-// newClaudeCmd builds `workspace claude <workspace> [-S] [-R] [claude args…]`:
+// newClaudeCmd builds `chaban claude <workspace> [-S] [-R] [claude args…]`:
 // launch a Claude Code session in the workspace dir with the decided flag
 // injection (spec §8) — `--dangerously-skip-permissions` unless the user opted
 // out or took their own permission stance, `--continue` when a previous
@@ -36,7 +36,7 @@ import (
 //     answered here before resolving (it would otherwise be exit 3);
 //   - the root's persistent --json is inert AFTER the workspace name (it is
 //     claude's argument there, passed through). BEFORE it, any flag-looking
-//     token is a usage error: `workspace claude --json T-1` would otherwise
+//     token is a usage error: `chaban claude --json T-1` would otherwise
 //     resolve the workspace "--json" and fail exit 3 with a message about a
 //     missing workspace — see requireIdentFirst.
 //
@@ -83,7 +83,7 @@ func newClaudeCmd() *cobra.Command {
 // requireIdentFirst enforces the shared first-positional rule of the two
 // session commands: their identifier (workspace / task id) must come FIRST.
 // With DisableFlagParsing a leading flag-looking token would silently become
-// that identifier — `workspace claude --json T-1` resolving a workspace named
+// that identifier — `chaban claude --json T-1` resolving a workspace named
 // "--json" and failing exit 3 "no workspace matching" — so it is classified
 // here as what it is: a usage error (exit 2) that names the rule. The bare
 // help forms are answered by the callers BEFORE this check, since -h is the
@@ -91,7 +91,7 @@ func newClaudeCmd() *cobra.Command {
 func requireIdentFirst(cmdName, noun string, args []string) error {
 	if len(args) > 0 && strings.HasPrefix(args[0], "-") {
 		return xerr.Wrap(xerr.ErrUsage,
-			fmt.Errorf("workspace %s requires the %s as its first argument", cmdName, noun))
+			fmt.Errorf("chaban %s requires the %s as its first argument", cmdName, noun))
 	}
 	return nil
 }

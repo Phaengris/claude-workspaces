@@ -14,7 +14,7 @@
 #
 # Daemon lifetime discipline (Task 4's rule): every daemon is `sleep 30` —
 # self-expiring well before any timeout — and the script still ends with
-# `workspace down`. Only ONE of app's two daemons is ever started: the whole
+# `chaban down`. Only ONE of app's two daemons is ever started: the whole
 # point is that status distinguishes them.
 #
 # The logs half needs no daemon at all: a daemon must exist in CONFIG, and the
@@ -28,15 +28,15 @@ exec git -C $WORK/root/src/app init -b main
 exec git -C $WORK/root/src/app add README
 exec git -C $WORK/root/src/app commit -m init
 
-exec workspace new T-1 x
+exec chaban new T-1 x
 
 # --- status: one line per configured daemon of each CHECKED-OUT project ------
 # Starting app:sleeper alone checks app out (up's ensure chain) and leaves
 # app:other configured but stopped.
-exec workspace up T-1 app:sleeper
+exec chaban up T-1 app:sleeper
 stdout 'started app:sleeper \(pid \d+\)'
 
-exec workspace status T-1
+exec chaban status T-1
 stdout '^  app: checked out \(branch T-1_x\), setup current$'
 stdout '^    sleeper: running \(pid \d+\) — naps on port 5000$'
 stdout '^    other: stopped$'
@@ -52,7 +52,7 @@ stdout '^  lib: not checked out$'
 # --json: projects[] carries daemons:[{name, running, pid, description}] in
 # the same order. description is substituted, and omitted (omitempty) for a
 # daemon that configures none.
-exec workspace status T-1 --json
+exec chaban status T-1 --json
 stdout '(?s)"daemons": \[\s+\{\s+"name": "sleeper",\s+"running": true,\s+"pid": \d+,\s+"description": "naps on port 5000"'
 stdout '(?s)"name": "other",\s+"running": false,\s+"pid": 0\s+\}'
 ! stdout '"description": ""'
@@ -65,41 +65,41 @@ cp fixture.log $WORK/root/T-1_x/.workspace/logs/app:other.log
 
 # `cmp stdout` rather than `stdout <regexp>`: "exactly the last 2 lines" is a
 # statement about the WHOLE output, and a regexp match cannot say that.
-exec workspace logs T-1 other -n 2
+exec chaban logs T-1 other -n 2
 cmp stdout tail2.txt
 
 # Default is the last 50 lines, so a 5-line log prints whole and byte-identical.
-exec workspace logs T-1 other
+exec chaban logs T-1 other
 cmp stdout fixture.log
 
 # project:daemon addresses the same daemon.
-exec workspace logs T-1 app:other -n 1
+exec chaban logs T-1 app:other -n 1
 stdout '^line5$'
 ! stdout 'line4'
 
 # --- logs: a project target is a usage error naming the candidates -----------
 # (exit 2 pinned in TestLogsExitCodes; here the message is the contract.)
-! exec workspace logs T-1 app
+! exec chaban logs T-1 app
 stderr 'app:sleeper'
 stderr 'app:other'
 
 # --- logs: unknown daemon → not found (exit 3, pinned in Go) -----------------
-! exec workspace logs T-1 nope
+! exec chaban logs T-1 nope
 stderr 'no project or daemon named "nope"'
 
 # --- logs: configured daemon that never ran → note, exit 0 -------------------
-exec workspace logs T-1 liblet
+exec chaban logs T-1 liblet
 stdout '^no log yet for lib:liblet$'
 
 # --- cleanup: stop what this script started ---------------------------------
-exec workspace down T-1
+exec chaban down T-1
 stdout 'stopped app:sleeper \(TERM\)'
 stdout 'other already stopped'
 
 # And status now reports both daemons stopped — sleeper's description still
 # appended (stopped and running render it identically), other's line
 # byte-identical to before descriptions existed.
-exec workspace status T-1
+exec chaban status T-1
 stdout '^    sleeper: stopped — naps on port 5000$'
 stdout '^    other: stopped$'
 

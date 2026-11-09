@@ -10,14 +10,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/gitx"
-	"github.com/Phaengris/claude-workspaces/internal/proc"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/proc"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
-// newDestroyCmd builds `workspace destroy [--force] <workspace>`: stop every
+// newDestroyCmd builds `chaban destroy [--force] <workspace>`: stop every
 // daemon, run every checked-out project's teardown commands, then remove the
 // worktrees, the workspace dir, and the allocation — spec §2's
 // "down + teardown + remove + release". The phased work itself lives in
@@ -39,7 +39,7 @@ func newDestroyCmd() *cobra.Command {
 		// Exactly one identifier; anything else is a usage error → exit 2 (spec §9).
 		Args: usageArgs(cobra.ExactArgs(1)),
 		// --json is inherited and deliberately unused: spec §2 scopes it to the
-		// query commands. Accepting and ignoring it keeps `workspace --json
+		// query commands. Accepting and ignoring it keeps `chaban --json
 		// destroy X` working for a caller that sets the flag globally, rather
 		// than failing on a command with no query result to serialize.
 		RunE: func(cmd *cobra.Command, args []string) error {

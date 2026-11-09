@@ -35,7 +35,7 @@ func (e *ExitError) Error() string {
 
 // Exit returns an error that makes the process exit with code, verbatim.
 // Match it with errors.As and a *ExitError target — cli.Main does, to suppress its
-// "workspace:" stderr line for these (the child already owned the terminal;
+// "chaban:" stderr line for these (the child already owned the terminal;
 // the code itself is the message).
 func Exit(code int) error {
 	return &ExitError{Code: code}

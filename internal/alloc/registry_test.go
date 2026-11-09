@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
 )
 
 func TestLoadMissingFileIsEmptyRegistry(t *testing.T) {

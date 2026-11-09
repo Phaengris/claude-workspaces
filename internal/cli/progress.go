@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
 // projectStepper renders the ensure chain's progress for one project (spec

@@ -9,16 +9,16 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 
-	"github.com/Phaengris/claude-workspaces/internal/gitx"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
-// newExecCmd builds `workspace exec <workspace> [project] <command> [args…]`:
+// newExecCmd builds `chaban exec <workspace> [project] <command> [args…]`:
 // replace THIS process with the command, run inside the workspace under the
 // curated environment. True replacement (unix.Exec, i.e. execve), not a child:
 // the command's pid, signals, exit code and terminal are all first-class —
-// `workspace exec T-1 app psql` behaves exactly like running psql there.
+// `chaban exec T-1 app psql` behaves exactly like running psql there.
 //
 // The v1 env-poisoning bug is closed by construction: the ONLY environment the
 // syscall is handed is wsp.CommandEnv's curated slice (allowlisted parent vars
@@ -97,7 +97,7 @@ func newExecCmd() *cobra.Command {
 				// project IS configured), this workspace just does not
 				// contain it — a runtime condition, not a lookup failure.
 				if !gitx.IsWorkTreeRoot(dir) {
-					return fmt.Errorf("project %q is not checked out in %s (run: workspace checkout %s %s)",
+					return fmt.Errorf("project %q is not checked out in %s (run: chaban checkout %s %s)",
 						project, ws.Name(), ws.Name(), project)
 				}
 			}

@@ -1,10 +1,10 @@
-# claude-workspaces (`workspace`)
+# chaban
 
-[![CI](https://github.com/Phaengris/claude-workspaces/actions/workflows/ci.yml/badge.svg)](https://github.com/Phaengris/claude-workspaces/actions/workflows/ci.yml)
+[![CI](https://github.com/Phaengris/chaban/actions/workflows/ci.yml/badge.svg)](https://github.com/Phaengris/chaban/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-`workspace` runs several copies of your dev stack on one machine — one per
+`chaban` runs several copies of your dev stack on one machine — one per
 task — without containers.
 
 Each workspace gets:
@@ -27,6 +27,12 @@ lighter liveness checks.
 
 Details and reasoning live in [`docs/reference.md`](docs/reference.md); this
 file is the short version.
+
+---
+
+## Why "chaban"
+
+*Chaban* means shepherd. The word came from Persian *chupan* through Turkic *çoban*, and lives on in Russian and Ukrainian *чабан* and Romanian *cioban*. A shepherd keeps one flock where every animal has its own pen. chaban keeps your parallel Claude Code sessions the same way: each workspace gets its own worktree, ports and daemons. The tool was called claude-workspaces before v2.0.
 
 ---
 
@@ -63,28 +69,28 @@ inside environment separation.
 ## Install
 
 ```sh
-go install github.com/Phaengris/claude-workspaces/cmd/workspace@latest
-workspace install
+go install github.com/Phaengris/chaban/v2/cmd/chaban@latest
+chaban install
 ```
 
 (A go-install'd binary reports version `dev` — `go install` cannot apply
-`-ldflags`. To build from a checkout: `CGO_ENABLED=0 go build -o workspace
-./cmd/workspace`, plus `-ldflags "-X
-github.com/Phaengris/claude-workspaces/internal/cli.version=X.Y.Z"` if the
+`-ldflags`. To build from a checkout: `CGO_ENABLED=0 go build -o chaban
+./cmd/chaban`, plus `-ldflags "-X
+github.com/Phaengris/chaban/v2/internal/cli.version=X.Y.Z"` if the
 version matters. Prerequisites: a Go toolchain and `git`.)
 
-`workspace install` copies the running binary and writes:
+`chaban install` copies the running binary and writes:
 
 | Path | What |
 |---|---|
-| `~/.local/bin/workspace` | the binary |
-| `~/.config/fish/functions/workspace.fish` | fish `cd` wrapper (autoloaded) |
-| `~/.config/fish/completions/workspace.fish` | fish completions (autoloaded) |
-| `~/.local/share/workspace/shell/workspace.bash` | bash/zsh `cd` wrapper — *you* source it |
-| `~/.local/share/workspace/completions/…` | bash/zsh completions — *you* wire them |
-| `~/.claude/skills/claude-workspaces/SKILL.md` | the Claude Code skill |
-| `~/.local/share/workspace/hooks/session-start.sh` | the SessionStart hook |
-| `~/.local/share/workspace/install-manifest.json` | the uninstall contract |
+| `~/.local/bin/chaban` | the binary |
+| `~/.config/fish/functions/chaban.fish` | fish `cd` wrapper (autoloaded) |
+| `~/.config/fish/completions/chaban.fish` | fish completions (autoloaded) |
+| `~/.local/share/chaban/shell/chaban.bash` | bash/zsh `cd` wrapper — *you* source it |
+| `~/.local/share/chaban/completions/…` | bash/zsh completions — *you* wire them |
+| `~/.claude/skills/chaban/SKILL.md` | the Claude Code skill |
+| `~/.local/share/chaban/hooks/session-start.sh` | the SessionStart hook |
+| `~/.local/share/chaban/install-manifest.json` | the uninstall contract |
 | `<root>/config.yml` | a commented starter config, only if absent |
 | `<root>/` | the workspaces root, created if missing |
 
@@ -99,13 +105,13 @@ It prints what to add instead:
   workspace identity and status into every session that starts inside a
   workspace; it never mutates anything);
 - the shell lines for `~/.bashrc` / `~/.zshrc` (fish needs nothing). The
-  wrapper exists because `workspace cd` can only *print* a directory — a child
+  wrapper exists because `chaban cd` can only *print* a directory — a child
   process cannot chdir your shell.
 
 Make sure `~/.local/bin` is on your `PATH`. Re-installing *from* the
 installed binary is safe (the same-file case is detected).
 
-`workspace uninstall` removes exactly what the manifest lists — never the
+`chaban uninstall` removes exactly what the manifest lists — never the
 root, your config, or your workspaces — and tells you what it left behind,
 including the SessionStart entry in `settings.json` (not ours to remove,
 since it was not ours to add). A manifest entry pointing at `/`, `$HOME`, or
@@ -114,9 +120,56 @@ it prints `nothing installed` and exits 0.
 
 ---
 
+## Upgrading from claude-workspaces
+
+The command is now `chaban`, the default root is `~/workspaces`, and the
+root env var is `CHABAN_ROOT_DIR`. Two guards keep an old setup from
+breaking quietly; both exit 4 with the fix in the message. Details,
+including moving a root, are in
+[`docs/reference.md`](docs/reference.md#upgrading-from-claude-workspaces).
+In order:
+
+1. Uninstall with the old binary: `workspace uninstall`.
+2. Keep your old root. Set `CHABAN_ROOT_DIR` to it before installing, or
+   `chaban install` stops on the legacy-root guard. Use the value of
+   `CLAUDE_WORKSPACES_ROOT_DIR` if you had one, otherwise
+   `~/claude-workspaces`. Then unset the old variable.
+
+   ```sh
+   set -Ux CHABAN_ROOT_DIR ~/claude-workspaces     # fish
+   export CHABAN_ROOT_DIR=~/claude-workspaces      # bash/zsh, in your rc file
+   ```
+
+3. Install: `chaban install`.
+4. Replace the old entries. The old SessionStart hook in `settings.json`
+   points at a script the old uninstall deleted, and the old bash/zsh rc
+   lines source files that are gone. Remove both, then add the ones
+   `chaban install` prints. Fix any statusline command that calls `workspace`.
+5. Existing workspaces' `CLAUDE.md` files are written once, so they still say
+   `workspace status` in one seeded line. Preview which files carry it:
+
+   ```sh
+   grep -lx 'every substantial turn. The user reads it from outside via `workspace status`,' <root>/*/CLAUDE.md
+   ```
+
+   Then replace that exact line in those files. Nothing else is touched:
+
+   ```sh
+   sed -i.bak 's/^every substantial turn\. The user reads it from outside via `workspace status`,$/every substantial turn. The user reads it from outside via `chaban status`,/' <those files>
+   ```
+
+   The `.bak` copies stay until you delete them.
+6. Restart Claude sessions running inside workspaces. They still know the
+   old skill and command, and their env lacks `CHABAN_ROOT_DIR`.
+
+Each existing workspace's `WORKSPACE.md` says `` Generated by `workspace` ``
+until the next `chaban up` or `checkout` regenerates it.
+
+---
+
 ## Quick start
 
-The root is `~/claude-workspaces` (override: `CLAUDE_WORKSPACES_ROOT_DIR`;
+The root is `~/workspaces` (override: `CHABAN_ROOT_DIR`;
 each root is an independent universe). Describe a project in
 `<root>/config.yml`:
 
@@ -144,16 +197,16 @@ projects:
 Then:
 
 ```sh
-workspace doctor
-workspace new DEMO-1 "try the tool" demo
-workspace up DEMO-1
-workspace status DEMO-1
-workspace logs DEMO-1 web -n 20
-workspace cd DEMO-1
-workspace claude DEMO-1
-workspace down DEMO-1
+chaban doctor
+chaban new DEMO-1 "try the tool" demo
+chaban up DEMO-1
+chaban status DEMO-1
+chaban logs DEMO-1 web -n 20
+chaban cd DEMO-1
+chaban claude DEMO-1
+chaban down DEMO-1
 cd ~
-workspace destroy DEMO-1
+chaban destroy DEMO-1
 ```
 
 What happened: `new` allocated index 0 (so `PORT0..PORT9` = 5000..5009),
@@ -325,7 +378,7 @@ Read its *Limits* once; it will save you a confused hour.
 `start:` entries are run-and-waits (bare strings — migrations, preludes) or
 daemons (named — own process group, own logs, pid+starttime liveness that
 survives pid reuse). **Daemons are lazy**: nothing starts them until
-`workspace up`. Give them `description:`s — `status` shows those to every
+`chaban up`. Give them `description:`s — `status` shows those to every
 session, which is how a session knows what to start.
 
 `down` stops by group TERM with a KILL escalation and takes its no-target
@@ -353,7 +406,7 @@ This is the part built *for* running agent fleets:
   stores nothing, so a change reaches every workspace at once.
 - **The status note**: sessions maintain a `## Status` section in the
   workspace's `CLAUDE.md` (the tool writes that file once and never touches it
-  again). `workspace status` renders it, the hook delivers it — so both you
+  again). `chaban status` renders it, the hook delivers it — so both you
   and the next session re-enter a workspace in seconds, days later.
 - **Sessions inject sensible flags**: `--dangerously-skip-permissions` and
   `--continue` (when history exists), each suppressible.
@@ -382,17 +435,17 @@ The exact gates, `--force`'s narrow meaning, and doctor's checks:
 go test ./... -count=1      # table tests + testscript command flows
 gofmt -l .                  # must print nothing
 go vet ./...
-CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=$(git describe --tags --always)" -o workspace ./cmd/workspace
+CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/chaban/v2/internal/cli.version=$(git describe --tags --always)" -o chaban ./cmd/chaban
 ```
 
 Runtime dependencies: `spf13/cobra`, `goccy/go-yaml`, `golang.org/x/sys` (and
 cobra's `pflag`). Test-only: `rogpeppe/go-internal/testscript`.
 
-Layout: `cmd/workspace` is a thin main; `internal/cli` is the cobra tree, one
+Layout: `cmd/chaban` is a thin main; `internal/cli` is the cobra tree, one
 file per command; `config`, `alloc`, `wsp`, `proc` are the domain;
 `envx`/`gitx`/`ui`/`xerr` are leaves. Assets are `//go:embed`ed. Tests are
 table tests for pure logic plus `testscript` flows against real processes and
-real git repos, isolated per-test by `CLAUDE_WORKSPACES_ROOT_DIR`.
+real git repos, isolated per-test by `CHABAN_ROOT_DIR`.
 
 ---
 
@@ -422,6 +475,6 @@ real terminal.
 
 ---
 
-claude-workspaces is an independent open-source project (MIT), not affiliated
+chaban is an independent open-source project (MIT), not affiliated
 with, endorsed by or sponsored by Anthropic. Claude and Claude Code are
 trademarks of Anthropic.

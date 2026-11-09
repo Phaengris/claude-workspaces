@@ -1,29 +1,51 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
-// RootDir resolves the workspaces root: $CLAUDE_WORKSPACES_ROOT_DIR overrides
-// ~/claude-workspaces. Every root is an independent universe with its own
-// config and registry (spec §3). It errors only when the home directory
-// cannot be determined and no override is set.
+// RootDir resolves the workspaces root: $CHABAN_ROOT_DIR overrides ~/workspaces.
+// Every root is an independent universe with its own config and registry
+// (spec §3). It errors when the home directory cannot be determined and no
+// override is set, and on two upgrade guards (both ErrConfig, exit 4):
+//
+//   - CHABAN_ROOT_DIR unset but the old CLAUDE_WORKSPACES_ROOT_DIR set: the old
+//     name is no longer read, so silently ignoring it would point the tool at
+//     a different root than the user thinks.
+//   - No override, ~/workspaces missing, ~/claude-workspaces present: install
+//     creates a missing root and writes a config stub into it, so without this
+//     guard an upgraded user would silently get a fresh, empty root.
+//
+// A Stat error other than not-exist on ~/workspaces counts as "exists": doubt
+// reads as keep, so no guard fires and no new root is suggested.
 func RootDir() (string, error) {
-	if dir := os.Getenv("CLAUDE_WORKSPACES_ROOT_DIR"); dir != "" {
+	if dir := os.Getenv("CHABAN_ROOT_DIR"); dir != "" {
 		return dir, nil
+	}
+	if os.Getenv("CLAUDE_WORKSPACES_ROOT_DIR") != "" {
+		return "", xerr.Wrap(xerr.ErrConfig, errors.New("CLAUDE_WORKSPACES_ROOT_DIR is no longer read: rename it to CHABAN_ROOT_DIR"))
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolving home dir: %w", err)
 	}
-	return filepath.Join(home, "claude-workspaces"), nil
+	root := filepath.Join(home, "workspaces")
+	if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
+		legacy := filepath.Join(home, "claude-workspaces")
+		if _, lerr := os.Stat(legacy); lerr == nil {
+			return "", xerr.Wrap(xerr.ErrConfig, fmt.Errorf("%s exists, but the default root is now ~/workspaces: set CHABAN_ROOT_DIR=%s to keep using it", legacy, legacy))
+		}
+	}
+	return root, nil
 }
 
 // Load reads <root>/config.yml: raw unmarshal → template expansion → strict

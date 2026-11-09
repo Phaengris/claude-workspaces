@@ -10,8 +10,8 @@ package wsp
 import (
 	"strings"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
 )
 
 // Subst replaces ${K} for every key in vars. Unknown tokens pass through

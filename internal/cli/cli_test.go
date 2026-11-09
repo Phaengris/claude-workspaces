@@ -8,17 +8,17 @@ import (
 
 	"github.com/rogpeppe/go-internal/testscript"
 
-	"github.com/Phaengris/claude-workspaces/internal/cli"
+	"github.com/Phaengris/chaban/v2/internal/cli"
 )
 
-// TestMain installs "workspace" as a command available inside the txtar
+// TestMain installs "chaban" as a command available inside the txtar
 // scripts, running cli.Main in a subprocess of the test binary. testscript.Main
 // replaces the deprecated RunMain (go-internal v1.15: Go collects integration
 // coverage natively, so returning an exit code became pointless); the command
 // func returns no int, so cli.Main's code reaches the script via os.Exit.
 func TestMain(m *testing.M) {
 	testscript.Main(m, map[string]func(){
-		"workspace": func() { os.Exit(cli.Main()) },
+		"chaban": func() { os.Exit(cli.Main()) },
 	})
 }
 
@@ -53,7 +53,7 @@ func cmdWsenv(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Setenv("GIT_AUTHOR_EMAIL", "t@t")
 	ts.Setenv("GIT_COMMITTER_NAME", "t")
 	ts.Setenv("GIT_COMMITTER_EMAIL", "t@t")
-	ts.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", ts.Getenv("WORK")+"/root")
+	ts.Setenv("CHABAN_ROOT_DIR", ts.Getenv("WORK")+"/root")
 }
 
 // cmdIsExec asserts each file exists AND carries the owner-executable bit —

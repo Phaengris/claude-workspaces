@@ -1,10 +1,10 @@
-# claude-workspaces configuration — <root>/config.yml
+# chaban configuration — <root>/config.yml
 #
-# Written by `workspace install` only when this file does not exist, so your
+# Written by `chaban install` only when this file does not exist, so your
 # edits are never overwritten. There is no reload step: every command reads it.
 #
 # Decoded STRICTLY — an unknown or misspelled key is an error with a
-# line:column position. `workspace doctor` prints the full report.
+# line:column position. `chaban doctor` prints the full report.
 #
 # Live below: a PORT value block and an empty `projects:`. Everything else is
 # a commented example, so a fresh install loads cleanly and reports no
@@ -31,7 +31,7 @@
 # Per-workspace number blocks. A workspace with allocation index i gets
 #   NAME0 .. NAME<per_workspace-1>  =  start + i*per_workspace + n
 # so workspace #0 gets PORT0=5000..PORT9=5009, workspace #1 gets 5010..5019.
-# `workspace ports` shows the blocks in use.
+# `chaban ports` shows the blocks in use.
 values:
   PORT:
     start: 5000
@@ -117,7 +117,7 @@ projects: {}
 #       DATABASE_URL: postgres:///my_app_${WORKSPACE}
 #       PORT: ${PORT0}
 #     env_allow: [MY_APP_SECRET]
-#     browse_port: ${PORT0}     # `workspace browse` opens http://localhost:<it>
+#     browse_port: ${PORT0}     # `chaban browse` opens http://localhost:<it>
 #     # Copied into WORKSPACE.md, read at session start. Say what the app is.
 #     # Sessions start in the workspace root and don't load my-app/CLAUDE.md:
 #     instructions: |

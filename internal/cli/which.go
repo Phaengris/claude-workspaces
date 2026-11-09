@@ -9,10 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/ui"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/ui"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // whichEntry is `which --json`: the located workspace's identity, nothing
@@ -24,7 +24,7 @@ type whichEntry struct {
 	TaskID string `json:"task_id"`
 }
 
-// newWhichCmd builds `workspace which`: the workspace containing the current
+// newWhichCmd builds `chaban which`: the workspace containing the current
 // directory, by name. It is the inverse of `cd` — the shell wrapper and the
 // Claude skill use it to answer "where am I?" without the caller having to
 // parse a path.
@@ -59,7 +59,7 @@ func newWhichCmd() *cobra.Command {
 			ws, ok := workspaceAt(reg, cwd)
 			if !ok {
 				// ErrNotFound (exit 3), matching `status <unknown>`: a script can
-				// use `workspace which` as the test for "am I in a workspace?"
+				// use `chaban which` as the test for "am I in a workspace?"
 				// and distinguish that from a broken root (4) or a bad flag (2).
 				return xerr.Wrap(xerr.ErrNotFound, errors.New("not inside a workspace"))
 			}

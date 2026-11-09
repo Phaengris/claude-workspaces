@@ -17,7 +17,7 @@ mkdir $WORK/root/src/app-b
 workroot config.tmpl root/config.yml
 ! grep WORKROOT root/config.yml
 
-exec workspace doctor
+exec chaban doctor
 stdout '^config: OK$'
 stdout '^projects \(2\): app-a, app-b$'
 stdout '^values: PORT = 10 per workspace from 5000$'
@@ -28,7 +28,7 @@ stdout '^doctor: no findings$'
 # --json on a clean root: findings stays EMPTY (the note is uncounted); the
 # description-less-daemon note is the only thing in informational, proving it
 # rode that array and not findings.
-exec workspace doctor --json
+exec chaban doctor --json
 stdout '"config": "ok"'
 stdout '"findings": \[\]'
 stdout '"kind": "daemon_no_description"'

@@ -7,7 +7,7 @@
 #             fails, so its daemon must never start
 #
 # Daemon lifetime discipline: every daemon here is `sleep 30` — self-expiring
-# well before any timeout — and the script still ends with `workspace down`
+# well before any timeout — and the script still ends with `chaban down`
 # for each workspace it started daemons in (Task 4's rule: the sleep is the
 # backstop, not the plan). Nothing in this script may start an unbounded
 # process.
@@ -27,15 +27,15 @@ exec git -C $WORK/root/src/bad add README
 exec git -C $WORK/root/src/bad commit -m init
 
 # --- empty workspace: converge-on-nothing is a no-op success -----------------
-exec workspace new T-1 x
-exec workspace up T-1
+exec chaban new T-1 x
+exec chaban up T-1
 stdout 'nothing checked out'
-stdout 'workspace checkout'
+stdout 'chaban checkout'
 
 # --- first up of a whole project ---------------------------------------------
 # EnsureProject chains (worktree + .env + stamped setup), then the run-and-wait
 # runs in the project dir, then the daemon starts and its pid file appears.
-exec workspace up T-1 app
+exec chaban up T-1 app
 stdout '  app: checking out \(branch T-1_x\)… ok \(\d+\.\d+s\)'
 stdout '  app: setup: echo ran >> setup.log… ok \(\d+\.\d+s\)'
 stdout 'started app:sleeper \(pid \d+\)'
@@ -51,7 +51,7 @@ exec sh -c 'test "$(wc -l < "$WORK/root/T-1_x/app/setup.log")" -eq 1'
 # (the idempotence pin: same pid AND same starttime, not a restart).
 rm $WORK/root/T-1_x/app/prestart-ran
 cp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-before
-exec workspace up T-1 app
+exec chaban up T-1 app
 stdout 'app:sleeper already running \(pid \d+\)'
 ! stdout 'started'
 ! stdout 'checking out \(branch T-1_x\)… ok'
@@ -66,7 +66,7 @@ exec sh -c 'test "$(wc -l < "$WORK/root/T-1_x/app/setup.log")" -eq 1'
 # --- no targets: the whole workspace ------------------------------------------
 # app is T-1's only checked-out project, so bare `up T-1` converges it: the
 # running daemon is skipped, exit 0.
-exec workspace up T-1
+exec chaban up T-1
 stdout 'app:sleeper already running \(pid \d+\)'
 
 # --- single-daemon target from cold ------------------------------------------
@@ -74,8 +74,8 @@ stdout 'app:sleeper already running \(pid \d+\)'
 # and addressing the daemon alone still runs the owning project's ensure-chain
 # — the worktree does not exist before this `up` and does after. WholeProject
 # is false, so the run-and-wait must NOT run. Exercises the `start` alias too.
-exec workspace new T-2 y
-exec workspace start T-2 sleeper
+exec chaban new T-2 y
+exec chaban start T-2 sleeper
 stdout '  app: checking out \(branch T-2_y\)… ok \(\d+\.\d+s\)'
 stdout '  app: setup: echo ran >> setup.log… ok \(\d+\.\d+s\)'
 stdout 'started app:sleeper \(pid \d+\)'
@@ -90,7 +90,7 @@ grep '### app' $WORK/root/T-2_y/WORKSPACE.md
 # --- run-and-wait failure aborts the project's daemons ------------------------
 # bad's `false` fails before its daemon: exit 1, project-prefixed error, and
 # NO pid file — a project whose prelude failed must not run half its stack.
-! exec workspace up T-1 bad
+! exec chaban up T-1 bad
 stdout '  bad: checking out \(branch T-1_x\)… ok \(\d+\.\d+s\)'
 stderr 'project "bad"'
 ! exists $WORK/root/T-1_x/.workspace/pids/bad:never
@@ -101,20 +101,20 @@ exists $WORK/root/T-1_x/.workspace/pids/app:sleeper
 
 # --- unknown target ------------------------------------------------------------
 # Exit 3 is pinned in TestUpExitCodes; txtar asserts the refusal message.
-! exec workspace up T-1 nope
+! exec chaban up T-1 nope
 stderr 'no project or daemon named "nope"'
 
 # --- usage: no positionals → exit 2 -------------------------------------------
-! exec workspace up
+! exec chaban up
 stderr 'requires at least 1'
 
 # --- cleanup: stop what this script started ------------------------------------
 # T-1 has app running and bad checked out (its prelude failed before the
 # daemon); T-2 has app running from the single-daemon block.
-exec workspace down T-1
+exec chaban down T-1
 stdout 'stopped app:sleeper \(TERM\)'
 stdout 'bad:never already stopped'
-exec workspace down T-2
+exec chaban down T-2
 stdout 'stopped app:sleeper \(TERM\)'
 
 -- config.tmpl --

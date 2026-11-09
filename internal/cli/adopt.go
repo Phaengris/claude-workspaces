@@ -11,13 +11,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/alloc"
-	"github.com/Phaengris/claude-workspaces/internal/config"
-	"github.com/Phaengris/claude-workspaces/internal/gitx"
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/alloc"
+	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/gitx"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
-// newAdoptCmd builds `workspace adopt [dir] [--projects a,b]`: give an
+// newAdoptCmd builds `chaban adopt [dir] [--projects a,b]`: give an
 // EXISTING directory an allocation, so a tree the user assembled by hand (or
 // v1 left behind, or a colleague cloned) gets an index, values, a .env per
 // project, and shows up in every command that reads the registry.
@@ -68,7 +68,7 @@ func newAdoptCmd() *cobra.Command {
 		// At most one positional; more is a usage error → exit 2 (spec §9).
 		Args: usageArgs(cobra.MaximumNArgs(1)),
 		// --json is inherited and deliberately unused: spec §2 scopes it to the
-		// query commands. Accepting and ignoring it keeps `workspace --json
+		// query commands. Accepting and ignoring it keeps `chaban --json
 		// adopt` working for a caller that sets the flag globally.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, cfg, reg, err := loadRootDir()
@@ -85,7 +85,7 @@ func newAdoptCmd() *cobra.Command {
 			taskID := filepath.Base(dir)
 			if !wsp.ValidTaskID(taskID) {
 				return fmt.Errorf("%s: directory name %q is not usable as a task id "+
-					"(want ^[A-Za-z0-9][A-Za-z0-9._-]*$, at most 64 bytes); rename the directory or create a workspace with `workspace new`",
+					"(want ^[A-Za-z0-9][A-Za-z0-9._-]*$, at most 64 bytes); rename the directory or create a workspace with `chaban new`",
 					dir, taskID)
 			}
 

@@ -11,16 +11,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/assets"
-	"github.com/Phaengris/claude-workspaces/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/assets"
+	"github.com/Phaengris/chaban/v2/internal/config"
 )
 
-// `workspace install` / `workspace uninstall` (spec §2, §9) are the one place
+// `chaban install` / `chaban uninstall` (spec §2, §9) are the one place
 // this tool writes OUTSIDE the workspaces root, so the rules are stricter
 // than anywhere else:
 //
 //   - Everything install writes is recorded, path by path, in a manifest
-//     (~/.local/share/workspace/install-manifest.json), and uninstall removes
+//     (~/.local/share/chaban/install-manifest.json), and uninstall removes
 //     exactly what the manifest lists — nothing more (see uninstall.go for
 //     the refusal rules that enforce it). The manifest deliberately EXCLUDES
 //     the workspaces root and its config stub: those hold user data the
@@ -42,38 +42,38 @@ import (
 // internal/assets accessors — those name the destination next to the content;
 // this struct is where the destinations become code.
 type installLayout struct {
-	binary      string // ~/.local/bin/workspace, 0755 — copy of os.Executable()
-	fishWrapper string // ~/.config/fish/functions/workspace.fish — the cd WRAPPER (autoloaded)
-	fishComp    string // ~/.config/fish/completions/workspace.fish — the GENERATED completion script
-	bashWrapper string // ~/.local/share/workspace/shell/workspace.bash — sourced by bash AND zsh
-	bashComp    string // ~/.local/share/workspace/completions/workspace.bash — generated, sourced
-	zshComp     string // ~/.local/share/workspace/completions/_workspace — generated, via $fpath
-	skill       string // ~/.claude/skills/claude-workspaces/SKILL.md
-	hook        string // ~/.local/share/workspace/hooks/session-start.sh, 0755 — executed
-	manifest    string // ~/.local/share/workspace/install-manifest.json — the uninstall contract
+	binary      string // ~/.local/bin/chaban, 0755 — copy of os.Executable()
+	fishWrapper string // ~/.config/fish/functions/chaban.fish — the cd WRAPPER (autoloaded)
+	fishComp    string // ~/.config/fish/completions/chaban.fish — the GENERATED completion script
+	bashWrapper string // ~/.local/share/chaban/shell/chaban.bash — sourced by bash AND zsh
+	bashComp    string // ~/.local/share/chaban/completions/chaban.bash — generated, sourced
+	zshComp     string // ~/.local/share/chaban/completions/_chaban — generated, via $fpath
+	skill       string // ~/.claude/skills/chaban/SKILL.md
+	hook        string // ~/.local/share/chaban/hooks/session-start.sh, 0755 — executed
+	manifest    string // ~/.local/share/chaban/install-manifest.json — the uninstall contract
 }
 
 // layoutFor derives the layout from a resolved home directory. Note the two
-// same-named workspace.fish files: functions/ holds the wrapper fish
+// same-named chaban.fish files: functions/ holds the wrapper fish
 // autoloads, completions/ the generated completion script — swapping them
 // would break both, silently.
 func layoutFor(home string) installLayout {
-	share := filepath.Join(home, ".local", "share", "workspace")
+	share := filepath.Join(home, ".local", "share", "chaban")
 	fish := filepath.Join(home, ".config", "fish")
 	return installLayout{
-		binary:      filepath.Join(home, ".local", "bin", "workspace"),
-		fishWrapper: filepath.Join(fish, "functions", "workspace.fish"),
-		fishComp:    filepath.Join(fish, "completions", "workspace.fish"),
-		bashWrapper: filepath.Join(share, "shell", "workspace.bash"),
-		bashComp:    filepath.Join(share, "completions", "workspace.bash"),
-		zshComp:     filepath.Join(share, "completions", "_workspace"),
-		skill:       filepath.Join(home, ".claude", "skills", "claude-workspaces", "SKILL.md"),
+		binary:      filepath.Join(home, ".local", "bin", "chaban"),
+		fishWrapper: filepath.Join(fish, "functions", "chaban.fish"),
+		fishComp:    filepath.Join(fish, "completions", "chaban.fish"),
+		bashWrapper: filepath.Join(share, "shell", "chaban.bash"),
+		bashComp:    filepath.Join(share, "completions", "chaban.bash"),
+		zshComp:     filepath.Join(share, "completions", "_chaban"),
+		skill:       filepath.Join(home, ".claude", "skills", "chaban", "SKILL.md"),
 		hook:        filepath.Join(share, "hooks", "session-start.sh"),
 		manifest:    filepath.Join(share, "install-manifest.json"),
 	}
 }
 
-// newInstallCmd builds `workspace install`: copy the running binary, write
+// newInstallCmd builds `chaban install`: copy the running binary, write
 // the shell integration, the completions, the Claude Code skill and the
 // SessionStart hook into $HOME; create the workspaces root and its config
 // stub; record every tool-owned path in the manifest; print what the user
@@ -83,7 +83,7 @@ func newInstallCmd() *cobra.Command {
 		Use:   "install",
 		Short: "Install the binary, shell integration, completions, skill and hook into $HOME",
 		// No positionals, and no --root flag on purpose: the root comes from
-		// $CLAUDE_WORKSPACES_ROOT_DIR / the default, exactly as it does for
+		// $CHABAN_ROOT_DIR / the default, exactly as it does for
 		// every other command — install must set up the same universe the
 		// rest of the tool will read.
 		Args: usageArgs(cobra.NoArgs),
@@ -100,7 +100,7 @@ func newInstallCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 
 			// The binary: a copy of the running executable. The same-file
-			// guard is what makes `~/.local/bin/workspace install` (the
+			// guard is what makes `~/.local/bin/chaban install` (the
 			// installed binary re-running its own install) safe — copying a
 			// file onto itself would truncate it under its own feet.
 			exe, err := os.Executable()
@@ -262,7 +262,7 @@ func copyBinary(src, dst string) (skipped bool, err error) {
 	}
 	defer in.Close()
 
-	tmp, err := os.CreateTemp(filepath.Dir(dst), ".workspace-*.tmp")
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".chaban-*.tmp")
 	if err != nil {
 		return false, err
 	}
@@ -283,7 +283,7 @@ func copyBinary(src, dst string) (skipped bool, err error) {
 // alloc registry's Save is the pattern, minus one deliberate omission: no
 // directory fsync after the rename. Save pays it because the registry is the
 // tool's only persistent state and a rename lost to a crash is data loss;
-// here a lost rename just means re-running `workspace install`, and the
+// here a lost rename just means re-running `chaban install`, and the
 // file-level sync above already rules out torn content at the final path.
 func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 	dir := filepath.Dir(path)

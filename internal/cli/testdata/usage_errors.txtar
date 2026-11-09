@@ -3,13 +3,13 @@
 # is pinned by the Go unit test TestUsageErrorsExit2.
 
 # Unknown subcommand.
-! exec workspace bogus-command
-stderr 'unknown command'
+! exec chaban bogus-command
+stderr '^chaban: usage: unknown command'
 
 # Unknown flag.
-! exec workspace --bad-flag
+! exec chaban --bad-flag
 stderr 'unknown flag'
 
 # Too many args for a NoArgs command.
-! exec workspace doctor extra-arg
+! exec chaban doctor extra-arg
 stderr 'unknown command'

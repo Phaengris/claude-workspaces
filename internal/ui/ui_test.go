@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/Phaengris/claude-workspaces/internal/ui"
+	"github.com/Phaengris/chaban/v2/internal/ui"
 )
 
 func TestPrintJSON(t *testing.T) {

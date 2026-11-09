@@ -1,4 +1,4 @@
-// Package cli builds the workspace command tree.
+// Package cli builds the chaban command tree.
 package cli
 
 import (
@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/envx"
-	"github.com/Phaengris/claude-workspaces/internal/xerr"
+	"github.com/Phaengris/chaban/v2/internal/envx"
+	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
 // version is stamped at release time via -ldflags "-X …/internal/cli.version=v…".
@@ -19,7 +19,7 @@ var version = "dev"
 // Root builds the command tree. A fresh tree per call keeps tests independent.
 func Root() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "workspace",
+		Use:           "chaban",
 		Short:         "Isolated, runnable dev-stack instances for parallel Claude Code sessions",
 		Version:       version,
 		SilenceUsage:  true,
@@ -101,12 +101,12 @@ func Main() int {
 	err := classifyUsageError(Root().Execute())
 	// A propagated child exit code (xerr.ExitError, from the claude session
 	// runner) is deliberately NOT printed: the child owned the terminal and
-	// said whatever it had to say; a trailing "workspace: exit status 7"
+	// said whatever it had to say; a trailing "chaban: exit status 7"
 	// after every non-zero session would be pure noise. The code still
 	// propagates via ExitCode below.
 	var ee *xerr.ExitError
 	if err != nil && !errors.As(err, &ee) {
-		fmt.Fprintln(os.Stderr, "workspace:", err)
+		fmt.Fprintln(os.Stderr, "chaban:", err)
 	}
 	return xerr.ExitCode(err)
 }

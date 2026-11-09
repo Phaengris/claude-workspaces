@@ -1,40 +1,40 @@
-# claude-workspaces (Go)
+# chaban (Go)
 
-CLI tool (`workspace`) managing isolated dev workspaces for parallel Claude Code
+CLI tool (`chaban`) managing isolated dev workspaces for parallel Claude Code
 sessions: a git worktree per project, an allocated port block, generated env,
 and daemons — an *environment engine*. Clean-room Go rewrite (v1.1.x, complete,
 daily-driven) of an earlier personal Ruby tool, never publicly released and
 since retired; **never consult or port Ruby code** — the spec and this repo
 are the only sources.
 
-Module path is `github.com/Phaengris/claude-workspaces` — the public home.
+Module path is `github.com/Phaengris/chaban/v2` — the public home.
 MIT-licensed.
 
 ## Commands
 
 ```
-CGO_ENABLED=0 go build -o ./workspace ./cmd/workspace     # build (binary is gitignored)
+CGO_ENABLED=0 go build -o ./chaban ./cmd/chaban             # build (binary is gitignored)
 go test ./...                                             # full suite (~11s; real processes, real git)
 go test -race ./internal/proc ./internal/wsp ./internal/cli
 gofmt -l . && go vet ./...                                # both must be clean before commit
 # landing a change: commit, push master to BOTH remotes (origin = private mirror, github = public),
 #   add its CHANGELOG entry under "Unreleased". Do NOT tag per change.
 # daily-driver install between releases: build with
-#   -ldflags "-X github.com/Phaengris/claude-workspaces/internal/cli.version=$(git describe --tags --always)"
-#   then ./workspace install — the user runs master, tags are for the world.
+#   -ldflags "-X github.com/Phaengris/chaban/v2/internal/cli.version=$(git describe --tags --always)"
+#   then ./chaban install — the user runs master, tags are for the world.
 # release (end of a day with user-visible changes, or on explicit need):
 #   retitle Unreleased to X.Y.Z in CHANGELOG.md, build with version=X.Y.Z,
-#   ./workspace install, tag vX.Y.Z, push master+tag to both remotes.
+#   ./chaban install, tag vX.Y.Z, push master+tag to both remotes.
 ```
 
 Conventional commits (`feat(cli): …`). The user's real install lives at
-`~/.local/bin/workspace` — after user-facing fixes, rebuild with a bumped
-version and run `./workspace install` (idempotent, manifest-driven).
+`~/.local/bin/chaban` — after user-facing fixes, rebuild with a bumped
+version and run `./chaban install` (idempotent, manifest-driven).
 
 ## Architecture (dependency flow strictly downward)
 
 ```
-cmd/workspace → internal/cli (one file per command; cobra)
+cmd/chaban → internal/cli (one file per command; cobra)
   → internal/wsp    workspace domain: identity/Resolve, ensure-chain, writers,
                     daemon model, ResolveTargets grammar, CommandEnv (SOLE
                     spawn-env composer), runtime ${} substitution

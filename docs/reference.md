@@ -34,7 +34,7 @@ declared is a validation error.
 `per_workspace: 1` yields `NAME0`. Indices are
 assigned lowest-free-first, so a released index is reused — which is exactly
 why `release` refuses while daemons are running (see *Workspace hygiene*).
-`workspace ports` shows the blocks in use.
+`chaban ports` shows the blocks in use.
 
 **`depends`.** A string or a list of project names. It gives a topological
 order over the workspace's *checked-out* projects (edges to projects that are
@@ -155,7 +155,7 @@ version-manager pins are gone — overlaid with the workspace's resolved
 **global** `env` and the runtime variables themselves (`WORKSPACE`, `PORT0`, …)
 exported as real variables. Claude is the operator's tool and needs the real
 login environment. Note the consequence: a **project's** `env` entry reaches
-`exec`, `setup` and daemons, but **not** the session — `workspace exec T-1 app env`
+`exec`, `setup` and daemons, but **not** the session — `chaban exec T-1 app env`
 and the session's environment legitimately differ.
 
 ### Limits — read these once
@@ -184,7 +184,7 @@ than mysterious:
   one-liners that work in *your* shell, or spell it out: `sh -c '…'`.
 - A failed run-and-wait reports **the first non-empty stderr line**. Under a
   *login* shell that can be a line your `/etc/profile` printed rather than the
-  command's own complaint; `workspace logs` and the command's own output are
+  command's own complaint; `chaban logs` and the command's own output are
   the fallback when a message looks unrelated.
 
 ---
@@ -278,7 +278,7 @@ A daemon that has never run is a note and exit 0, not a failure.
 is actually listening on the port (a quick TCP dial — the socket is asked
 directly, so a hand-started server counts and a daemon that died during
 boot does not), and opens `http://localhost:<port>` with `xdg-open`,
-detached. Nothing listening is a refusal that names the `workspace up` to
+detached. Nothing listening is a refusal that names the `chaban up` to
 run and hands over the URL for when the app serves. With no `xdg-open` on
 `PATH` it prints the URL and exits 0 — on a remote box, printing *is* the
 feature. With one project checked out it needs no argument; with several it
@@ -294,11 +294,11 @@ their log files.
 ## Sessions
 
 ```sh
-workspace claude DEMO-1                    # session in the workspace dir
-workspace claude DEMO-1 -S                 # ... without --dangerously-skip-permissions
-workspace claude DEMO-1 -R                 # ... without --continue
-workspace claude DEMO-1 --model opus       # anything else goes to claude
-workspace launch DEMO-1 "try the tool" demo -- --model opus
+chaban claude DEMO-1                    # session in the workspace dir
+chaban claude DEMO-1 -S                 # ... without --dangerously-skip-permissions
+chaban claude DEMO-1 -R                 # ... without --continue
+chaban claude DEMO-1 --model opus       # anything else goes to claude
+chaban launch DEMO-1 "try the tool" demo -- --model opus
 ```
 
 Both **disable flag parsing**: every flag except the tool's own two belongs to
@@ -316,7 +316,7 @@ Claude, and the injection rules are:
 Everything after a literal `--` is Claude's, verbatim — including a later `--`,
 and including strings spelled exactly like `-S`/`-R`. The tool's flags are only
 recognized *before* the first `--`. The **workspace identifier must come first**:
-with flag parsing off, `workspace claude --json DEMO-1` would otherwise resolve
+with flag parsing off, `chaban claude --json DEMO-1` would otherwise resolve
 a workspace literally named `--json`, so a leading flag-looking token is a usage
 error (exit 2) that says so.
 
@@ -334,13 +334,13 @@ Three sharp edges worth knowing:
   injected alongside your `-c`. Write short flags separately (`-c -p`) when you
   care.
 - **`exec`'s project sniff, and the `--` rule.** In
-  `workspace exec <ws> [project] <cmd…>` the argument right after the workspace
+  `chaban exec <ws> [project] <cmd…>` the argument right after the workspace
   is the **project** if (and only if) it names a configured project; otherwise it
   *is* the command. To run a command that happens to be named like a project,
-  put `--` in that one slot (`workspace exec T-1 -- app`) or give a path
+  put `--` in that one slot (`chaban exec T-1 -- app`) or give a path
   (`./app`). `--` is the sniff suppressor **only** in that position: a later
   one belongs to your command and is passed through untouched, so
-  `workspace exec T-1 app git checkout -- README` still restores a file.
+  `chaban exec T-1 app git checkout -- README` still restores a file.
 
 **Titles.** A session names its terminal (OSC escape, when stdout is a
 terminal, first 40 characters of the workspace name) and, inside tmux, its
@@ -356,15 +356,15 @@ individual commands use, so it cannot drift from them. Any phase that fails
 stops the sequence, so a session never opens onto a half-built environment.
 **Daemons are lazy**: `launch` starts none of them, on either the create or
 the reuse path, and reuse does not converge a dead one back to running —
-`workspace up <ws> [target…]` is the explicit start, and the skill/session is
+`chaban up <ws> [target…]` is the explicit start, and the skill/session is
 expected to call it for whatever it actually needs. Reuse **ignores a supplied
 description silently** (the `using existing workspace <name>` line is the
 notice), and positional 2 is *always* the description slot on both paths — so
 when it happens to name a configured project, a note says what became of it,
 because you almost certainly meant `launch <id> <desc> <project…>`. On the
-**create** path, `launch` does not print `new`'s `hint: workspace cd <id>` —
+**create** path, `launch` does not print `new`'s `hint: chaban cd <id>` —
 the terminal is about to become the session's, so a `cd` hint would read as a
-stale to-do — and instead prints `tip: in another terminal: workspace cd <id>
+stale to-do — and instead prints `tip: in another terminal: chaban cd <id>
 — work alongside this session`. The reuse path prints neither.
 
 ---
@@ -477,3 +477,52 @@ unreadable registry (exit 1) are errors. `--json` gives `findings` and
 - **Boundaries.** No Docker runtime (a container-based flavor is on the
   roadmap), no Windows (POSIX: flock, process groups, `$SHELL -lc`), no
   profiles (named `start:` subsets) yet.
+
+---
+
+## Upgrading from claude-workspaces
+
+The rename to `chaban` moved the root and its env var. Two config guards
+make a stale setup fail loudly instead of quietly starting from an empty
+root. Both are exit 4 (config error).
+
+- **Old env var.** `CLAUDE_WORKSPACES_ROOT_DIR` is set and `CHABAN_ROOT_DIR`
+  is not. The message is `CLAUDE_WORKSPACES_ROOT_DIR is no longer read:
+  rename it to CHABAN_ROOT_DIR`. The old variable is never read, only
+  noticed.
+- **Legacy default root.** No override is set, `~/workspaces` does not exist,
+  and `~/claude-workspaces` does. The message is `<abs legacy path> exists,
+  but the default root is now ~/workspaces: set CHABAN_ROOT_DIR=<abs legacy
+  path> to keep using it`. It also stops `chaban install`, which
+  would otherwise create an empty `~/workspaces` and hide your workspaces.
+
+Either way the fix is to set `CHABAN_ROOT_DIR`, to the old path to keep it.
+Once `~/workspaces` exists, or any override is set, the legacy-root guard
+stays quiet. The step-by-step upgrade, including the `settings.json` entries
+and the one seeded `CLAUDE.md` line, is in the
+[README](../README.md#upgrading-from-claude-workspaces).
+
+### The variable must reach every process
+
+If you keep an old root through `CHABAN_ROOT_DIR`, every process that runs
+`chaban` needs it.
+
+- User commands (`setup`, `start`, `stop`, `teardown`, `exec`) get the
+  curated env, which does not carry it. If those commands call `chaban`, add
+  `CHABAN_ROOT_DIR` to `env_allow` in `config.yml` (a list of names, global or
+  per project).
+- Claude Code launched outside your shell (an IDE, the desktop app) does not
+  see a shell-only variable. Set it session-wide instead, for example in
+  `~/.config/environment.d/`.
+
+### Moving a root
+
+Don't. Use `CHABAN_ROOT_DIR`. A root with live worktrees breaks when moved:
+each source repo keeps stale worktree records, `destroy` fails, and
+`git worktree prune` from `destroy --force` orphans the other moved
+worktrees. Claude session history is keyed by absolute path and stays with
+the old path.
+
+If you must: `chaban down` every workspace, move the directory, then in each
+source repo run `git -C <repo> worktree repair <new worktree paths...>`.
+Accept that the session history stays behind.

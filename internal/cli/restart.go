@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Phaengris/claude-workspaces/internal/wsp"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 )
 
-// newRestartCmd builds `workspace restart <workspace> [target…]`: the down
+// newRestartCmd builds `chaban restart <workspace> [target…]`: the down
 // flow (confirmed deaths) then the up flow, over the SAME resolved target set
 // — restart ≡ down+up, nothing more. That composition is also its semantics:
 // restart CONVERGES to running (the decided restart row), so a targeted
