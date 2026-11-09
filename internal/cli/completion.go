@@ -310,7 +310,8 @@ func resolvedFor(ident string) (*config.Config, bool) {
 }
 
 // workspaceIdents lists each workspace's FULL NAME, sorted and filtered by
-// what is typed so far. Task ids resolve too (wsp.Resolve accepts both
+// what is typed so far — anywhere in the name, not just its start (see
+// matchingAnywhere). Task ids resolve too (wsp.Resolve accepts both
 // spellings, and typing one by hand keeps working) but are not offered: an id
 // is by construction a prefix of its workspace's name — `new` names the dir
 // <id>_<slug>, and `adopt`'s id IS the dir basename — so offering both listed
@@ -329,7 +330,7 @@ func workspaceIdents(toComplete string) []string {
 	for _, ws := range wsp.List(reg) {
 		names = append(names, ws.Name())
 	}
-	return matching(names, toComplete) // List is already Name()-sorted
+	return matchingAnywhere(names, toComplete) // List is already Name()-sorted
 }
 
 // projectNames lists the CONFIGURED project names, sorted and prefix-filtered.
@@ -380,11 +381,36 @@ func daemonSpellings(cfg *config.Config) []string {
 // and nobody reaches for shift at a prompt — `cd try<TAB>` must offer the
 // TRY-* workspaces. Safe because the shell replaces the typed token with the
 // candidate wholesale, so the completed word always carries the real casing.
+// Only fish benefits as shipped: bash's cobra script and zsh's default matcher
+// re-filter case-sensitively.
 func matching(names []string, toComplete string) []string {
 	var out []string
 	want := strings.ToLower(toComplete)
 	for _, name := range names {
 		if strings.HasPrefix(strings.ToLower(name), want) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// matchingAnywhere is matching for the workspace slot: names that START with
+// the fragment first, then names that only CONTAIN it. Task ids share board
+// prefixes (FIZZY-80_…, FIZZY-81_…), so the part a person remembers is the
+// number in the middle; `cd 80<TAB>` must reach FIZZY-80_… Project and daemon
+// names are short and chosen by the user, so they stay prefix-only.
+//
+// What the shell shows is the shell's call, and every shell sorts, so the
+// prefix-first order survives only in the raw protocol. fish matches
+// substrings itself and shows contains-matches only when nothing matches by
+// prefix. bash's cobra script re-filters by prefix, which drops them; so does
+// zsh's default matcher (zsh users can opt in with a matcher-list style).
+func matchingAnywhere(names []string, toComplete string) []string {
+	out := matching(names, toComplete)
+	want := strings.ToLower(toComplete)
+	for _, name := range names {
+		lower := strings.ToLower(name)
+		if !strings.HasPrefix(lower, want) && strings.Contains(lower, want) {
 			out = append(out, name)
 		}
 	}

@@ -104,19 +104,29 @@ func TestDynamicCompletions(t *testing.T) {
 		want      []string
 		directive cobra.ShellCompDirective
 	}{
-		// The workspace slot: names and task ids, prefix-filtered.
+		// The workspace slot: full names, matched case-insensitively by prefix
+		// or substring.
 		"cd workspace":        {args: []string{"cd", ""}, want: wsIdents, directive: noFile},
 		"cd workspace prefix": {args: []string{"cd", "B"}, want: []string{"B-2_beta"}, directive: noFile},
 		// Case-insensitive: the real-use miss was `cd try<TAB>` offering no
 		// TRY-* workspaces. The shell replaces the whole token with the
-		// candidate, so completing across case is safe everywhere.
+		// candidate, so completing across case is safe (fish honors it; bash's
+		// cobra script and zsh's default matcher re-filter case-sensitively).
 		"cd workspace prefix lowercase": {args: []string{"cd", "b"}, want: []string{"B-2_beta"}, directive: noFile},
 		"cd project prefix upcase":      {args: []string{"cd", "A-1", "L"}, want: []string{"lib"}, directive: noFile},
-		"status workspace":              {args: []string{"status", ""}, want: wsIdents, directive: noFile},
-		"destroy workspace":             {args: []string{"destroy", ""}, want: wsIdents, directive: noFile},
-		"up workspace":                  {args: []string{"up", ""}, want: wsIdents, directive: noFile},
-		"logs workspace":                {args: []string{"logs", ""}, want: wsIdents, directive: noFile},
-		"exec workspace":                {args: []string{"exec", ""}, want: wsIdents, directive: noFile},
+		// Substring, workspace slot only: `cd 80<TAB>` must reach FIZZY-80_…
+		// without typing the board prefix. Project and daemon slots stay
+		// prefix-only (see the next pin).
+		"cd workspace substring":     {args: []string{"cd", "2"}, want: []string{"B-2_beta"}, directive: noFile},
+		"cd workspace substring cap": {args: []string{"cd", "BETA"}, want: []string{"B-2_beta"}, directive: noFile},
+		"cd project not substring":   {args: []string{"cd", "A-1", "ib"}, want: nil, directive: noFile},
+		"down target not substring":  {args: []string{"down", "A-1", "orker"}, want: nil, directive: noFile},
+		"logs daemon not substring":  {args: []string{"logs", "A-1", "orker"}, want: nil, directive: noFile},
+		"status workspace":           {args: []string{"status", ""}, want: wsIdents, directive: noFile},
+		"destroy workspace":          {args: []string{"destroy", ""}, want: wsIdents, directive: noFile},
+		"up workspace":               {args: []string{"up", ""}, want: wsIdents, directive: noFile},
+		"logs workspace":             {args: []string{"logs", ""}, want: wsIdents, directive: noFile},
+		"exec workspace":             {args: []string{"exec", ""}, want: wsIdents, directive: noFile},
 		// Session commands parse their own flags, so cobra hands the completer
 		// the raw argv: only the first slot is reliably identifiable.
 		"claude workspace":  {args: []string{"claude", ""}, want: wsIdents, directive: noFile},
@@ -266,5 +276,34 @@ func TestEveryCommandCompletes(t *testing.T) {
 		if sub.ValidArgsFunction == nil {
 			t.Errorf("command %q has no ValidArgsFunction: wire it in completion.go (completeNothing if it takes no arguments)", sub.Name())
 		}
+	}
+}
+
+// TestMatchingAnywhere pins the workspace-slot candidates and their order in the
+// raw protocol: names that start with the typed fragment first, then names that
+// merely contain it, each group in input order. No shell shows this order
+// (they all sort, and fish ranks by match kind), but it costs nothing and keeps
+// the raw `__complete` output sensible.
+func TestMatchingAnywhere(t *testing.T) {
+	names := []string{"FIZZY-123_upd", "FIZZY-312_x", "TRY-1_a", "12-local"}
+	cases := map[string]struct {
+		typed string
+		want  []string
+	}{
+		"empty lists all":           {"", names},
+		"prefix before contains":    {"12", []string{"12-local", "FIZZY-123_upd", "FIZZY-312_x"}},
+		"contains only":             {"31", []string{"FIZZY-312_x"}},
+		"case-insensitive prefix":   {"try", []string{"TRY-1_a"}},
+		"case-insensitive contains": {"UPD", []string{"FIZZY-123_upd"}},
+		"no match":                  {"zzz-9", nil},
+		"each name once":            {"1", []string{"12-local", "FIZZY-123_upd", "FIZZY-312_x", "TRY-1_a"}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := matchingAnywhere(names, tc.typed)
+			if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+				t.Errorf("matchingAnywhere(%q) = %v, want %v", tc.typed, got, tc.want)
+			}
+		})
 	}
 }

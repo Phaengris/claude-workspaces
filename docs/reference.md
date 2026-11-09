@@ -92,7 +92,12 @@ whole workspace.
 
 **Completions** cover workspace identifiers, project names (templated projects
 included), and daemon targets for the command and position you are at,
-matching case-insensitively. A completer never reports a failure: a broken
+offered case-insensitively, and for a workspace also when what you typed is
+*inside* the name (`cd 430<TAB>` reaches `FIZZY-430_…`). What you see is up to
+the shell. fish uses both, and shows inside-matches only when no name starts
+with your text. bash's completion script keeps only exact-case prefix matches.
+zsh does the same by default; a `matcher-list` style turns on case-insensitive
+and substring matching there. A completer never reports a failure: a broken
 config or registry collapses to "no suggestions" rather than printing an error
 at your prompt or falling back to file names in a workspace slot. The two
 session commands (`claude`, `launch`) disable flag parsing so everything can

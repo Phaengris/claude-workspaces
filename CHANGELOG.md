@@ -10,6 +10,14 @@ All notable changes to `workspace` are documented here. The format follows
 installed daily driver may be ahead of the last tag — `workspace --version`
 says exactly how far when built with `git describe`.)
 
+### Changed
+
+- Workspace-name completion also offers names that contain what you typed:
+  in fish, `workspace cd 430<TAB>` completes to `FIZZY-430_…`. fish shows
+  such matches only when no name starts with your text. bash still matches
+  by prefix only; zsh does too unless your `matcher-list` allows substrings.
+  Project and daemon names stay prefix-only.
+
 ## [1.8.1] — 2026-10-25
 
 ### Changed
