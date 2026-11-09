@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Phaengris/chaban/internal/xerr"
 )
 
 // validConfig is the smallest config the query commands accept: one value
@@ -50,6 +52,40 @@ func TestQueryExitCodes(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestRootGuardExitCode pins exit 4 (config) for both RootDir upgrade guards,
+// reached through a real command. The message is pinned too: a missing config
+// is also exit 4, so the code alone would not tell a guard from no guard.
+func TestRootGuardExitCode(t *testing.T) {
+	cases := map[string]struct {
+		legacyVar string
+		legacyDir bool
+		wantMsg   string
+	}{
+		"legacy var":      {legacyVar: "/old", wantMsg: "no longer read"},
+		"legacy dir only": {legacyDir: true, wantMsg: "default root is now ~/workspaces"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("CHABAN_ROOT_DIR", "")
+			t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", tc.legacyVar)
+			if tc.legacyDir {
+				if err := os.Mkdir(filepath.Join(home, "claude-workspaces"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := classifyUsageError(runCLI(t, "ls"))
+			if got := xerr.ExitCode(err); got != 4 {
+				t.Errorf("ls exit code = %d, want 4 (err: %v)", got, err)
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Errorf("error %v must contain %q", err, tc.wantMsg)
+			}
+		})
 	}
 }
 
