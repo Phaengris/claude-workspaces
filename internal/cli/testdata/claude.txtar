@@ -6,7 +6,7 @@
 # history probe sees OUR ~/.claude/projects, never the developer's.
 #
 # Exit-code PROPAGATION is asserted here only as zero/non-zero (testscript
-# cannot see exact codes); the exact-code pin (shim exit 7 → workspace exit 7)
+# cannot see exact codes); the exact-code pin (shim exit 7 → chaban exit 7)
 # lives in TestClaudeExitCodePropagation.
 #
 # `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
@@ -20,7 +20,7 @@ exec git -C $WORK/root/src/app init -b main
 exec git -C $WORK/root/src/app add README
 exec git -C $WORK/root/src/app commit -m init
 
-exec workspace new T-1 x app
+exec chaban new T-1 x app
 
 # Hermetic HOME + the shim first on PATH.
 env HOME=$WORK/home
@@ -32,7 +32,7 @@ env PATH=$WORK/bin:$PATH
 # The shim's cwd is the workspace dir; the session env carries the inherited
 # environment PLUS the overlay: WORKSPACE, the value vars, and the resolved
 # global env (sanitized-inherited + overlay — NOT the curated allowlist).
-exec workspace claude T-1
+exec chaban claude T-1
 stdout 'argv: --dangerously-skip-permissions$'
 ! stdout 'continue'
 stdout 'cwd: '$WORK'/root/T-1_x$'
@@ -45,23 +45,23 @@ stdout 'DB_NAME=app_T-1_dev$'
 # duplicated here in sed ON PURPOSE: if encodeClaudeProjectDir ever drifts,
 # this block stops finding the fixture and the --continue assertion fails.
 exec sh -c 'enc=$(printf %s "$WORK/root/T-1_x" | LC_ALL=C sed "s/[^A-Za-z0-9]/-/g"); mkdir -p "$HOME/.claude/projects/$enc" && : > "$HOME/.claude/projects/$enc/conv.jsonl"'
-exec workspace claude T-1
+exec chaban claude T-1
 stdout 'argv: --dangerously-skip-permissions --continue$'
 
 # --- -R suppresses resume; -S suppresses skip-permissions; both ----------------
-exec workspace claude T-1 -R
+exec chaban claude T-1 -R
 stdout 'argv: --dangerously-skip-permissions$'
 ! stdout 'continue'
-exec workspace claude T-1 -S
+exec chaban claude T-1 -S
 stdout 'argv: --continue$'
 ! stdout 'dangerously'
-exec workspace claude T-1 -S -R
+exec chaban claude T-1 -S -R
 stdout 'argv: $'
 
 # --- after `--` everything is claude's, verbatim -------------------------------
 # -S after the separator is NOT our flag: both injections still happen and the
 # look-alikes arrive untouched, in order, with the `--` itself dropped.
-exec workspace claude T-1 -- -S --foo
+exec chaban claude T-1 -- -S --foo
 stdout 'argv: --dangerously-skip-permissions --continue -S --foo$'
 
 # --- …but CLAUDE's OWN flags after `--` still INFLUENCE injection ---------------
@@ -71,25 +71,25 @@ stdout 'argv: --dangerously-skip-permissions --continue -S --foo$'
 # injecting --continue next to a --print the user asked for would fight it.
 # History exists at this point in the script, so the absence of --continue can
 # only come from the post-separator --print.
-exec workspace claude T-1 -- --print
+exec chaban claude T-1 -- --print
 stdout 'argv: --dangerously-skip-permissions --print$'
 ! stdout 'continue'
 
 # --- a user permission stance suppresses that injection only -------------------
-exec workspace claude T-1 --permission-mode plan
+exec chaban claude T-1 --permission-mode plan
 stdout 'argv: --continue --permission-mode plan$'
 ! stdout 'dangerously'
 
 # --- print mode suppresses --continue only --------------------------------------
-exec workspace claude T-1 -p hi
+exec chaban claude T-1 -p hi
 stdout 'argv: --dangerously-skip-permissions -p hi$'
 ! stdout 'continue'
 
 # --- non-zero session exit propagates, with NO added stderr noise ---------------
-# The child owned the terminal; workspace must not print "workspace: exit
+# The child owned the terminal; chaban must not print "chaban: exit
 # status 7" on top. Exact code pinned in the unit test.
 env CLAUDE_SHIM_EXIT=7
-! exec workspace claude T-1
+! exec chaban claude T-1
 ! stderr .
 env CLAUDE_SHIM_EXIT=
 
@@ -107,15 +107,15 @@ chmod 0755 $WORK/bin/tmux
 env TMUX_SHIM_LOG=$WORK/tmux.log
 env TMUX=/tmp/fake-socket,1234,0
 env TMUX_PANE=%42
-exec workspace claude T-1
+exec chaban claude T-1
 grep -count=1 'rename-window -t %42 T-1_x' $WORK/tmux.log
 grep -count=1 'set-option -w -t %42 -u automatic-rename' $WORK/tmux.log
 exec sh -c 'test "$(sed -n 1p "$TMUX_SHIM_LOG")" = "rename-window -t %42 T-1_x"'
 
 # --- titles: the tmux window name is truncated to 20 runes --------------------
 env TMUX_SHIM_LOG=$WORK/tmux-long.log
-exec workspace new T-2 abcdefghijklmnopqrstuvwxyz app
-exec workspace claude T-2
+exec chaban new T-2 abcdefghijklmnopqrstuvwxyz app
+exec chaban claude T-2
 grep -count=1 'rename-window -t %42 T-2_abcdefghijklmnop$' $WORK/tmux-long.log
 
 # --- titles: $TMUX without $TMUX_PANE renames nothing -------------------------
@@ -123,14 +123,14 @@ grep -count=1 'rename-window -t %42 T-2_abcdefghijklmnop$' $WORK/tmux-long.log
 # window the user is looking at, so the tmux half is skipped entirely.
 env TMUX_SHIM_LOG=$WORK/tmux-nopane.log
 env TMUX_PANE=
-exec workspace claude T-1
+exec chaban claude T-1
 ! exists $WORK/tmux-nopane.log
 env TMUX_PANE=%42
 
 # --- titles: outside tmux nothing is renamed; piped stdout stays clean --------
 env TMUX_SHIM_LOG=$WORK/tmux-none.log
 env TMUX=
-exec workspace claude T-1
+exec chaban claude T-1
 ! exists $WORK/tmux-none.log
 ! stdout ']0;'
 
@@ -143,7 +143,7 @@ exec workspace claude T-1
 env TMUX_SHIM_EXIT=1
 env TMUX_SHIM_LOG=$WORK/tmux-fail.log
 env TMUX=/tmp/fake-socket,1234,0
-exec workspace claude T-1
+exec chaban claude T-1
 grep -count=1 'rename-window' $WORK/tmux-fail.log
 ! grep 'set-option' $WORK/tmux-fail.log
 env TMUX_SHIM_EXIT=

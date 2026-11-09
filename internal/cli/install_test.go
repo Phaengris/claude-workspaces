@@ -13,14 +13,14 @@ import (
 // The txtar script (install.txtar) covers the whole install → re-install →
 // uninstall lifecycle against a fake $HOME. The tests here pin the two pieces
 // whose interesting cases a script cannot reach: the same-file binary guard
-// (the script's `workspace` is the test binary, never the installed copy) and
+// (the script's `chaban` is the test binary, never the installed copy) and
 // the hostile-manifest refusals (a script would have to construct a manifest
 // naming "/" — exactly the file a test must never risk touching outside a
 // unit test's full control).
 
 // TestCopyBinary pins copyBinary's three answers: a fresh copy, an overwrite,
 // and the same-file skip. The same-file case is the guard's reason to exist —
-// `workspace install` run FROM ~/.local/bin/workspace would otherwise open
+// `chaban install` run FROM ~/.local/bin/workspace would otherwise open
 // its own running binary for truncation.
 func TestCopyBinary(t *testing.T) {
 	dir := t.TempDir()
@@ -236,7 +236,7 @@ func TestUninstallKeepsManifestOnFailedRemoval(t *testing.T) {
 	}
 }
 
-// runUninstall executes `workspace uninstall` in-process against the
+// runUninstall executes `chaban uninstall` in-process against the
 // env-configured fake HOME, output discarded, returning the command error.
 func runUninstall(t *testing.T) error {
 	t.Helper()

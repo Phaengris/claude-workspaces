@@ -44,15 +44,15 @@ mkdir $WORK/side/X-1_corrupt
 cp stale-pid $WORK/root/T-2_daemons/.workspace/pids/app:ghost
 cp stale-pid $WORK/root/T-2_daemons/.workspace/pids/vanished:ghost
 
-exec workspace doctor
+exec chaban doctor
 stdout '^config: OK$'
 stdout '^projects \(3\): app, badport, gone$'
-stdout '^stale allocation: '$WORK'/root/T-1_vanished \(run: workspace gc\)$'
+stdout '^stale allocation: '$WORK'/root/T-1_vanished \(run: chaban gc\)$'
 stdout '^allocation outside root: '$WORK'/side/A-9_adopted \(adopted\)$'
 stdout '^allocation outside root: '$WORK'/side/X-1_corrupt \(NOT adopted — possibly corrupt registry\)$'
 stdout '^project "gone": repo does not exist: '$WORK'/root/src/gone$'
-stdout '^stale pid file: T-2_daemons/app:ghost \(run: workspace gc\)$'
-stdout '^stale pid file: T-2_daemons/vanished:ghost \(not in config\) \(run: workspace gc\)$'
+stdout '^stale pid file: T-2_daemons/app:ghost \(run: chaban gc\)$'
+stdout '^stale pid file: T-2_daemons/vanished:ghost \(not in config\) \(run: chaban gc\)$'
 stdout 'note: daemon app:ghost has no description — add description: under start: to tell sessions what it is for'
 stdout 'project "badport": browse_port "\$\{TYPO\}" resolves to "\$\{TYPO\}", not a port number — fix browse_port in config.yml'
 stdout '^doctor: 6 finding\(s\)$'
@@ -69,7 +69,7 @@ exists $WORK/root/T-2_daemons/.workspace/pids/app:ghost
 # Findings and informational are separate arrays; kinds are the machine handle,
 # detail is the human line verbatim. Parsing (and the kind/array split) is
 # pinned in TestDoctorJSONShape; these are the on-the-wire spellings.
-exec workspace doctor --json
+exec chaban doctor --json
 stdout '"config": "ok"'
 stdout '"kind": "stale_allocation"'
 stdout '"kind": "allocation_outside_root"'

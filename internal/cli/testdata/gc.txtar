@@ -24,56 +24,56 @@ workroot config.tmpl root/config.yml
 # .env, as real projects do: checkout writes .env INTO the worktree, so in a
 # repo that does not ignore it every workspace reads dirty — to `ls -g`'s
 # star exactly as to gc's dirty gate (one predicate, gitx.Stats.Dirty), and
-# then only the explicit `workspace destroy` can ever collect anything.
+# then only the explicit `chaban destroy` can ever collect anything.
 exec git -C $WORK/root/src/app init -b main
 exec git -C $WORK/root/src/app add README .gitignore
 exec git -C $WORK/root/src/app commit -m init
 
 # --- empty root: truly nothing to do ------------------------------------------
-exec workspace gc
+exec chaban gc
 stdout '^nothing to collect$'
 
 # --- fixture: the whole matrix in one root -------------------------------------
 # (1) vanished dir: the allocation stays in the registry, the dir is gone.
-exec workspace new T-1 vanished
+exec chaban new T-1 vanished
 rm $WORK/root/T-1_vanished
 
 # (2) live workspace: one RUNNING daemon plus one hand-written stale pid file.
 # The stale record names pid 1 (which always exists) with an impossible
 # starttime, so liveness is deterministically false — no timing games.
-exec workspace new T-2 live app
-exec workspace up T-2 app:sleeper
+exec chaban new T-2 live app
+exec chaban up T-2 app:sleeper
 stdout 'started app:sleeper \(pid \d+\)'
 cp stale-pid $WORK/root/T-2_live/.workspace/pids/app:ghost
 
 # (3) merged: real work on branch T-3, merged into main in the SOURCE repo.
-exec workspace new T-3 merged app
+exec chaban new T-3 merged app
 exec git -C $WORK/root/T-3_merged/app commit --allow-empty -m work
 exec git -C $WORK/root/src/app merge T-3_merged
 
 # (4) unmerged: real work on branch T-4, NOT merged anywhere.
-exec workspace new T-4 unmerged app
+exec chaban new T-4 unmerged app
 exec git -C $WORK/root/T-4_unmerged/app commit --allow-empty -m work
 
 # (5) adopted: its checked-out branch A-9 points AT main, so it reads as fully
 # merged and nothing runs in it — Adopted=true is the only thing saving it.
 mkdir $WORK/side/A-9
 exec git -C $WORK/root/src/app worktree add -b A-9 $WORK/side/A-9/app main
-exec workspace adopt $WORK/side/A-9
+exec chaban adopt $WORK/side/A-9
 stdout 'adopted A-9'
 
 # (6) empty: tool-created, nothing checked out — no merge evidence exists.
-exec workspace new T-5 empty
+exec chaban new T-5 empty
 
 # (7) dirty: branch T-6 has no commits of its own (trivially merged) and no
 # daemon runs — everything says collectable EXCEPT an untracked file in the
 # worktree. gc -d must skip it loudly: merged covers only committed work,
 # and a batch sweep never discards a working copy (plan-owner ruling).
-exec workspace new T-6 dirty app
+exec chaban new T-6 dirty app
 cp stale-pid $WORK/root/T-6_dirty/app/scratch
 
 # --- gc without --destroy-dirs: release + reap only, never destroy -------------
-exec workspace gc
+exec chaban gc
 stdout '^released T-1_vanished \(dir vanished\)$'
 stdout '^reaped stale pid file T-2_live/app:ghost$'
 ! stdout '^destroyed'
@@ -84,11 +84,11 @@ stdout '^gc: 1 released, 1 reaped, 0 destroyed$'
 exists $WORK/root/T-2_live/.workspace/pids/app:sleeper
 
 # Idempotent: a second run finds nothing left to collect.
-exec workspace gc
+exec chaban gc
 stdout '^nothing to collect$'
 
 # --- gc --destroy-dirs: the survival matrix -------------------------------------
-exec workspace gc -d
+exec chaban gc -d
 stdout '^destroyed T-3_merged \(merged\)$'
 stdout 'project "app": worktree removed'
 stdout '^skipped T-6_dirty \(uncommitted changes\)$'
@@ -131,14 +131,14 @@ grep T-6 $WORK/root/.allocations.json
 # now finds two collectable workspaces, hits T-7's teardown failure (T-2_live
 # sorts first, so T-2 is already gone), keeps going, and exits non-zero with a
 # summary that counts only what succeeded.
-exec workspace down T-2
+exec chaban down T-2
 workroot config-fail.tmpl root/config.yml
 exec git -C $WORK/root/src/boom init -b main
 exec git -C $WORK/root/src/boom add README .gitignore
 exec git -C $WORK/root/src/boom commit -m init
-exec workspace new T-7 fail boom
+exec chaban new T-7 fail boom
 
-! exec workspace gc -d
+! exec chaban gc -d
 stderr 'project "boom"'
 stdout '^destroyed T-2_live \(merged\)$'
 stdout '^gc: 0 released, 0 reaped, 1 destroyed$'
@@ -158,8 +158,8 @@ exists $WORK/root/T-6_dirty/app/scratch
 # whose key nothing configured can name. Both the reap pass and the daemon gate
 # enumerate the pids DIRECTORY, so such a record is never invisible: dead ones
 # are collected, and a live one still holds this index's ports.
-exec workspace new T-8 unlisted app
-exec workspace up T-8 app:sleeper
+exec chaban new T-8 unlisted app
+exec chaban up T-8 app:sleeper
 stdout 'started app:sleeper \(pid \d+\)'
 cp stale-pid $WORK/root/T-8_unlisted/.workspace/pids/vanished:ghost
 
@@ -169,33 +169,33 @@ cp stale-pid $WORK/root/T-8_unlisted/.workspace/pids/vanished:ghost
 workroot config-renamed.tmpl root/config.yml
 
 # Pass 2 reaps the DEAD unlisted record and leaves the LIVE one alone.
-exec workspace gc
+exec chaban gc
 stdout '^reaped stale pid file T-8_unlisted/vanished:ghost$'
 ! exists $WORK/root/T-8_unlisted/.workspace/pids/vanished:ghost
 exists $WORK/root/T-8_unlisted/.workspace/pids/app:sleeper
 
 # Pass 3 must not destroy T-8: its branch is trivially merged and its worktree
 # clean, so the live unlisted daemon is the ONLY thing saving it.
-exec workspace gc -d
+exec chaban gc -d
 ! stdout 'destroyed T-8_unlisted'
 exists $WORK/root/T-8_unlisted/app/.git
 grep T-8 $WORK/root/.allocations.json
 
 # release refuses too, for the same reason: freeing the index while a process
 # holds its ports would make the daemon unaddressable and the index reusable.
-! exec workspace release $WORK/root/T-8_unlisted
-stderr 'workspace down T-8_unlisted'
+! exec chaban release $WORK/root/T-8_unlisted
+stderr 'chaban down T-8_unlisted'
 grep T-8 $WORK/root/.allocations.json
 
 # Cleanup: restore the config so `down` can name the daemon again.
 workroot config.tmpl root/config.yml
-exec workspace down T-8
+exec chaban down T-8
 stdout 'stopped app:sleeper \(TERM\)'
-exec workspace release $WORK/root/T-8_unlisted
+exec chaban release $WORK/root/T-8_unlisted
 stdout '^released T-8_unlisted \(#\d+ freed\)$'
 
 # --- usage: gc takes no positionals (exit 2, pinned in TestGCExitCodes) --------
-! exec workspace gc extra
+! exec chaban gc extra
 stderr 'unknown command|accepts'
 
 -- config.tmpl --

@@ -11,14 +11,14 @@ import (
 	"github.com/Phaengris/chaban/internal/cli"
 )
 
-// TestMain installs "workspace" as a command available inside the txtar
+// TestMain installs "chaban" as a command available inside the txtar
 // scripts, running cli.Main in a subprocess of the test binary. testscript.Main
 // replaces the deprecated RunMain (go-internal v1.15: Go collects integration
 // coverage natively, so returning an exit code became pointless); the command
 // func returns no int, so cli.Main's code reaches the script via os.Exit.
 func TestMain(m *testing.M) {
 	testscript.Main(m, map[string]func(){
-		"workspace": func() { os.Exit(cli.Main()) },
+		"chaban": func() { os.Exit(cli.Main()) },
 	})
 }
 

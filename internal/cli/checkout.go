@@ -11,7 +11,7 @@ import (
 	"github.com/Phaengris/chaban/internal/xerr"
 )
 
-// newCheckoutCmd builds `workspace checkout <workspace> <project…>`: the
+// newCheckoutCmd builds `chaban checkout <workspace> <project…>`: the
 // ensure-chain (worktree, .env, stamped setup) for each named project, in
 // dependency order.
 //
@@ -31,7 +31,7 @@ func newCheckoutCmd() *cobra.Command {
 		// exit 2 (spec §9).
 		Args: usageArgs(cobra.MinimumNArgs(2)),
 		// --json is inherited and deliberately unused: spec §2 scopes it to the
-		// query commands. Accepting and ignoring it keeps `workspace --json
+		// query commands. Accepting and ignoring it keeps `chaban --json
 		// checkout X app` working for a caller that sets the flag globally,
 		// rather than failing on a command with no query result to serialize.
 		RunE: func(cmd *cobra.Command, args []string) error {

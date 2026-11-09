@@ -17,7 +17,7 @@ import (
 	"github.com/Phaengris/chaban/internal/wsp"
 )
 
-// newDestroyCmd builds `workspace destroy [--force] <workspace>`: stop every
+// newDestroyCmd builds `chaban destroy [--force] <workspace>`: stop every
 // daemon, run every checked-out project's teardown commands, then remove the
 // worktrees, the workspace dir, and the allocation — spec §2's
 // "down + teardown + remove + release". The phased work itself lives in
@@ -39,7 +39,7 @@ func newDestroyCmd() *cobra.Command {
 		// Exactly one identifier; anything else is a usage error → exit 2 (spec §9).
 		Args: usageArgs(cobra.ExactArgs(1)),
 		// --json is inherited and deliberately unused: spec §2 scopes it to the
-		// query commands. Accepting and ignoring it keeps `workspace --json
+		// query commands. Accepting and ignoring it keeps `chaban --json
 		// destroy X` working for a caller that sets the flag globally, rather
 		// than failing on a command with no query result to serialize.
 		RunE: func(cmd *cobra.Command, args []string) error {

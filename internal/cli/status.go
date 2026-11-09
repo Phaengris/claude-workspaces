@@ -79,7 +79,7 @@ type statusEntry struct {
 	Status string `json:"status,omitempty"`
 }
 
-// newStatusCmd builds `workspace status [workspace]`. With an identifier it
+// newStatusCmd builds `chaban status [workspace]`. With an identifier it
 // prints one workspace in full (spec §2: every field derived live from the
 // registry, the filesystem and git — nothing about a workspace is stored
 // beyond its allocation). Without one it degenerates to the `ls` listing, via

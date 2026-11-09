@@ -9,13 +9,13 @@ import (
 	"github.com/Phaengris/chaban/internal/xerr"
 )
 
-// newCdCmd builds `workspace cd <workspace> [project]`: the absolute directory
+// newCdCmd builds `chaban cd <workspace> [project]`: the absolute directory
 // of a workspace, or of one project inside it.
 //
 // WHY it only prints: a child process cannot change its parent shell's working
 // directory — that is a property of the process model, not a missing feature. So
 // the command's whole job is to resolve the path; the M5 shell function does the
-// actual chdir (`cd "$(workspace cd "$1")"`). Naming it `cd` anyway is
+// actual chdir (`cd "$(chaban cd "$1")"`). Naming it `cd` anyway is
 // deliberate: the wrapper's name and the binary's subcommand match, so the two
 // never have to be explained separately.
 //
@@ -32,7 +32,7 @@ func newCdCmd() *cobra.Command {
 		// --json is inherited and deliberately unused: the output is a single
 		// absolute path, which is already the machine-readable form, and the
 		// shell wrapper substitutes it verbatim. Accepting the flag and ignoring
-		// it keeps `workspace --json cd X` (a caller that sets --json globally
+		// it keeps `chaban --json cd X` (a caller that sets --json globally
 		// for every call) working instead of failing on the one command where
 		// JSON would only get in the way.
 		RunE: func(cmd *cobra.Command, args []string) error {

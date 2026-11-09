@@ -16,7 +16,7 @@ import (
 	"github.com/Phaengris/chaban/internal/wsp"
 )
 
-// newDownCmd builds `workspace down <workspace> [target…]` (alias `stop`):
+// newDownCmd builds `chaban down <workspace> [target…]` (alias `stop`):
 // converge the targeted daemons to stopped — the mirror of `up`, walked
 // BACKWARDS (the decided Order row): projects in reverse topological order,
 // and within each project its daemons in reverse listed order, so dependents

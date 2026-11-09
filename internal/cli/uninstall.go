@@ -12,7 +12,7 @@ import (
 	"github.com/Phaengris/chaban/internal/config"
 )
 
-// newUninstallCmd builds `workspace uninstall`: remove EXACTLY the paths the
+// newUninstallCmd builds `chaban uninstall`: remove EXACTLY the paths the
 // install manifest lists, then the manifest itself, and say what was
 // deliberately left behind. The manifest is the whole contract — see the
 // package comment in install.go — and this command's one hard rule is that it
@@ -57,7 +57,7 @@ import (
 func newUninstallCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "uninstall",
-		Short: "Remove everything `workspace install` recorded, keep all user data",
+		Short: "Remove everything `chaban install` recorded, keep all user data",
 		Args:  usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			home, err := os.UserHomeDir()

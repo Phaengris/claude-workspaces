@@ -41,7 +41,7 @@ exec git -C $WORK/root/B-7_y/app init -b main
 # --- status <ws> ----------------------------------------------------------
 # Header block, then one line per CONFIGURED project (sorted), whether or not
 # it is checked out here. em-dash between task id and description.
-exec workspace status A-1_x
+exec chaban status A-1_x
 stdout '^workspace: A-1_x$'
 stdout '^task: A-1 — fix the thing$'
 # $WORK must sit OUTSIDE the quotes: testscript expands env vars in unquoted
@@ -62,21 +62,21 @@ stdout '(?s)  api:.*  app:.*  lib:'
 # file) is displayed VERBATIM, heading stripped — the tool records nothing,
 # it shows a fact of the world, pids-dir style. Ends at the next ## heading.
 exec sh -c 'printf "See @WORKSPACE.md.\n\n## Status\n\nAbout: fixing the thing (as of 2026-08-21)\nNext: wire the frobnicator\n\n## Notes\nprivate scribbles\n" > "$WORK/root/A-1_x/CLAUDE.md"'
-exec workspace status A-1
+exec chaban status A-1
 stdout 'status \(from CLAUDE.md\):'
 stdout 'About: fixing the thing \(as of 2026-08-21\)'
 stdout 'Next: wire the frobnicator'
 ! stdout 'private scribbles'
-exec workspace status A-1 --json
+exec chaban status A-1 --json
 stdout '"status": "About: fixing the thing'
 
 # A task id resolves to the same workspace as its full name.
-exec workspace status A-1
+exec chaban status A-1
 stdout '^workspace: A-1_x$'
 
 # Empty description → no trailing em-dash. Unreadable branch → "branch unknown".
 # Missing stamp → stale, same wording as a mismatched one.
-exec workspace status B-7
+exec chaban status B-7
 stdout '^task: B-7$'
 ! stdout 'B-7 —'
 stdout '^index: 2$'
@@ -85,7 +85,7 @@ stdout '^  api: not checked out$'
 stdout '^  lib: not checked out$'
 
 # --json is the full derived object: all configured projects, same rule.
-exec workspace status A-1_x --json
+exec chaban status A-1_x --json
 stdout '"dir": "'$WORK'/root/A-1_x"'
 stdout '"name": "A-1_x"'
 stdout '"index": 0'
@@ -102,21 +102,21 @@ stdout '(?s)"name": "api".*"name": "app".*"name": "lib"'
 
 # --- status (no ws) -------------------------------------------------------
 # Exactly the `ls` one-line format (same row builder), no git columns.
-exec workspace status
+exec chaban status
 stdout '^A-1_x +#0 *$'
 stdout '^B-7_y +#2 +\(adopted\)$'
 stdout '(?s)A-1_x.*B-7_y'
 ! stdout 'workspace: '
 ! stdout 'app@'
 
-exec workspace status --json
+exec chaban status --json
 stdout '(?s)"name": "A-1_x".*"name": "B-7_y"'
 ! stdout '"projects"'
 
 # --- env ------------------------------------------------------------------
 # Sorted K=V lines. Project env overrides global per key; runtime tokens are
 # substituted into VALUES only.
-exec workspace env A-1 app
+exec chaban env A-1 app
 stdout '^BASE_URL=http://localhost:5000$'
 stdout '^DB_NAME=app_A-1_dev$'
 stdout '^RAILS_ENV=development$'
@@ -131,23 +131,23 @@ stdout '(?s)BASE_URL.*DB_NAME.*RAILS_ENV'
 
 # Same by full workspace name, and the index (not the listing position) drives
 # the numbers: B-7_y is #2, so PORT0 is 5020.
-exec workspace env B-7_y app
+exec chaban env B-7_y app
 stdout '^BASE_URL=http://localhost:5020$'
 stdout '^DB_NAME=app_B-7_dev$'
 
 # Without a project: global env only, so no project overlay wins and ${PROJECT}
 # has no value to substitute (unknown tokens pass through — spec §4).
-exec workspace env A-1
+exec chaban env A-1
 stdout '^DB_NAME=global_A-1$'
 stdout '^BASE_URL=http://localhost:5000$'
 ! stdout 'app_A-1_dev'
 
 # A configured project that is not checked out still has resolvable env: env is
 # a config question, not a checkout question.
-exec workspace env A-1 lib
+exec chaban env A-1 lib
 stdout '^DB_NAME=lib-db$'
 
-exec workspace env A-1 app --json
+exec chaban env A-1 app --json
 stdout '"DB_NAME": "app_A-1_dev"'
 stdout '"BASE_URL": "http://localhost:5000"'
 ! stdout '"PORT0"'
@@ -156,33 +156,33 @@ stdout '"BASE_URL": "http://localhost:5000"'
 # --- error paths ----------------------------------------------------------
 # Unknown workspace → not found (exit 3, pinned in Go by TestStatusEnvExitCodes),
 # and the message names the ident that failed.
-! exec workspace status NOPE-9
+! exec chaban status NOPE-9
 stderr 'NOPE-9'
-! exec workspace env NOPE-9
+! exec chaban env NOPE-9
 stderr 'NOPE-9'
-! exec workspace env NOPE-9 app
+! exec chaban env NOPE-9 app
 stderr 'NOPE-9'
 
 # Unknown project → not found (exit 3, spec §9), naming the project: ResolvedEnv
 # would silently hand back the global env, which looks like success.
-! exec workspace env A-1 nope
+! exec chaban env A-1 nope
 stderr 'nope'
 
 # Missing config.yml → config error (exit 4).
 env CHABAN_ROOT_DIR=$WORK/no-config
 mkdir $WORK/no-config
-! exec workspace status
+! exec chaban status
 stderr 'config.yml'
-! exec workspace env A-1
+! exec chaban env A-1
 stderr 'config.yml'
 
 # --- empty registry -------------------------------------------------------
 env CHABAN_ROOT_DIR=$WORK/empty
-exec workspace status
+exec chaban status
 stdout '^no workspaces$'
-exec workspace status --json
+exec chaban status --json
 stdout '^\[\]$'
-! exec workspace status A-1
+! exec chaban status A-1
 stderr 'A-1'
 
 # --- no-arg status spawns no git ------------------------------------------
@@ -194,18 +194,18 @@ stderr 'A-1'
 env CHABAN_ROOT_DIR=$WORK/root
 chmod 0777 $WORK/shim/git
 env PATH=$WORK/shim:$PATH
-exec workspace status
+exec chaban status
 stdout '^A-1_x +#0 *$'
 ! exists $WORK/git-calls
-exec workspace status --json
+exec chaban status --json
 stdout '"task_id": "A-1"'
 ! exists $WORK/git-calls
 # env is pure config + arithmetic: no git either.
-exec workspace env A-1 app
+exec chaban env A-1 app
 stdout '^DB_NAME=app_A-1_dev$'
 ! exists $WORK/git-calls
 # status <ws> does reach for git — and degrades to "not checked out" when it fails.
-exec workspace status A-1_x
+exec chaban status A-1_x
 exists $WORK/git-calls
 stdout '^  app: not checked out$'
 

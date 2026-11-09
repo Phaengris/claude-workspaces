@@ -374,7 +374,7 @@ func TestClaudeMissingBinary(t *testing.T) {
 // while the child owns the terminal, the shell delivers Ctrl-C to the whole
 // foreground group — parent included — and a parent that dies mid-session
 // leaves the tty to a still-running claude. The shim aims SIGINT at ITS parent
-// (this test binary, which is the `workspace` process here) and then keeps
+// (this test binary, which is the `chaban` process here) and then keeps
 // running; a session that returns cleanly proves the parent absorbed it.
 //
 // HAZARD, deliberate: if the wrap regresses, the signal takes its default

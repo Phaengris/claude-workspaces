@@ -14,7 +14,7 @@ import (
 	"github.com/Phaengris/chaban/internal/xerr"
 )
 
-// newBrowseCmd builds `workspace browse <workspace> [project]`: open the
+// newBrowseCmd builds `chaban browse <workspace> [project]`: open the
 // project's app — http://localhost:<port>, port = the project's browse_port
 // after runtime substitution (so `${PORT0}` becomes THIS workspace's number).
 //
@@ -72,7 +72,7 @@ func newBrowseCmd() *cobra.Command {
 					project = states[0].Name
 				case 0:
 					return xerr.Wrap(xerr.ErrUsage, fmt.Errorf(
-						"nothing checked out in %s; run: workspace checkout %s <project>", ws.Name(), ws.Name()))
+						"nothing checked out in %s; run: chaban checkout %s <project>", ws.Name(), ws.Name()))
 				default:
 					names := make([]string, len(states))
 					for i, st := range states {
@@ -102,7 +102,7 @@ func newBrowseCmd() *cobra.Command {
 			// wrong. The refusal carries the URL on purpose: a user who
 			// knows the app is seconds from serving can open it themselves.
 			if conn, err := net.DialTimeout("tcp", "localhost:"+port, 500*time.Millisecond); err != nil {
-				return fmt.Errorf("nothing is listening on localhost:%s — start the app (workspace up %s), then retry; or open %s yourself once it serves",
+				return fmt.Errorf("nothing is listening on localhost:%s — start the app (chaban up %s), then retry; or open %s yourself once it serves",
 					port, ws.Name(), url)
 			} else {
 				conn.Close()

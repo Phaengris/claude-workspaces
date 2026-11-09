@@ -24,7 +24,7 @@ func NextIndex(reg Registry) int {
 // Block returns the inclusive [first, last] numbers a value reserves for the
 // workspace at index: first = Start + index*PerWorkspace, last = first +
 // PerWorkspace - 1. This is the single home of the allocation arithmetic —
-// ComputeValues names the individual numbers, `workspace ports` reports the
+// ComputeValues names the individual numbers, `chaban ports` reports the
 // range, and both must agree by construction rather than by coincidence.
 // A PerWorkspace of 0 (rejected by config validation) yields last < first.
 func Block(v config.Value, index int) (first, last int) {

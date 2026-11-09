@@ -21,10 +21,10 @@ exec git -C $WORK/root/src/bad add README
 exec git -C $WORK/root/src/bad commit -m init
 
 # --- happy path: allocate, scaffold, checkout, report ------------------------
-exec workspace new T-1 'fix thing' app
+exec chaban new T-1 'fix thing' app
 stdout 'T-1_fix-thing'
 stdout '^  app: checked out \(branch T-1_fix-thing\), setup current$'
-stdout 'hint: workspace cd T-1'
+stdout 'hint: chaban cd T-1'
 
 # Docs scaffolded: CLAUDE.md once, WORKSPACE.md listing the project.
 exists $WORK/root/T-1_fix-thing/CLAUDE.md
@@ -35,27 +35,27 @@ grep '### app' $WORK/root/T-1_fix-thing/WORKSPACE.md
 # status derives "setup current" from the stamp.
 exec git -C $WORK/root/T-1_fix-thing/app rev-parse --abbrev-ref HEAD
 stdout '^T-1_fix-thing$'
-exec workspace ls
+exec chaban ls
 stdout 'T-1_fix-thing'
-exec workspace status T-1
+exec chaban status T-1
 stdout '^  app: checked out \(branch T-1_fix-thing\), setup current$'
 
 # --- duplicate task id → exit 1 naming the existing dir ----------------------
 # Different description, so the dir itself is fresh — the task-id uniqueness
 # check is what rejects it, and its message points at the existing workspace.
-! exec workspace new T-1 'again'
+! exec chaban new T-1 'again'
 stderr 'T-1_fix-thing'
 
 # Same name again: the dir-exists pre-check fires (nothing allocated).
-! exec workspace new T-1 'fix thing'
+! exec chaban new T-1 'fix thing'
 stderr 'T-1_fix-thing'
 
 # --- invalid task id → usage error (exit 2, pinned in TestNewExitCodes) ------
-! exec workspace new .bad 'x'
+! exec chaban new .bad 'x'
 stderr 'invalid task id'
 
 # --- no projects: dir + docs, no worktrees, exit 0 ----------------------------
-exec workspace new T-3 'no projects'
+exec chaban new T-3 'no projects'
 exists $WORK/root/T-3_no-projects/CLAUDE.md
 exists $WORK/root/T-3_no-projects/WORKSPACE.md
 grep 'none checked out' $WORK/root/T-3_no-projects/WORKSPACE.md
@@ -64,7 +64,7 @@ grep 'none checked out' $WORK/root/T-3_no-projects/WORKSPACE.md
 # bad depends on app, so app is ensured FIRST and succeeds (worktree + setup);
 # bad's setup then fails. The undo stack must remove bad's worktree, app's
 # worktree, the workspace dir, and the allocation — but NOT the branches.
-! exec workspace new T-2 x app bad
+! exec chaban new T-2 x app bad
 stderr 'project "bad"'
 ! exists $WORK/root/T-2_x
 ! grep T-2 $WORK/root/.allocations.json
@@ -79,14 +79,14 @@ exec git -C $WORK/root/src/bad rev-parse --verify refs/heads/T-2_x
 
 # Convergence: after dropping the broken project the same new succeeds,
 # reusing the surviving T-2 branch.
-exec workspace new T-2 x app
+exec chaban new T-2 x app
 exec git -C $WORK/root/T-2_x/app rev-parse --abbrev-ref HEAD
 stdout '^T-2_x$'
-exec workspace status T-2
+exec chaban status T-2
 stdout '^  app: checked out \(branch T-2_x\), setup current$'
 
 # --- usage: fewer than two positionals → exit 2 -------------------------------
-! exec workspace new T-9
+! exec chaban new T-9
 stderr 'requires at least 2'
 
 -- config.tmpl --

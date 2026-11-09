@@ -14,7 +14,7 @@ import (
 
 // Shell completions (spec §2). Two halves:
 //
-//   - The SCRIPTS come from cobra: `workspace completion bash|zsh|fish` is
+//   - The SCRIPTS come from cobra: `chaban completion bash|zsh|fish` is
 //     cobra's own generated subcommand, deliberately kept rather than
 //     hand-rolled — the scripts are the client side of cobra's `__complete`
 //     protocol and hand-maintaining them would mean re-deriving that protocol
@@ -112,7 +112,7 @@ func wireCompletions(root *cobra.Command) {
 
 // completeNothing suggests nothing and suppresses file completion. It is the
 // deliberate answer for the commands that take no positionals — the shell
-// offering file names after `workspace ls` would be pure noise.
+// offering file names after `chaban ls` would be pure noise.
 func completeNothing(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }

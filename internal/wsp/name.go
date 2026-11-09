@@ -24,7 +24,7 @@ func ValidTaskID(id string) bool {
 
 // DirName is the workspace directory name for a task: "<task_id>" when there
 // is no usable description, otherwise "<task_id>_<slug>". Keeping the task id
-// as the leading segment is what lets a human (and `workspace ls`) read the
+// as the leading segment is what lets a human (and `chaban ls`) read the
 // identity straight off the directory.
 func DirName(taskID, desc string) string {
 	s := slug(desc)

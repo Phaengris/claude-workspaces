@@ -45,7 +45,7 @@ func registryRoot(t *testing.T) string {
 // exit 3 for "workspace/project not found", and that covers an unconfigured
 // project exactly as it covers an unknown workspace — the workspace resolving
 // successfully first doesn't change what the project half of the identifier
-// means. This is what makes `workspace status X` usable as a shell test for
+// means. This is what makes `chaban status X` usable as a shell test for
 // existence.
 func TestStatusEnvExitCodes(t *testing.T) {
 	cases := map[string]struct {

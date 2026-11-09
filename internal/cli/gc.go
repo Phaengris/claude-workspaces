@@ -16,7 +16,7 @@ import (
 	"github.com/Phaengris/chaban/internal/wsp"
 )
 
-// newGCCmd builds `workspace gc [--destroy-dirs]`: garbage-collect the whole
+// newGCCmd builds `chaban gc [--destroy-dirs]`: garbage-collect the whole
 // registry in up to three passes (spec §2's gc row).
 //
 //  1. release — every allocation whose dir no longer EXISTS is released, one
@@ -54,7 +54,7 @@ import (
 //     only on evidence, so it SURVIVES. That covers the half-destroyed
 //     case too: a workspace a partial destroy left with its worktrees
 //     already removed reads as empty here and is skipped — finish it with
-//     `workspace destroy` (or destroy --force), the "I mean it" path for
+//     `chaban destroy` (or destroy --force), the "I mean it" path for
 //     anything without evidence;
 //     - NOTHING recorded in its pids directory is still running
 //     (anyDaemonRunning). Every record found on disk, not the configured
@@ -75,7 +75,7 @@ import (
 //     same porcelain question `ls -g` renders, via gitx.StatsFor. Merged
 //     covers only what was COMMITTED; destroyWork's removal discards the
 //     working copy, and uncommitted work is the wrong thing for a batch
-//     sweep to discard — the explicit `workspace destroy` keeps that
+//     sweep to discard — the explicit `chaban destroy` keeps that
 //     power, gc does not (plan-owner ruling). A dirty workspace survives
 //     LOUDLY, `skipped <name> (uncommitted changes)`: unlike the silent
 //     gates above, it is the one case where everything else says
@@ -111,7 +111,7 @@ func newGCCmd() *cobra.Command {
 		// No positionals: gc always works on the whole registry (spec §2).
 		Args: usageArgs(cobra.NoArgs),
 		// --json is inherited and deliberately unused: spec §2 scopes it to the
-		// query commands. Accepting and ignoring it keeps `workspace --json gc`
+		// query commands. Accepting and ignoring it keeps `chaban --json gc`
 		// working for a caller that sets the flag globally.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, cfg, reg, err := loadRootDir()

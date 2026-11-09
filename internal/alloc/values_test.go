@@ -31,7 +31,7 @@ func TestNextIndexFillsGaps(t *testing.T) {
 	}
 }
 
-// TestBlock pins the allocation arithmetic ComputeValues and `workspace ports`
+// TestBlock pins the allocation arithmetic ComputeValues and `chaban ports`
 // share: the block is inclusive, and a workspace's index — not its position in
 // any listing — decides where its block starts.
 func TestBlock(t *testing.T) {

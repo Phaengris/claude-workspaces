@@ -13,7 +13,7 @@ import (
 	"github.com/Phaengris/chaban/internal/wsp"
 )
 
-// newUpCmd builds `workspace up <workspace> [target…]` (alias `start`):
+// newUpCmd builds `chaban up <workspace> [target…]` (alias `start`):
 // converge the targeted daemons to running. Per resolved project, in
 // dependency order (the decided Order row):
 //
@@ -84,7 +84,7 @@ func newUpCmd() *cobra.Command {
 // certainly wants something checked out first.
 func hintNothingCheckedOut(cmd *cobra.Command, ws wsp.Workspace) {
 	fmt.Fprintf(cmd.OutOrStdout(),
-		"nothing checked out — run: workspace checkout %s <project…>\n", ws.Name())
+		"nothing checked out — run: chaban checkout %s <project…>\n", ws.Name())
 }
 
 // upWork converges an already-resolved work list to running: upProject per

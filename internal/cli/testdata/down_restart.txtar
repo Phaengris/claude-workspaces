@@ -6,7 +6,7 @@
 #   src/stubborn — start: [daemon `trap: …`] that ignores TERM (KILL escalation)
 #
 # Daemon lifetime discipline: every block that starts daemons ends with a
-# `workspace down` (the point of this task); every daemon is ALSO `sleep 30`
+# `chaban down` (the point of this task); every daemon is ALSO `sleep 30`
 # as a self-expiring backstop, so nothing here can outlive the test run.
 #
 # `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go.
@@ -23,10 +23,10 @@ exec git -C $WORK/root/src/stubborn add README
 exec git -C $WORK/root/src/stubborn commit -m init
 
 # --- empty workspace: down/restart on nothing is a no-op success ---------------
-exec workspace new T-1 x
-exec workspace down T-1
+exec chaban new T-1 x
+exec chaban down T-1
 stdout 'nothing checked out'
-exec workspace restart T-1
+exec chaban restart T-1
 stdout 'nothing checked out'
 
 # --- cold whole-project down: stop: commands skipped, loudly --------------------
@@ -34,7 +34,7 @@ stdout 'nothing checked out'
 # configures stop: commands, and those may manage state outside the worktree
 # (docker compose down, …): declining them silently would hide that. One note
 # line, still exit 0, and the marker they would create is naturally absent.
-exec workspace down T-1 app
+exec chaban down T-1 app
 stdout 'app: stop commands skipped \(not checked out\)'
 stdout 'app:sleeper already stopped'
 ! exists $WORK/root/T-1_x/app
@@ -46,7 +46,7 @@ stdout 'app:sleeper already stopped'
 # the project's stop: commands inside it would run them against something that
 # is not the project: same note, same exit 0, and the marker stays absent.
 mkdir $WORK/root/T-1_x/app
-exec workspace down T-1 app
+exec chaban down T-1 app
 stdout 'app: stop commands skipped \(not checked out\)'
 ! exists $WORK/root/T-1_x/app/stopped-marker
 rm $WORK/root/T-1_x/app
@@ -54,10 +54,10 @@ rm $WORK/root/T-1_x/app
 # --- up → down: confirmed TERM stop --------------------------------------------
 # Capture the pid record BEFORE down; after down the pid file is gone and the
 # process is dead — kill -0 against the captured pid must fail.
-exec workspace up T-1 app
+exec chaban up T-1 app
 stdout 'started app:sleeper \(pid \d+\)'
 cp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-before
-exec workspace down T-1 app
+exec chaban down T-1 app
 stdout 'stopped app:sleeper \(TERM\)'
 ! exists $WORK/root/T-1_x/.workspace/pids/app:sleeper
 ! exec sh -c 'kill -0 $(cut -d" " -f1 pid-before)'
@@ -66,7 +66,7 @@ stdout 'stopped app:sleeper \(TERM\)'
 exists $WORK/root/T-1_x/app/stopped-marker
 
 # --- down again: idempotent, exit 0 (alias `stop` exercised here) ---------------
-exec workspace stop T-1 app
+exec chaban stop T-1 app
 stdout 'app:sleeper already stopped'
 ! stdout 'stopped app:sleeper \('
 
@@ -74,15 +74,15 @@ stdout 'app:sleeper already stopped'
 # WholeProject is false when only the daemon was named, and the stop: commands
 # are the project's epilogue, not any single daemon's — pin the marker absent.
 rm $WORK/root/T-1_x/app/stopped-marker
-exec workspace up T-1 app
-exec workspace down T-1 sleeper
+exec chaban up T-1 app
+exec chaban down T-1 sleeper
 stdout 'stopped app:sleeper \(TERM\)'
 ! exists $WORK/root/T-1_x/app/stopped-marker
 
 # --- restart: new pid, daemon running after -------------------------------------
-exec workspace up T-1 app
+exec chaban up T-1 app
 cp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-old
-exec workspace restart T-1 app
+exec chaban restart T-1 app
 stdout 'stopped app:sleeper \(TERM\)'
 stdout 'started app:sleeper \(pid \d+\)'
 cp $WORK/root/T-1_x/.workspace/pids/app:sleeper pid-new
@@ -91,11 +91,11 @@ exec sh -c 'kill -0 $(cut -d" " -f1 pid-new)'
 
 # --- restart from stopped: converge to running -----------------------------------
 # restart is down+up of the SAME set; a daemon that was already stopped starts.
-exec workspace down T-1 app
-exec workspace restart T-1 app
+exec chaban down T-1 app
+exec chaban restart T-1 app
 stdout 'app:sleeper already stopped'
 stdout 'started app:sleeper \(pid \d+\)'
-exec workspace down T-1
+exec chaban down T-1
 
 # --- KILL escalation (deliberately ONCE in the suite: ~5s wall clock) ------------
 # The daemon command installs `trap '' TERM` directly (Task 1's flat pattern —
@@ -103,10 +103,10 @@ exec workspace down T-1
 # burns the full 5s TERM budget before escalating to KILL. The ready file gates
 # the race between our signal and the login shell still initializing (trap not
 # yet installed).
-exec workspace up T-1 stubborn
+exec chaban up T-1 stubborn
 stdout 'started stubborn:trap \(pid \d+\)'
 exec sh -c 'for i in $(seq 50); do test -f $WORK/root/T-1_x/stubborn/ready && exit 0; sleep 0.1; done; exit 1'
-exec workspace down T-1 stubborn
+exec chaban down T-1 stubborn
 stdout 'stopped stubborn:trap \(KILL\)'
 ! exists $WORK/root/T-1_x/.workspace/pids/stubborn:trap
 
@@ -120,17 +120,17 @@ stdout 'stopped stubborn:trap \(KILL\)'
 #
 # T-2 is used (not T-1) so the whole-workspace down here cannot rope in the
 # stubborn daemon and pay the 5s KILL budget a second time.
-exec workspace new T-2 y
+exec chaban new T-2 y
 
 # restart first, while app is still startable: its down half enumerates the same
 # directory, and its up half can only start what the config DEFINES — nothing
 # can re-launch a daemon whose definition is gone.
-exec workspace up T-2 app
+exec chaban up T-2 app
 stdout 'started app:sleeper \(pid \d+\)'
 cp $WORK/root/T-2_y/.workspace/pids/app:sleeper pid-unlisted
 workroot config2.tmpl root/config.yml
 ! grep 'src/app' root/config.yml
-exec workspace restart T-2
+exec chaban restart T-2
 stdout 'stopped app:sleeper \(TERM\)'
 ! stdout 'started app:sleeper'
 ! exists $WORK/root/T-2_y/.workspace/pids/app:sleeper
@@ -140,10 +140,10 @@ stdout 'stopped app:sleeper \(TERM\)'
 # addressed) and no stop: epilogue — those stay config-gated, and the config no
 # longer claims this project at all, so its marker must not appear.
 workroot config.tmpl root/config.yml
-exec workspace up T-2 app
+exec chaban up T-2 app
 cp $WORK/root/T-2_y/.workspace/pids/app:sleeper pid-unlisted2
 workroot config2.tmpl root/config.yml
-exec workspace down T-2
+exec chaban down T-2
 stdout 'stopped app:sleeper \(TERM\)'
 ! stdout 'nothing checked out'
 ! exists $WORK/root/T-2_y/.workspace/pids/app:sleeper
@@ -156,10 +156,10 @@ stdout 'stopped app:sleeper \(TERM\)'
 # holding this index's ports, with nothing left on disk for a re-run to find it
 # by. Phase 0 is therefore the no-target down in full, directory included.
 workroot config.tmpl root/config.yml
-exec workspace up T-2 app
+exec chaban up T-2 app
 cp $WORK/root/T-2_y/.workspace/pids/app:sleeper pid-unlisted3
 workroot config2.tmpl root/config.yml
-exec workspace destroy T-2
+exec chaban destroy T-2
 stdout 'stopped app:sleeper \(TERM\)'
 ! exists $WORK/root/T-2_y
 ! exec sh -c 'kill -0 $(cut -d" " -f1 pid-unlisted3)'

@@ -13,7 +13,7 @@ MIT-licensed.
 ## Commands
 
 ```
-CGO_ENABLED=0 go build -o ./workspace ./cmd/workspace     # build (binary is gitignored)
+CGO_ENABLED=0 go build -o ./chaban ./cmd/chaban             # build (binary is gitignored)
 go test ./...                                             # full suite (~11s; real processes, real git)
 go test -race ./internal/proc ./internal/wsp ./internal/cli
 gofmt -l . && go vet ./...                                # both must be clean before commit
@@ -21,15 +21,15 @@ gofmt -l . && go vet ./...                                # both must be clean b
 #   add its CHANGELOG entry under "Unreleased". Do NOT tag per change.
 # daily-driver install between releases: build with
 #   -ldflags "-X github.com/Phaengris/chaban/internal/cli.version=$(git describe --tags --always)"
-#   then ./workspace install — the user runs master, tags are for the world.
+#   then ./chaban install — the user runs master, tags are for the world.
 # release (end of a day with user-visible changes, or on explicit need):
 #   retitle Unreleased to X.Y.Z in CHANGELOG.md, build with version=X.Y.Z,
-#   ./workspace install, tag vX.Y.Z, push master+tag to both remotes.
+#   ./chaban install, tag vX.Y.Z, push master+tag to both remotes.
 ```
 
 Conventional commits (`feat(cli): …`). The user's real install lives at
 `~/.local/bin/workspace` — after user-facing fixes, rebuild with a bumped
-version and run `./workspace install` (idempotent, manifest-driven).
+version and run `./chaban install` (idempotent, manifest-driven).
 
 ## Architecture (dependency flow strictly downward)
 

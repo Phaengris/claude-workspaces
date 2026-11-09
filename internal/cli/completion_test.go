@@ -285,9 +285,9 @@ func TestCompletionsSurviveRootGuards(t *testing.T) {
 // fails here.
 func TestCompletionScripts(t *testing.T) {
 	cases := map[string]string{
-		"bash": "complete -o default -F __start_workspace workspace",
-		"zsh":  "#compdef workspace",
-		"fish": "function __workspace_perform_completion",
+		"bash": "complete -o default -F __start_chaban chaban",
+		"zsh":  "#compdef chaban",
+		"fish": "function __chaban_perform_completion",
 	}
 	for shell, sentinel := range cases {
 		t.Run(shell, func(t *testing.T) {

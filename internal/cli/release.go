@@ -24,7 +24,7 @@ import (
 // they just differ in what they claim.
 const alreadyReleased = "already released"
 
-// newReleaseCmd builds `workspace release [dir]`: drop a workspace's
+// newReleaseCmd builds `chaban release [dir]`: drop a workspace's
 // allocation and leave every byte on disk exactly where it is.
 //
 // It is the inverse of `adopt` and the opposite of `destroy`: destroy tears the
@@ -45,7 +45,7 @@ const alreadyReleased = "already released"
 // to stop it, and the freed index would be handed to the next `new`, whose
 // daemons would then collide on the same ports. This is M3's destroy-orphan bug
 // in registry form, and the answer is the same: refuse (plain error, exit 1)
-// and name the command that fixes it, `workspace down <name>`. The liveness
+// and name the command that fixes it, `chaban down <name>`. The liveness
 // question is anyDaemonRunning — gc's own gate, reading the pids DIRECTORY, so
 // a daemon renamed out of the config while running still blocks the release.
 //
@@ -72,7 +72,7 @@ func newReleaseCmd() *cobra.Command {
 		// At most one positional; more is a usage error → exit 2 (spec §9).
 		Args: usageArgs(cobra.MaximumNArgs(1)),
 		// --json is inherited and deliberately unused: spec §2 scopes it to the
-		// query commands. Accepting and ignoring it keeps `workspace --json
+		// query commands. Accepting and ignoring it keeps `chaban --json
 		// release` working for a caller that sets the flag globally.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Not loadRoot: release needs the root path itself for
@@ -99,7 +99,7 @@ func newReleaseCmd() *cobra.Command {
 				return err
 			}
 			if running {
-				return fmt.Errorf("%s still has running daemons; stop them first: workspace down %s",
+				return fmt.Errorf("%s still has running daemons; stop them first: chaban down %s",
 					ws.Name(), ws.Name())
 			}
 			// ws.Dir is the registry's own key spelling (allocationAt and

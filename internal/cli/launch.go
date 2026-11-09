@@ -12,7 +12,7 @@ import (
 	"github.com/Phaengris/chaban/internal/xerr"
 )
 
-// newLaunchCmd builds `workspace launch <task_id> [<description> [project…]]
+// newLaunchCmd builds `chaban launch <task_id> [<description> [project…]]
 // [-S] [-R] [-- claude args…]`: the one-shot that composes the daily entry
 // sequence — create-or-reuse, check out, then hand the terminal to Claude. It
 // runs the OTHER commands' work functions (newWork, checkoutWork,
@@ -34,13 +34,13 @@ import (
 //     dead until an explicit `up` (spec 2026-08-11, decided rows 1 and 4).
 //     NOT FOUND → create. The description becomes REQUIRED (usage error, exit
 //     2, when absent) and newWork runs with the listed projects. `new`'s own
-//     `hint: workspace cd <id>` is NOT printed here — the terminal is about to
+//     `hint: chaban cd <id>` is NOT printed here — the terminal is about to
 //     become the session's, so the hint would read as a pending to-do. Instead
 //     the create path prints a tip for reaching the workspace from ANOTHER
 //     terminal while the session runs.
 //     Anything else (an ambiguous task id) is that error, verbatim.
-//  2. the session, via the same runner as `workspace claude`. Daemons are
-//     lazy: launch starts NONE of them, on either path — `workspace up` is
+//  2. the session, via the same runner as `chaban claude`. Daemons are
+//     lazy: launch starts NONE of them, on either path — `chaban up` is
 //     the explicit start. A workspace with nothing checked out still gets the
 //     empty-workspace hint (up's own), since that is a fact about checkout,
 //     not about daemons.
@@ -69,7 +69,7 @@ func newLaunchCmd() *cobra.Command {
 			"then launch a Claude Code session in it.\n\n" +
 			"An existing workspace is reused as-is: the description is ignored " +
 			"and any projects listed after it are checked out.\n\n" +
-			"Daemons are not started; use `workspace up` for the services you need.",
+			"Daemons are not started; use `chaban up` for the services you need.",
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
@@ -108,7 +108,7 @@ func newLaunchCmd() *cobra.Command {
 			case errors.Is(err, xerr.ErrNotFound):
 				if len(positional) < 2 {
 					return xerr.Wrap(xerr.ErrUsage, fmt.Errorf(
-						"no workspace for task %q yet, so a description is required: workspace launch %s <description> [project...]",
+						"no workspace for task %q yet, so a description is required: chaban launch %s <description> [project...]",
 						taskID, taskID))
 				}
 				if ws, err = newWork(cmd, cfg, root, taskID, positional[1], positional[2:]); err != nil {
@@ -122,13 +122,13 @@ func newLaunchCmd() *cobra.Command {
 				// The cd hint `new` prints would read as a pending to-do here — the
 				// session is about to own this terminal. What IS worth saying is how
 				// to reach the workspace while the session runs (spec row 7).
-				fmt.Fprintf(out, "tip: in another terminal: workspace cd %s — work alongside this session\n", taskID)
+				fmt.Fprintf(out, "tip: in another terminal: chaban cd %s — work alongside this session\n", taskID)
 			default:
 				return err // an ambiguous task id: plain error, exit 1
 			}
 
 			// Daemons are lazy (spec 2026-08-11): the session starts what it
-			// needs via `workspace up`. The one thing launch still says here is
+			// needs via `chaban up`. The one thing launch still says here is
 			// the empty-workspace hint — a workspace with nothing checked out is
 			// a legitimate place to think in, but deserves the pointer.
 			if len(wsp.ProjectStates(cfg, ws)) == 0 {

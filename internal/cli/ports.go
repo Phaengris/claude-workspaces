@@ -19,7 +19,7 @@ type portRange struct {
 	Last  int `json:"last"`
 }
 
-// newPortsCmd builds `workspace ports`: the allocated value blocks across every
+// newPortsCmd builds `chaban ports`: the allocated value blocks across every
 // workspace — value name × workspace, both sorted. The numbers come from
 // alloc.Block (the same arithmetic that produces the runtime PORT0…PORTn), NOT
 // from parsing alloc.ComputeValues' strings: a block is a first/last pair here,

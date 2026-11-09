@@ -24,7 +24,7 @@ exec git -C $WORK/root/src/api add README
 exec git -C $WORK/root/src/api commit -m init
 
 # --- first checkout: worktree, .env, setup, stamp, WORKSPACE.md ------------
-exec workspace checkout T-1 app
+exec chaban checkout T-1 app
 
 # Worktree on a branch named after the task id.
 exec git -C $WORK/root/T-1/app rev-parse --abbrev-ref HEAD
@@ -37,7 +37,7 @@ grep '^DB_NAME=app_T-1_dev$' $WORK/root/T-1/app/.env
 
 # Stamp written; status derives "setup current" from it.
 exists $WORK/root/T-1/.workspace/setup-app.ok
-exec workspace status T-1
+exec chaban status T-1
 stdout '^  app: checked out \(branch T-1\), setup current$'
 
 # WORKSPACE.md regenerated, listing the checked-out project.
@@ -48,11 +48,11 @@ exec sh -c 'test "$(wc -l < "$WORK/root/T-1/app/setup.log")" -eq 1'
 
 # --- re-run: idempotent ------------------------------------------------------
 # Worktree exists, stamp current — exit 0 and setup does NOT re-run.
-exec workspace checkout T-1 app
+exec chaban checkout T-1 app
 exec sh -c 'test "$(wc -l < "$WORK/root/T-1/app/setup.log")" -eq 1'
 
 # --- unknown project → not found (exit 3, pinned in TestCheckoutExitCodes) --
-! exec workspace checkout T-1 nope
+! exec chaban checkout T-1 nope
 stderr 'project "nope" is not configured'
 
 # --- failing setup: join-and-continue ---------------------------------------
@@ -60,7 +60,7 @@ stderr 'project "nope" is not configured'
 # ensured afterward (errors joined, remaining projects continue), api gets no
 # stamp, and WORKSPACE.md is refreshed regardless — api's worktree and .env
 # exist (the chain failed at setup, after both), so both projects are listed.
-! exec workspace checkout T-2 api app
+! exec chaban checkout T-2 api app
 stderr 'project "api"'
 ! exists $WORK/root/T-2/.workspace/setup-api.ok
 exists $WORK/root/T-2/.workspace/setup-app.ok
@@ -71,11 +71,11 @@ grep '### app' $WORK/root/T-2/WORKSPACE.md
 
 # Re-running the failed checkout converges on the still-broken half only:
 # app's stamp is current, so its setup does not re-run.
-! exec workspace checkout T-2 api app
+! exec chaban checkout T-2 api app
 exec sh -c 'test "$(wc -l < "$WORK/root/T-2/app/setup.log")" -eq 1'
 
 # --- usage: fewer than two positionals → exit 2 ------------------------------
-! exec workspace checkout T-1
+! exec chaban checkout T-1
 stderr 'requires at least 2'
 
 -- config.tmpl --

@@ -22,11 +22,11 @@ exec git -C $WORK/root/src/api add README
 exec git -C $WORK/root/src/api commit -m init
 
 # --- full destroy: reverse-order teardown, removal, release ------------------
-exec workspace new T-1 'fix thing' app api
+exec chaban new T-1 'fix thing' app api
 exists $WORK/root/T-1_fix-thing/app/.git
 exists $WORK/root/T-1_fix-thing/api/.git
 
-exec workspace destroy T-1
+exec chaban destroy T-1
 stdout 'project "api": teardown complete'
 stdout 'project "app": teardown complete'
 stdout 'project "api": worktree removed'
@@ -52,8 +52,8 @@ exec git -C $WORK/root/src/api rev-parse --verify refs/heads/T-1_fix-thing
 # app's teardown is `false`; api's still succeeds first (reverse order), then
 # the failure aborts destroy before any removal.
 workroot config-bad.tmpl root/config.yml
-exec workspace new T-2 x app api
-! exec workspace destroy T-2
+exec chaban new T-2 x app api
+! exec chaban destroy T-2
 stderr 'project "app"'
 
 # app's failure does NOT skip api: the remaining projects still run their
@@ -74,7 +74,7 @@ stdout T-2_x
 # Convergence: drop the failing teardown from config and re-run — the same
 # destroy now completes (teardowns are expected idempotent, spec §3).
 workroot config.tmpl root/config.yml
-exec workspace destroy T-2
+exec chaban destroy T-2
 ! exists $WORK/root/T-2_x
 ! grep T-2 $WORK/root/.allocations.json
 exec git -C $WORK/root/src/app worktree list
@@ -85,7 +85,7 @@ exec git -C $WORK/root/src/app worktree list
 # adoption will record it.
 mkdir $WORK/root/A-9_adopt
 workroot adopted-reg.tmpl root/.allocations.json
-exec workspace destroy A-9
+exec chaban destroy A-9
 stdout 'left in place'
 exists $WORK/root/A-9_adopt
 ! grep A-9 $WORK/root/.allocations.json
@@ -98,12 +98,12 @@ exists $WORK/root/A-9_adopt
 # Daemon lifetime discipline (down_restart.txtar's rule): the daemon is
 # `sleep 30`, self-expiring, and the destroy under test is what stops it.
 workroot config-daemon.tmpl root/config.yml
-exec workspace new T-3 daemons app
-exec workspace up T-3 app
+exec chaban new T-3 daemons app
+exec chaban up T-3 app
 stdout 'started app:sleeper \(pid \d+\)'
 cp $WORK/root/T-3_daemons/.workspace/pids/app:sleeper pid-daemon
 
-exec workspace destroy T-3
+exec chaban destroy T-3
 stdout 'stopped app:sleeper \(TERM\)'
 stdout 'project "app": teardown complete'
 stdout 'allocation released \(task T-3\)'
@@ -117,17 +117,17 @@ stdout 'allocation released \(task T-3\)'
 # `down` on nothing prints "nothing checked out" as its no-op-success hint;
 # inside destroy that line is nonsense (the workspace is being removed), so the
 # hint belongs to down's own UX only.
-exec workspace new T-4 empty
-exec workspace destroy T-4
+exec chaban new T-4 empty
+exec chaban destroy T-4
 ! stdout 'nothing checked out'
 ! exists $WORK/root/T-4_empty
 
 # --- unknown workspace → not found (exit 3, pinned in TestDestroyExitCodes) --
-! exec workspace destroy NOPE
+! exec chaban destroy NOPE
 stderr 'no workspace matching'
 
 # --- usage: exactly one positional (exit 2, pinned in TestDestroyExitCodes) --
-! exec workspace destroy
+! exec chaban destroy
 stderr 'accepts 1 arg'
 
 # --- destroy --force: a corrupted worktree marker cannot wedge destruction ----
@@ -137,15 +137,15 @@ stderr 'accepts 1 arg'
 # downgrades it to a warning, removes the dir, prunes the stale registration
 # from the (healthy) source repo, and releases.
 workroot config.tmpl root/config.yml
-exec workspace new T-5 corrupt api
+exec chaban new T-5 corrupt api
 cp junk-git $WORK/root/T-5_corrupt/api/.git
 
-! exec workspace destroy T-5
+! exec chaban destroy T-5
 stderr 'project "api"'
 exists $WORK/root/T-5_corrupt/api
 grep T-5 $WORK/root/.allocations.json
 
-exec workspace destroy --force T-5
+exec chaban destroy --force T-5
 stdout 'warning: worktree removal failed for .*T-5_corrupt/api'
 ! exists $WORK/root/T-5_corrupt
 ! grep T-5 $WORK/root/.allocations.json
@@ -164,15 +164,15 @@ exec git -C $WORK/root/src/api worktree list
 # repo. Plain destroy aborts (pin); --force warns and proceeds. The prune
 # epilogue also fails here (the repo path is gone) and that too is only a
 # warning — prune is best-effort by contract.
-exec workspace new T-6 broken app
+exec chaban new T-6 broken app
 exec mv $WORK/root/src/app $WORK/root/src/app-moved
 
-! exec workspace destroy T-6
+! exec chaban destroy T-6
 stderr 'project "app"'
 exists $WORK/root/T-6_broken/app
 grep T-6 $WORK/root/.allocations.json
 
-exec workspace destroy --force T-6
+exec chaban destroy --force T-6
 stdout 'warning: worktree removal failed for .*T-6_broken/app'
 stdout 'warning: worktree prune failed for .*src/app'
 ! exists $WORK/root/T-6_broken

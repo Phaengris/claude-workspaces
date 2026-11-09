@@ -15,7 +15,7 @@ import (
 	"github.com/Phaengris/chaban/internal/config"
 )
 
-// `workspace install` / `workspace uninstall` (spec §2, §9) are the one place
+// `chaban install` / `chaban uninstall` (spec §2, §9) are the one place
 // this tool writes OUTSIDE the workspaces root, so the rules are stricter
 // than anywhere else:
 //
@@ -73,7 +73,7 @@ func layoutFor(home string) installLayout {
 	}
 }
 
-// newInstallCmd builds `workspace install`: copy the running binary, write
+// newInstallCmd builds `chaban install`: copy the running binary, write
 // the shell integration, the completions, the Claude Code skill and the
 // SessionStart hook into $HOME; create the workspaces root and its config
 // stub; record every tool-owned path in the manifest; print what the user
@@ -283,7 +283,7 @@ func copyBinary(src, dst string) (skipped bool, err error) {
 // alloc registry's Save is the pattern, minus one deliberate omission: no
 // directory fsync after the rename. Save pays it because the registry is the
 // tool's only persistent state and a rename lost to a crash is data loss;
-// here a lost rename just means re-running `workspace install`, and the
+// here a lost rename just means re-running `chaban install`, and the
 // file-level sync above already rules out torn content at the final path.
 func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 	dir := filepath.Dir(path)

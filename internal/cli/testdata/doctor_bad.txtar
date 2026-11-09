@@ -1,6 +1,6 @@
 # doctor on an invalid config exits 4 and lists every problem.
 env CHABAN_ROOT_DIR=$WORK/root
-! exec workspace doctor
+! exec chaban doctor
 stderr 'unknown'
 stderr 'comand_runner'
 
