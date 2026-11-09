@@ -83,7 +83,7 @@ func newInstallCmd() *cobra.Command {
 		Use:   "install",
 		Short: "Install the binary, shell integration, completions, skill and hook into $HOME",
 		// No positionals, and no --root flag on purpose: the root comes from
-		// $CLAUDE_WORKSPACES_ROOT_DIR / the default, exactly as it does for
+		// $CHABAN_ROOT_DIR / the default, exactly as it does for
 		// every other command — install must set up the same universe the
 		// rest of the tool will read.
 		Args: usageArgs(cobra.NoArgs),

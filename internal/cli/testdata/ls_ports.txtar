@@ -11,7 +11,7 @@ env GIT_AUTHOR_NAME=t
 env GIT_AUTHOR_EMAIL=t@t
 env GIT_COMMITTER_NAME=t
 env GIT_COMMITTER_EMAIL=t@t
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+env CHABAN_ROOT_DIR=$WORK/root
 
 # The registry keys on ABSOLUTE workspace dirs, and txtar file bodies are
 # extracted verbatim (no env expansion), so the registry is shipped as a
@@ -125,7 +125,7 @@ stdout '"last": 5029'
 # --- empty registry -------------------------------------------------------
 # A root with a valid config and no allocations is not an error: both commands
 # say so on stdout and exit 0. --json stays machine-parseable (empty container).
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/empty
+env CHABAN_ROOT_DIR=$WORK/empty
 exec workspace ls
 stdout '^no workspaces$'
 exec workspace ports
@@ -137,7 +137,7 @@ stdout '^\{\}$'
 
 # --- error paths ----------------------------------------------------------
 # Missing config.yml → config error (exit 4, pinned in Go by TestQueryExitCodes).
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/no-config
+env CHABAN_ROOT_DIR=$WORK/no-config
 mkdir $WORK/no-config
 ! exec workspace ls
 stderr 'config.yml'
@@ -145,7 +145,7 @@ stderr 'config.yml'
 stderr 'config.yml'
 
 # Unreadable registry → plain error naming the registry (exit 1).
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/broken
+env CHABAN_ROOT_DIR=$WORK/broken
 ! exec workspace ls
 stderr 'registry'
 ! exec workspace ports
@@ -165,7 +165,7 @@ stderr 'unknown command'
 # after plain ls, a log file after -g. (The rest of PATH must stay: testscript
 # resolves the `workspace` command itself through it. This block runs last, so
 # the shim shadows real git for everything that follows.)
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+env CHABAN_ROOT_DIR=$WORK/root
 chmod 0777 $WORK/shim/git
 env PATH=$WORK/shim:$PATH
 exec workspace ls

@@ -69,7 +69,7 @@ func newUninstallCmd() *cobra.Command {
 				return err
 			}
 			// Absolutize before the refusal compares: manifest entries are
-			// absolute, and a RELATIVE $CLAUDE_WORKSPACES_ROOT_DIR would
+			// absolute, and a RELATIVE $CHABAN_ROOT_DIR would
 			// otherwise never match one — silently disabling the root guard,
 			// the worst possible failure mode for a safety check.
 			if root, err = filepath.Abs(root); err != nil {

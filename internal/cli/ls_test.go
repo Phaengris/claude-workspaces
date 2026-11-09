@@ -12,7 +12,7 @@ import (
 const validConfig = "values:\n  PORT: { start: 5000, per_workspace: 10 }\n"
 
 // fixtureRoot writes the given files (name → content) into a fresh root and
-// points $CLAUDE_WORKSPACES_ROOT_DIR at it for the duration of the test.
+// points $CHABAN_ROOT_DIR at it for the duration of the test.
 func fixtureRoot(t *testing.T, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -21,7 +21,7 @@ func fixtureRoot(t *testing.T, files map[string]string) string {
 			t.Fatal(err)
 		}
 	}
-	t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", root)
+	t.Setenv("CHABAN_ROOT_DIR", root)
 	return root
 }
 

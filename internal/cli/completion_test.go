@@ -231,6 +231,15 @@ func TestCompletionsSurviveBrokenRoot(t *testing.T) {
 	}
 }
 
+// TestCompletionsSurviveLegacyRootVar pins the same contract for the upgrade
+// guard: CHABAN_ROOT_DIR unset with the old variable set is a config error for
+// commands, and must stay silent for completion.
+func TestCompletionsSurviveLegacyRootVar(t *testing.T) {
+	t.Setenv("CHABAN_ROOT_DIR", "")
+	t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", t.TempDir())
+	assertCompletions(t, []string{"cd", ""}, nil, cobra.ShellCompDirectiveNoFileComp)
+}
+
 // TestCompletionScripts pins that the generated scripts exist and are the real
 // thing (cobra's generators, kept rather than hand-rolled). The sentinels are
 // the entry points each shell needs, so a truncated or wrong-shell script

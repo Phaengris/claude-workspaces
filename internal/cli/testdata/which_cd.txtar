@@ -13,7 +13,7 @@
 #
 # Neither command touches git, so no repos are created here (see the git-shim
 # block at the end, which asserts exactly that).
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+env CHABAN_ROOT_DIR=$WORK/root
 
 # The registry keys on ABSOLUTE workspace dirs, and txtar file bodies are
 # extracted verbatim (no env expansion), so the registry is shipped as a
@@ -149,7 +149,7 @@ stderr 'NOPE-9'
 stderr 'nope'
 
 # --- empty registry -------------------------------------------------------
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/empty
+env CHABAN_ROOT_DIR=$WORK/empty
 ! exec workspace which
 stderr 'not inside a workspace'
 ! exec workspace cd A-1_x
@@ -158,7 +158,7 @@ stderr 'A-1_x'
 # --- missing config -------------------------------------------------------
 # Both commands open with loadRoot, so a broken root is a config error (exit 4)
 # before anything about the cwd or the identifier is considered.
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/no-config
+env CHABAN_ROOT_DIR=$WORK/no-config
 mkdir $WORK/no-config
 ! exec workspace which
 stderr 'config.yml'
@@ -169,7 +169,7 @@ stderr 'config.yml'
 # which is pure path arithmetic and cd is pure config lookup: no worktree probe
 # belongs in either. A logging `git` shim prepended to PATH makes it observable.
 # (This block runs LAST — the shim shadows real git for everything after it.)
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+env CHABAN_ROOT_DIR=$WORK/root
 chmod 0777 $WORK/shim/git
 env PATH=$WORK/shim:$PATH
 cd $WORK/root/A-1_x/deep

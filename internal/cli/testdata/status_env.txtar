@@ -17,7 +17,7 @@ env GIT_AUTHOR_NAME=t
 env GIT_AUTHOR_EMAIL=t@t
 env GIT_COMMITTER_NAME=t
 env GIT_COMMITTER_EMAIL=t@t
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+env CHABAN_ROOT_DIR=$WORK/root
 
 # The registry keys on ABSOLUTE workspace dirs, and txtar file bodies are
 # extracted verbatim (no env expansion), so the registry is shipped as a
@@ -169,7 +169,7 @@ stderr 'NOPE-9'
 stderr 'nope'
 
 # Missing config.yml → config error (exit 4).
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/no-config
+env CHABAN_ROOT_DIR=$WORK/no-config
 mkdir $WORK/no-config
 ! exec workspace status
 stderr 'config.yml'
@@ -177,7 +177,7 @@ stderr 'config.yml'
 stderr 'config.yml'
 
 # --- empty registry -------------------------------------------------------
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/empty
+env CHABAN_ROOT_DIR=$WORK/empty
 exec workspace status
 stdout '^no workspaces$'
 exec workspace status --json
@@ -191,7 +191,7 @@ stderr 'A-1'
 # for output that shows no branch at all. A logging `git` shim prepended to PATH
 # makes it observable. (This block runs LAST — the shim shadows real git for
 # everything after it.)
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+env CHABAN_ROOT_DIR=$WORK/root
 chmod 0777 $WORK/shim/git
 env PATH=$WORK/shim:$PATH
 exec workspace status

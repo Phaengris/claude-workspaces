@@ -5,8 +5,8 @@
 #
 # Everything here runs against a FAKE home ($WORK/home, per the plan's global
 # constraint): os.UserHomeDir honors $HOME on linux, and no
-# CLAUDE_WORKSPACES_ROOT_DIR is set, so the root is the default
-# $HOME/claude-workspaces.
+# CHABAN_ROOT_DIR is set, so the root is the default
+# $HOME/workspaces.
 
 env HOME=$WORK/home
 mkdir $HOME
@@ -40,9 +40,9 @@ grep 'session-start\.sh' $HOME/.local/share/workspace/install-manifest.json
 ! grep 'config\.yml' $HOME/.local/share/workspace/install-manifest.json
 
 # The config stub is created in the (freshly made) default root.
-exists $HOME/claude-workspaces/config.yml
-grep 'claude-workspaces configuration' $HOME/claude-workspaces/config.yml
-stdout 'created .*/claude-workspaces/config\.yml \(starter config\)'
+exists $HOME/workspaces/config.yml
+grep 'claude-workspaces configuration' $HOME/workspaces/config.yml
+stdout 'created .*/workspaces/config\.yml \(starter config\)'
 stdout 'manifest: .*/install-manifest\.json'
 
 # The epilogue PRINTS the settings.json snippet and the rc source lines —
@@ -62,14 +62,14 @@ stderr 'unknown command'
 # --- re-install: idempotent for OUR files, sacred for the user's ------------
 # The config stub is only-if-absent: user edits survive. Everything the tool
 # owns is overwritten: junk scribbled into a wrapper is repaired.
-cp marker.yml $HOME/claude-workspaces/config.yml
+cp marker.yml $HOME/workspaces/config.yml
 cp junk.txt $HOME/.config/fish/functions/workspace.fish
 
 exec workspace install
-grep 'USER-EDITED-KEEP' $HOME/claude-workspaces/config.yml
+grep 'USER-EDITED-KEEP' $HOME/workspaces/config.yml
 ! grep 'JUNK' $HOME/.config/fish/functions/workspace.fish
 grep 'function workspace --description' $HOME/.config/fish/functions/workspace.fish
-stdout 'kept .*/claude-workspaces/config\.yml \(exists, not overwritten\)'
+stdout 'kept .*/workspaces/config\.yml \(exists, not overwritten\)'
 
 # --- uninstall: exactly the manifest, then the manifest itself --------------
 exec workspace uninstall
@@ -85,9 +85,9 @@ exec workspace uninstall
 
 # The root, the (edited) config and the reminder about the settings.json hook
 # entry: uninstall says what it deliberately left behind.
-exists $HOME/claude-workspaces
-exists $HOME/claude-workspaces/config.yml
-grep 'USER-EDITED-KEEP' $HOME/claude-workspaces/config.yml
+exists $HOME/workspaces
+exists $HOME/workspaces/config.yml
+grep 'USER-EDITED-KEEP' $HOME/workspaces/config.yml
 stdout 'left untouched:'
 stdout 'claude-workspaces'
 stdout 'settings\.json'

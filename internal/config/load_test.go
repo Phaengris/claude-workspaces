@@ -158,19 +158,51 @@ func TestLoadEmptyTemplatesBlockKeepsExactPositions(t *testing.T) {
 	}
 }
 
-func TestRootDirEnvOverride(t *testing.T) {
-	t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", "/custom/root")
-	got, err := RootDir()
-	if err != nil || got != "/custom/root" {
-		t.Errorf("RootDir() = %q, %v; want /custom/root", got, err)
+func TestRootDir(t *testing.T) {
+	const (
+		legacyVarMsg = "CLAUDE_WORKSPACES_ROOT_DIR is no longer read: rename it to CHABAN_ROOT_DIR"
+		legacyDirMsg = "the default root is now ~/workspaces: set CHABAN_ROOT_DIR="
+	)
+	cases := []struct {
+		name       string
+		chaban     string
+		legacyVar  string
+		dirs       []string
+		want       string // "$HOME/..." is expanded
+		wantErrMsg string // "$HOME/..." is expanded
+	}{
+		{name: "override", chaban: "/custom/root", want: "/custom/root"},
+		{name: "override beats legacy var", chaban: "/custom/root", legacyVar: "/old", dirs: []string{"claude-workspaces"}, want: "/custom/root"},
+		{name: "default", want: "$HOME/workspaces"},
+		{name: "default exists, legacy dir too", dirs: []string{"workspaces", "claude-workspaces"}, want: "$HOME/workspaces"},
+		{name: "legacy var", legacyVar: "/old", wantErrMsg: legacyVarMsg},
+		{name: "legacy var, new default exists", legacyVar: "/old", dirs: []string{"workspaces"}, wantErrMsg: legacyVarMsg},
+		{name: "legacy dir only", dirs: []string{"claude-workspaces"}, wantErrMsg: legacyDirMsg + "$HOME/claude-workspaces"},
 	}
-}
-
-func TestRootDirDefault(t *testing.T) {
-	t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", "")
-	home, _ := os.UserHomeDir()
-	got, err := RootDir()
-	if err != nil || got != filepath.Join(home, "claude-workspaces") {
-		t.Errorf("RootDir() = %q, %v; want %q", got, err, filepath.Join(home, "claude-workspaces"))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("CHABAN_ROOT_DIR", tc.chaban)
+			t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", tc.legacyVar)
+			for _, d := range tc.dirs {
+				if err := os.Mkdir(filepath.Join(home, d), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := RootDir()
+			if tc.wantErrMsg != "" {
+				if !errors.Is(err, xerr.ErrConfig) {
+					t.Fatalf("RootDir() = %q, %v; want an ErrConfig error", got, err)
+				}
+				if want := strings.ReplaceAll(tc.wantErrMsg, "$HOME", home); !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q must contain %q", err, want)
+				}
+				return
+			}
+			if want := strings.ReplaceAll(tc.want, "$HOME", home); err != nil || got != want {
+				t.Errorf("RootDir() = %q, %v; want %q", got, err, want)
+			}
+		})
 	}
 }

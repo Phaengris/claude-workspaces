@@ -53,7 +53,7 @@ func cmdWsenv(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Setenv("GIT_AUTHOR_EMAIL", "t@t")
 	ts.Setenv("GIT_COMMITTER_NAME", "t")
 	ts.Setenv("GIT_COMMITTER_EMAIL", "t@t")
-	ts.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", ts.Getenv("WORK")+"/root")
+	ts.Setenv("CHABAN_ROOT_DIR", ts.Getenv("WORK")+"/root")
 }
 
 // cmdIsExec asserts each file exists AND carries the owner-executable bit —

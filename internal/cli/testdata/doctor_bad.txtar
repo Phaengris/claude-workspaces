@@ -1,5 +1,5 @@
 # doctor on an invalid config exits 4 and lists every problem.
-env CLAUDE_WORKSPACES_ROOT_DIR=$WORK/root
+env CHABAN_ROOT_DIR=$WORK/root
 ! exec workspace doctor
 stderr 'unknown'
 stderr 'comand_runner'

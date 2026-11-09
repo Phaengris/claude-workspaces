@@ -119,7 +119,7 @@ func TestUninstallRefusesHostileManifest(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	root := filepath.Join(home, "claude-workspaces")
-	t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", root)
+	t.Setenv("CHABAN_ROOT_DIR", root)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestUninstallKeepsManifestOnFailedRemoval(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	root := filepath.Join(home, "claude-workspaces")
-	t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", root)
+	t.Setenv("CHABAN_ROOT_DIR", root)
 
 	locked := filepath.Join(home, "locked")
 	blocked := filepath.Join(locked, "artifact")
