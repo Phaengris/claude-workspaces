@@ -19,7 +19,7 @@ import (
 // return a non-empty file, and each file must still contain the marks that
 // make it that file. The sentinels are the load-bearing lines — the skill's
 // frontmatter name (Claude Code keys the skill on it), the hook's binary
-// guard and workspace probe, the wrappers' `command workspace` passthrough
+// guard and workspace probe, the wrappers' `command chaban` passthrough
 // (without it the wrapper recurses into itself) — so a rename or a rewrite
 // that drops one fails here rather than at install time.
 func TestAccessorsCarryTheirContent(t *testing.T) {
@@ -29,27 +29,27 @@ func TestAccessorsCarryTheirContent(t *testing.T) {
 		sentinels []string
 	}{
 		{"Skill", assets.Skill(), []string{
-			"name: claude-workspaces",
+			"name: chaban",
 			"description:",
 			"work on",
-			"workspace launch",
+			"chaban launch",
 			"WORKSPACE.md",
 		}},
 		{"SessionStartHook", assets.SessionStartHook(), []string{
 			"#!/bin/sh",
-			"command -v workspace",
-			"workspace which",
-			"workspace status",
+			"command -v chaban",
+			"chaban which",
+			"chaban status",
 			"exit 0",
 		}},
 		{"FishWrapper", assets.FishWrapper(), []string{
-			"function workspace",
-			"command workspace $argv",
+			"function chaban",
+			"command chaban $argv",
 			"cd ",
 		}},
 		{"BashWrapper", assets.BashWrapper(), []string{
-			"workspace()",
-			`command workspace "$@"`,
+			"chaban()",
+			`command chaban "$@"`,
 			"cd ",
 		}},
 		{"ConfigStub", assets.ConfigStub(), []string{
@@ -91,7 +91,7 @@ func TestAccessorsReturnCopies(t *testing.T) {
 	}
 }
 
-// TestConfigStubIsLoadableAsShipped is THE pin on the config stub: `workspace
+// TestConfigStubIsLoadableAsShipped is THE pin on the config stub: `chaban
 // install` writes it to <root>/config.yml, and the very next command loads
 // that file. Strict decoding means a stray key or a mis-indented example
 // makes a fresh install fail on every command — so the stub is checked
@@ -242,7 +242,7 @@ func writeAsset(t *testing.T, dir, name string, data []byte, mode os.FileMode) s
 	return path
 }
 
-// shimBin writes an executable `workspace` shim into a fresh bin dir and
+// shimBin writes an executable `chaban` shim into a fresh bin dir and
 // returns the dir, for use as the hook's entire PATH. The shim is the tool as
 // far as the hook can tell: it answers `which` and `status` and nothing else,
 // so the test drives the hook's branches without a built binary, a root, or a
@@ -250,7 +250,7 @@ func writeAsset(t *testing.T, dir, name string, data []byte, mode os.FileMode) s
 func shimBin(t *testing.T, script string) string {
 	t.Helper()
 	dir := t.TempDir()
-	writeAsset(t, dir, "workspace", []byte(script), 0o755)
+	writeAsset(t, dir, "chaban", []byte(script), 0o755)
 	return dir
 }
 
@@ -262,7 +262,7 @@ func runHook(t *testing.T, binDir string) (stdout, stderr string, code int) {
 	hook := writeAsset(t, t.TempDir(), "session-start.sh", assets.SessionStartHook(), 0o755)
 	cmd := exec.Command("sh", hook)
 	// /usr/bin:/bin stay on PATH so the shim script's own `printf`/`exit`
-	// resolve; the shim dir goes FIRST so its `workspace` wins over any real
+	// resolve; the shim dir goes FIRST so its `chaban` wins over any real
 	// installation on the developer's machine.
 	cmd.Env = []string{"PATH=" + binDir + ":/usr/bin:/bin", "HOME=" + t.TempDir()}
 	var out, errb bytes.Buffer
@@ -299,7 +299,7 @@ esac
 	if stderr != "" {
 		t.Errorf("stderr = %q, want empty", stderr)
 	}
-	want := `# claude-workspaces
+	want := `# chaban
 
 This session is inside workspace A-1_x.
 
@@ -307,8 +307,8 @@ workspace: A-1_x
 index: 0
 
 WORKSPACE.md holds the task, the allocated values and per-project instructions.
-Manage this workspace with: workspace status|up|down|logs|exec A-1_x
-Daemons are not auto-started; start what you need with: workspace up A-1_x <daemon>
+Manage this workspace with: chaban status|up|down|logs|exec A-1_x
+Daemons are not auto-started; start what you need with: chaban up A-1_x <daemon>
 
 End every substantial turn with a handoff report — Done (outcomes, never the
 journey), Needs you (each ask self-contained: context, options and a
@@ -388,7 +388,7 @@ func TestHookNagsWithoutStatusSectionAndStillPrintsRule(t *testing.T) {
 func TestHookOutsideWorkspaceIsSilent(t *testing.T) {
 	bin := shimBin(t, `#!/bin/sh
 if [ "$1" = which ]; then
-	echo 'workspace: not inside a workspace' >&2
+	echo 'chaban: not inside a workspace' >&2
 	exit 3
 fi
 exit 1
@@ -407,9 +407,9 @@ exit 1
 
 // TestHookWithoutBinaryIsSilent pins the guard: the hook is a file in
 // ~/.local/share and the settings.json entry that runs it outlives any
-// uninstall, so "workspace is not on PATH" is a normal state, not an error.
+// uninstall, so "chaban is not on PATH" is a normal state, not an error.
 func TestHookWithoutBinaryIsSilent(t *testing.T) {
-	stdout, stderr, code := runHook(t, t.TempDir()) // empty bin dir: no `workspace`
+	stdout, stderr, code := runHook(t, t.TempDir()) // empty bin dir: no `chaban`
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
 	}
@@ -418,7 +418,7 @@ func TestHookWithoutBinaryIsSilent(t *testing.T) {
 	}
 }
 
-// TestHookEmptyProbeIsSilent covers the third silent case: `workspace which`
+// TestHookEmptyProbeIsSilent covers the third silent case: `chaban which`
 // succeeds but prints nothing. That cannot happen today, but the hook's next
 // step interpolates the name into a `status` call, and an empty name there
 // would print a bare, confusing block — so the guard is pinned.
@@ -449,14 +449,14 @@ func lookShell(t *testing.T, name string) string {
 // Skipped when fish is absent (see lookShell).
 func TestFishWrapperParses(t *testing.T) {
 	fish := lookShell(t, "fish")
-	path := writeAsset(t, t.TempDir(), "workspace.fish", assets.FishWrapper(), 0o644)
+	path := writeAsset(t, t.TempDir(), "chaban.fish", assets.FishWrapper(), 0o644)
 	out, err := exec.Command(fish, "-n", path).CombinedOutput()
 	if err != nil {
 		t.Errorf("fish -n %s: %v\n%s", path, err, out)
 	}
 }
 
-// wrapperShim is the fake `workspace` binary both wrapper tests drive: `cd`
+// wrapperShim is the fake `chaban` binary both wrapper tests drive: `cd`
 // prints a path or fails with 3 (not found), and with --json it prints a
 // deliberate NON-path, standing in for the outputs the wrappers must not
 // chdir to (a help page today, a JSON shape if `cd --json` ever grows one).
@@ -469,7 +469,7 @@ cd)
 	for a in "$@"; do
 		if [ "$a" = --json ]; then printf 'JSON-NOT-A-PATH\n'; exit 0; fi
 	done
-	if [ "$2" != good ]; then echo 'workspace: no such workspace' >&2; exit 3; fi
+	if [ "$2" != good ]; then echo 'chaban: no such workspace' >&2; exit 3; fi
 	printf '%s\n' "$WSTARGET"
 	;;
 *)
@@ -479,7 +479,7 @@ esac
 `
 
 // checkWrapper runs the four cases every shell wrapper must satisfy. run
-// executes one `workspace <args>` invocation in a shell that has sourced the
+// executes one `chaban <args>` invocation in a shell that has sourced the
 // wrapper, then prints the resulting working directory, and reports the
 // combined output together with the exit code of the WRAPPER (not of the
 // trailing pwd) — so one call tests where the shell ended up and what the
@@ -494,7 +494,7 @@ func checkWrapper(t *testing.T, startDir, target string, run func(args string) (
 	t.Helper()
 
 	if out, code := run("cd good"); code != 0 || !strings.Contains(out, target) {
-		t.Errorf("`workspace cd good` must chdir the shell to %q, got out=%q code=%d", target, out, code)
+		t.Errorf("`chaban cd good` must chdir the shell to %q, got out=%q code=%d", target, out, code)
 	}
 	if out, code := run("status good"); code != 0 || !strings.Contains(out, "passthrough:status good") {
 		t.Errorf("non-cd subcommands must pass through, got out=%q code=%d", out, code)
@@ -528,7 +528,7 @@ func wrapperFixture(t *testing.T) (startDir, target string, env []string) {
 }
 
 // runInShell is the shared body of the two behavior tests: run the shell with
-// argv (which sources the wrapper file, invokes `workspace` once, remembers
+// argv (which sources the wrapper file, invokes `chaban` once, remembers
 // its status, prints the directory the shell ended up in and exits with the
 // remembered status) and report the combined output and that status.
 func runInShell(t *testing.T, shell string, argv []string, dir string, env []string) (string, int) {
@@ -550,13 +550,13 @@ func runInShell(t *testing.T, shell string, argv []string, dir string, env []str
 
 // TestFishWrapperBehavior pins the fish function against checkWrapper's four
 // cases. `--no-config` keeps the developer's own fish config (which may well
-// define its own `workspace`) out of the test.
+// define its own `chaban`) out of the test.
 func TestFishWrapperBehavior(t *testing.T) {
 	fish := lookShell(t, "fish")
 	dir, target, env := wrapperFixture(t)
-	wrapper := writeAsset(t, t.TempDir(), "workspace.fish", assets.FishWrapper(), 0o644)
+	wrapper := writeAsset(t, t.TempDir(), "chaban.fish", assets.FishWrapper(), 0o644)
 	checkWrapper(t, dir, target, func(args string) (string, int) {
-		script := "source " + wrapper + "\nworkspace " + args + "; set -l rc $status; pwd; exit $rc"
+		script := "source " + wrapper + "\nchaban " + args + "; set -l rc $status; pwd; exit $rc"
 		return runInShell(t, fish, []string{"--no-config", "-c", script}, dir, env)
 	})
 }
@@ -569,7 +569,7 @@ func TestBashWrapperParses(t *testing.T) {
 	for _, sh := range []string{"bash", "zsh"} {
 		t.Run(sh, func(t *testing.T) {
 			shell := lookShell(t, sh)
-			path := writeAsset(t, t.TempDir(), "workspace.bash", assets.BashWrapper(), 0o644)
+			path := writeAsset(t, t.TempDir(), "chaban.bash", assets.BashWrapper(), 0o644)
 			out, err := exec.Command(shell, "-n", path).CombinedOutput()
 			if err != nil {
 				t.Errorf("%s -n %s: %v\n%s", sh, path, err, out)
@@ -584,7 +584,7 @@ func TestBashWrapperParses(t *testing.T) {
 // "$@" behave alike there, and the file claims to support it.
 func TestBashWrapperBehavior(t *testing.T) {
 	// Each shell's spelling of "read no startup files": a developer's rc file
-	// may well define its own `workspace`, and the test must see ours.
+	// may well define its own `chaban`, and the test must see ours.
 	noRC := map[string][]string{
 		"bash": {"--noprofile", "--norc"},
 		"zsh":  {"-f"},
@@ -593,9 +593,9 @@ func TestBashWrapperBehavior(t *testing.T) {
 		t.Run(sh, func(t *testing.T) {
 			shell := lookShell(t, sh)
 			dir, target, env := wrapperFixture(t)
-			wrapper := writeAsset(t, t.TempDir(), "workspace.bash", assets.BashWrapper(), 0o644)
+			wrapper := writeAsset(t, t.TempDir(), "chaban.bash", assets.BashWrapper(), 0o644)
 			checkWrapper(t, dir, target, func(args string) (string, int) {
-				script := ". " + wrapper + "\nworkspace " + args + "; rc=$?; pwd; exit $rc"
+				script := ". " + wrapper + "\nchaban " + args + "; rc=$?; pwd; exit $rc"
 				argv := append(append([]string{}, noRC[sh]...), "-c", script)
 				return runInShell(t, shell, argv, dir, env)
 			})

@@ -21,7 +21,7 @@ import (
 //     on every cobra upgrade. Nothing in this file registers the command; it
 //     exists because the tree has subcommands and completion is not disabled.
 //     M5's installer writes the generated fish script to fish's
-//     `completions/` directory; `functions/workspace.fish` is the cd WRAPPER
+//     `completions/` directory; `functions/chaban.fish` is the cd WRAPPER
 //     and must not be overwritten with a completion script.
 //
 //   - The dynamic SUGGESTIONS live here: one ValidArgsFunction per command,

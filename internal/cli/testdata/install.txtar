@@ -15,33 +15,33 @@ exec chaban install
 
 # Every artifact lands, with the right modes: the binary and the hook are
 # EXECUTED (0755, `isexec` from cli_test.go), everything else is read.
-isexec $HOME/.local/bin/workspace
-exists $HOME/.config/fish/functions/workspace.fish
-exists $HOME/.config/fish/completions/workspace.fish
-exists $HOME/.local/share/workspace/shell/workspace.bash
-exists $HOME/.local/share/workspace/completions/workspace.bash
-exists $HOME/.local/share/workspace/completions/_workspace
-exists $HOME/.claude/skills/claude-workspaces/SKILL.md
-isexec $HOME/.local/share/workspace/hooks/session-start.sh
+isexec $HOME/.local/bin/chaban
+exists $HOME/.config/fish/functions/chaban.fish
+exists $HOME/.config/fish/completions/chaban.fish
+exists $HOME/.local/share/chaban/shell/chaban.bash
+exists $HOME/.local/share/chaban/completions/chaban.bash
+exists $HOME/.local/share/chaban/completions/_chaban
+exists $HOME/.claude/skills/chaban/SKILL.md
+isexec $HOME/.local/share/chaban/hooks/session-start.sh
 
 # fish's functions/ holds the cd WRAPPER and completions/ the generated
 # completion script — the two files share a name and must never be swapped.
-grep 'function workspace --description' $HOME/.config/fish/functions/workspace.fish
-! grep '__chaban_perform_completion' $HOME/.config/fish/functions/workspace.fish
-grep '__chaban_perform_completion' $HOME/.config/fish/completions/workspace.fish
-! grep 'function workspace --description' $HOME/.config/fish/completions/workspace.fish
+grep 'function chaban --description' $HOME/.config/fish/functions/chaban.fish
+! grep '__chaban_perform_completion' $HOME/.config/fish/functions/chaban.fish
+grep '__chaban_perform_completion' $HOME/.config/fish/completions/chaban.fish
+! grep 'function chaban --description' $HOME/.config/fish/completions/chaban.fish
 
 # The manifest lists exactly the 8 files installed above — one JSON string per
 # path — and neither the config stub nor the root: those are user data and
 # uninstall must never touch them.
-grep -count=8 '"/' $HOME/.local/share/workspace/install-manifest.json
-grep '/.local/bin/workspace' $HOME/.local/share/workspace/install-manifest.json
-grep 'session-start\.sh' $HOME/.local/share/workspace/install-manifest.json
-! grep 'config\.yml' $HOME/.local/share/workspace/install-manifest.json
+grep -count=8 '"/' $HOME/.local/share/chaban/install-manifest.json
+grep '/.local/bin/chaban' $HOME/.local/share/chaban/install-manifest.json
+grep 'session-start\.sh' $HOME/.local/share/chaban/install-manifest.json
+! grep 'config\.yml' $HOME/.local/share/chaban/install-manifest.json
 
 # The config stub is created in the (freshly made) default root.
 exists $HOME/workspaces/config.yml
-grep 'claude-workspaces configuration' $HOME/workspaces/config.yml
+grep 'chaban configuration' $HOME/workspaces/config.yml
 stdout 'created .*/workspaces/config\.yml \(starter config\)'
 stdout 'manifest: .*/install-manifest\.json'
 
@@ -63,25 +63,25 @@ stderr 'unknown command'
 # The config stub is only-if-absent: user edits survive. Everything the tool
 # owns is overwritten: junk scribbled into a wrapper is repaired.
 cp marker.yml $HOME/workspaces/config.yml
-cp junk.txt $HOME/.config/fish/functions/workspace.fish
+cp junk.txt $HOME/.config/fish/functions/chaban.fish
 
 exec chaban install
 grep 'USER-EDITED-KEEP' $HOME/workspaces/config.yml
-! grep 'JUNK' $HOME/.config/fish/functions/workspace.fish
-grep 'function workspace --description' $HOME/.config/fish/functions/workspace.fish
+! grep 'JUNK' $HOME/.config/fish/functions/chaban.fish
+grep 'function chaban --description' $HOME/.config/fish/functions/chaban.fish
 stdout 'kept .*/workspaces/config\.yml \(exists, not overwritten\)'
 
 # --- uninstall: exactly the manifest, then the manifest itself --------------
 exec chaban uninstall
-! exists $HOME/.local/bin/workspace
-! exists $HOME/.config/fish/functions/workspace.fish
-! exists $HOME/.config/fish/completions/workspace.fish
-! exists $HOME/.local/share/workspace/shell/workspace.bash
-! exists $HOME/.local/share/workspace/completions/workspace.bash
-! exists $HOME/.local/share/workspace/completions/_workspace
-! exists $HOME/.claude/skills/claude-workspaces/SKILL.md
-! exists $HOME/.local/share/workspace/hooks/session-start.sh
-! exists $HOME/.local/share/workspace/install-manifest.json
+! exists $HOME/.local/bin/chaban
+! exists $HOME/.config/fish/functions/chaban.fish
+! exists $HOME/.config/fish/completions/chaban.fish
+! exists $HOME/.local/share/chaban/shell/chaban.bash
+! exists $HOME/.local/share/chaban/completions/chaban.bash
+! exists $HOME/.local/share/chaban/completions/_chaban
+! exists $HOME/.claude/skills/chaban/SKILL.md
+! exists $HOME/.local/share/chaban/hooks/session-start.sh
+! exists $HOME/.local/share/chaban/install-manifest.json
 
 # The root, the (edited) config and the reminder about the settings.json hook
 # entry: uninstall says what it deliberately left behind.
@@ -89,13 +89,22 @@ exists $HOME/workspaces
 exists $HOME/workspaces/config.yml
 grep 'USER-EDITED-KEEP' $HOME/workspaces/config.yml
 stdout 'left untouched:'
-stdout 'claude-workspaces'
+stdout 'skills/chaban'
 stdout 'settings\.json'
 stdout 'now-empty tool directories'
 
 # A second uninstall has nothing to act on — and says so, exit 0.
 exec chaban uninstall
 stdout 'nothing installed'
+
+# --- the upgrade guard: ~/claude-workspaces present, no override ------------
+# install refuses (exit 4, pinned in Go) and creates nothing.
+env HOME=$WORK/legacyhome
+mkdir $HOME/claude-workspaces
+! exec chaban install
+stderr 'default root is now ~/workspaces'
+! exists $HOME/workspaces
+! exists $HOME/.local
 
 -- marker.yml --
 # USER-EDITED-KEEP

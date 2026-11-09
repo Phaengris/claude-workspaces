@@ -20,7 +20,7 @@ import (
 
 // TestCopyBinary pins copyBinary's three answers: a fresh copy, an overwrite,
 // and the same-file skip. The same-file case is the guard's reason to exist —
-// `chaban install` run FROM ~/.local/bin/workspace would otherwise open
+// `chaban install` run FROM ~/.local/bin/chaban would otherwise open
 // its own running binary for truncation.
 func TestCopyBinary(t *testing.T) {
 	dir := t.TempDir()
@@ -30,7 +30,7 @@ func TestCopyBinary(t *testing.T) {
 	}
 
 	t.Run("fresh copy", func(t *testing.T) {
-		dst := filepath.Join(dir, "sub", "workspace")
+		dst := filepath.Join(dir, "sub", "chaban")
 		skipped, err := copyBinary(src, dst)
 		if err != nil || skipped {
 			t.Fatalf("copyBinary = skipped %v, err %v; want false, nil", skipped, err)
@@ -118,7 +118,7 @@ func TestManifestRoundTrip(t *testing.T) {
 func TestUninstallRefusesHostileManifest(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	root := filepath.Join(home, "claude-workspaces")
+	root := filepath.Join(home, "workspaces")
 	t.Setenv("CHABAN_ROOT_DIR", root)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
@@ -128,7 +128,7 @@ func TestUninstallRefusesHostileManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	legit := filepath.Join(home, ".local", "bin", "workspace")
+	legit := filepath.Join(home, ".local", "bin", "chaban")
 	if err := os.MkdirAll(filepath.Dir(legit), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestUninstallRefusesHostileManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	manifest := filepath.Join(home, ".local", "share", "workspace", "install-manifest.json")
+	manifest := filepath.Join(home, ".local", "share", "chaban", "install-manifest.json")
 	hostile := []string{"/", home, root, userCfg, "relative/path", legit}
 	if err := writeManifest(manifest, hostile); err != nil {
 		t.Fatal(err)
@@ -178,12 +178,12 @@ func TestUninstallKeepsManifestOnFailedRemoval(t *testing.T) {
 	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	root := filepath.Join(home, "claude-workspaces")
+	root := filepath.Join(home, "workspaces")
 	t.Setenv("CHABAN_ROOT_DIR", root)
 
 	locked := filepath.Join(home, "locked")
 	blocked := filepath.Join(locked, "artifact")
-	removable := filepath.Join(home, ".local", "bin", "workspace")
+	removable := filepath.Join(home, ".local", "bin", "chaban")
 	for _, f := range []string{blocked, removable} {
 		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
 			t.Fatal(err)
@@ -198,7 +198,7 @@ func TestUninstallKeepsManifestOnFailedRemoval(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(locked, 0o755) })
 
-	manifest := filepath.Join(home, ".local", "share", "workspace", "install-manifest.json")
+	manifest := filepath.Join(home, ".local", "share", "chaban", "install-manifest.json")
 	if err := writeManifest(manifest, []string{"/", blocked, removable}); err != nil {
 		t.Fatal(err)
 	}
@@ -246,4 +246,26 @@ func runUninstall(t *testing.T) error {
 	cmd.SetErr(io.Discard)
 	cmd.SetArgs([]string{"uninstall"})
 	return cmd.Execute()
+}
+
+// TestInstallRefusesLegacyRoot pins the upgrade guard at install's door: a
+// home with ~/claude-workspaces and no override must exit 4 and create
+// NOTHING — not ~/workspaces, not the binary, not the manifest. Install
+// resolves the root first precisely so a refusal leaves the home untouched.
+func TestInstallRefusesLegacyRoot(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CHABAN_ROOT_DIR", "")
+	t.Setenv("CLAUDE_WORKSPACES_ROOT_DIR", "")
+	if err := os.Mkdir(filepath.Join(home, "claude-workspaces"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := exitCodeFor(t, "install"); got != 4 {
+		t.Errorf("install exit code = %d, want 4", got)
+	}
+	for _, p := range []string{"workspaces", ".local", ".config", ".claude"} {
+		if _, err := os.Stat(filepath.Join(home, p)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s exists after a refused install (err %v); want nothing created", p, err)
+		}
+	}
 }

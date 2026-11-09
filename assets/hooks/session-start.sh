@@ -1,5 +1,5 @@
 #!/bin/sh
-# SessionStart hook for claude-workspaces.
+# SessionStart hook for chaban.
 #
 # When a Claude Code session starts inside a managed workspace, print a short
 # context block: which workspace this is, and its live status. Outside a
@@ -11,46 +11,46 @@
 # surface as a session-start error, and "you are not in a workspace" is not an
 # error.
 #
-# Installed by `workspace install` to
-#   ~/.local/share/workspace/hooks/session-start.sh
+# Installed by `chaban install` to
+#   ~/.local/share/chaban/hooks/session-start.sh
 # and wired up by adding the snippet `install` prints to
 # ~/.claude/settings.json. The installer never edits that file itself.
 
 # The binary may be absent: uninstalled, or not on PATH in the environment
 # Claude Code runs hooks in. Nothing to say either way.
-command -v workspace >/dev/null 2>&1 || exit 0
+command -v chaban >/dev/null 2>&1 || exit 0
 
-# `workspace which` IS the "am I inside a workspace?" test: the workspace name
+# `chaban which` IS the "am I inside a workspace?" test: the workspace name
 # on stdout, or a non-zero exit (3 = not inside a workspace, 4 = broken
 # config, …). Any failure means "no context to add" — including the broken
 # config, which the user will see the moment they run a real command and does
 # not need shouted at session start. Its diagnostic is discarded for the same
 # reason.
-name=$(workspace which 2>/dev/null) || exit 0
+name=$(chaban which 2>/dev/null) || exit 0
 [ -n "$name" ] || exit 0
 
 # `status` output is passed through verbatim rather than reformatted: it is
 # the tool's own rendering of derived state (projects, branches, setup
 # freshness, running daemons), and a second formatting of the same facts here
 # would be one more thing to keep in step.
-printf '# claude-workspaces\n\n'
+printf '# chaban\n\n'
 printf 'This session is inside workspace %s.\n\n' "$name"
-workspace status "$name" 2>/dev/null
+chaban status "$name" 2>/dev/null
 # Workspaces created before the seeded frame (v1.8) have no ## Status section
 # in CLAUDE.md; nag until a session starts one. Read-only: a grep, no writes.
 # The pattern mirrors recordedStatus's predicate (case-insensitive, the
 # trimmed line is exactly "## status") so the nag and the renderer cannot
 # disagree about whether a note exists.
-dir=$(workspace cd "$name" 2>/dev/null)
+dir=$(chaban cd "$name" 2>/dev/null)
 if [ -n "$dir" ] && ! grep -qi '^[[:space:]]*## status[[:space:]]*$' "$dir/CLAUDE.md" 2>/dev/null; then
 	printf '\nThis workspace has no "## Status" section in its CLAUDE.md. Start one\n'
 	printf '(About / Now / Next / Needs, with an as-of date) and refresh it at the end\n'
-	printf 'of every substantial turn — the user reads it via `workspace status`.\n'
+	printf 'of every substantial turn — the user reads it via `chaban status`.\n'
 fi
 
 printf '\nWORKSPACE.md holds the task, the allocated values and per-project instructions.\n'
-printf 'Manage this workspace with: workspace status|up|down|logs|exec %s\n' "$name"
-printf 'Daemons are not auto-started; start what you need with: workspace up %s <daemon>\n' "$name"
+printf 'Manage this workspace with: chaban status|up|down|logs|exec %s\n' "$name"
+printf 'Daemons are not auto-started; start what you need with: chaban up %s <daemon>\n' "$name"
 
 # The handoff-report convention, delivered here rather than seeded into the
 # workspace's CLAUDE.md. CLAUDE.md is written once and then belongs to the

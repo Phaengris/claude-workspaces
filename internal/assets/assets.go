@@ -1,6 +1,6 @@
 // Package assets serves the embedded install-time files as bytes: the Claude
 // Code skill, the SessionStart hook, the two shell wrappers and the config
-// stub. It is the import point for `workspace install`; the files themselves
+// stub. It is the import point for `chaban install`; the files themselves
 // live at the repository root under assets/ and are embedded there (a
 // //go:embed pattern cannot reach a parent directory).
 //
@@ -22,8 +22,8 @@ import (
 var (
 	skill      = mustRead("skill/SKILL.md")
 	hook       = mustRead("hooks/session-start.sh")
-	fishWrap   = mustRead("shell/workspace.fish")
-	bashWrap   = mustRead("shell/workspace.bash")
+	fishWrap   = mustRead("shell/chaban.fish")
+	bashWrap   = mustRead("shell/chaban.bash")
 	configStub = mustRead("config_stub.yml")
 )
 
@@ -47,24 +47,24 @@ func mustRead(name string) []byte {
 func clone(b []byte) []byte { return append([]byte(nil), b...) }
 
 // Skill returns the Claude Code skill document. Install target:
-// ~/.claude/skills/claude-workspaces/SKILL.md, mode 0644. The directory
+// ~/.claude/skills/chaban/SKILL.md, mode 0644. The directory
 // name must match the skill's frontmatter `name`.
 func Skill() []byte { return clone(skill) }
 
 // SessionStartHook returns the SessionStart hook script (POSIX sh). Install
-// target: ~/.local/share/workspace/hooks/session-start.sh, mode 0755 — it is
+// target: ~/.local/share/chaban/hooks/session-start.sh, mode 0755 — it is
 // executed, not sourced. Wiring it into ~/.claude/settings.json is the user's
 // step; install only prints the snippet.
 func SessionStartHook() []byte { return clone(hook) }
 
-// FishWrapper returns the fish `workspace` function that makes `workspace cd`
+// FishWrapper returns the fish `chaban` function that makes `chaban cd`
 // change the shell's directory. Install target:
-// ~/.config/fish/functions/workspace.fish, mode 0644 — fish autoloads it from
+// ~/.config/fish/functions/chaban.fish, mode 0644 — fish autoloads it from
 // there, so no rc file is touched.
 func FishWrapper() []byte { return clone(fishWrap) }
 
 // BashWrapper returns the bash/zsh equivalent of FishWrapper. Install target:
-// ~/.local/share/workspace/shell/workspace.bash, mode 0644. Bash and zsh have
+// ~/.local/share/chaban/shell/chaban.bash, mode 0644. Bash and zsh have
 // no autoload for functions, so the user sources it; install prints the line
 // and never edits an rc file itself.
 func BashWrapper() []byte { return clone(bashWrap) }
