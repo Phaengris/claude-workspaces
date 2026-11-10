@@ -109,12 +109,14 @@ untested here.) `ls -g`'s git stats run concurrently, bounded.
 **Exit codes.** Once a `chat`/`launch`/`try` session starts, chaban exits
 with **the code of the shell that ran the agent, verbatim**, so a 3 from
 there is the agent's 3, not "not found". Normally that is the agent's own
-code. A signal death depends on the shell: one that replaces itself with a
-simple command (bash does) leaves chaban seeing the signal, and chaban exits
-1; fish, or any shell running a compound command (`a && b`), exits 128+n
-(130 for SIGINT), and chaban passes that on. A configured agent whose
-program is missing is the shell's 127. A failed `can_resume` check is exit 1,
-before anything starts.
+code. A signal death depends on the shell and on who got the signal. When
+the shell replaced itself with the agent (bash does, for a simple command),
+chaban sees the signal and exits 1. When the shell is still there (fish, or
+bash running a compound command like `a && b`) and the signal hit the agent
+alone, the shell can exit 128+n (143 for a SIGTERM sent to the agent), and
+chaban passes that on. A ^C, which reaches the shell too, and fish's SIGINT
+both show as exit 1. A configured agent whose program is missing is the
+shell's 127. A failed `can_resume` check is exit 1, before anything starts.
 
 ---
 
