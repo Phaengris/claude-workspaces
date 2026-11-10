@@ -53,21 +53,30 @@ func quoteArg(s string) string {
 	return "'" + quoteArgEscaper.Replace(s) + "'"
 }
 
+// fallbackProgram is the program the no-agent: fallback needs: the first word
+// of the built-in Claude block's start command. found reports whether
+// exec.LookPath finds it on chaban's own PATH. resolveAgent and doctor both ask
+// this, so the rule lives in one place.
+func fallbackProgram() (prog string, found bool) {
+	prog = strings.Fields(config.ClaudeAgent().Start)[0]
+	_, err := exec.LookPath(prog)
+	return prog, err == nil
+}
+
 // resolveAgent returns the configured agent, or the built-in Claude block when
 // config has none and claude is on chaban's PATH (noting that on stderr).
 func resolveAgent(cfg *config.Config, stderr io.Writer) (*config.Agent, error) {
 	if cfg.Agent != nil {
 		return cfg.Agent, nil
 	}
-	fallback := config.ClaudeAgent()
-	prog := strings.Fields(fallback.Start)[0]
-	if _, err := exec.LookPath(prog); err != nil {
+	prog, found := fallbackProgram()
+	if !found {
 		return nil, xerr.Wrap(xerr.ErrConfig, fmt.Errorf(
 			"no agent: block in config.yml and no %s on PATH; add one, for example:\n\n%s",
 			prog, config.ClaudeAgentYAML()))
 	}
 	fmt.Fprintf(stderr, "chaban: no agent: in config.yml, starting %s (found on PATH); add an agent: block to choose\n", prog)
-	return fallback, nil
+	return config.ClaudeAgent(), nil
 }
 
 // probeCanResume runs the agent's can_resume command: exit 0 means resume,

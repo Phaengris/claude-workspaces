@@ -42,6 +42,8 @@ const (
 	kindDaemonNoDescription   = "daemon_no_description"
 	kindBrowsePortUnresolved  = "browse_port_unresolved"
 	kindUnregisteredDir       = "unregistered_dir"
+	kindAgentFallback         = "agent_fallback"
+	kindAgentMissing          = "agent_missing"
 )
 
 // gcHint closes every finding `chaban gc` is the fix for. doctor reports and
@@ -186,6 +188,18 @@ func doctorObserve(root string, cfg *config.Config, reg alloc.Registry) []doctor
 	}
 	note := func(kind, ws, detail string) {
 		obs = append(obs, doctorObs{kind: kind, workspace: ws, detail: detail, note: true})
+	}
+
+	// No agent: block: chat takes the claude fallback, decided by the same
+	// lookup resolveAgent makes. The fallback itself is a note; claude being
+	// absent as well means chat cannot start anything, which is a finding.
+	if cfg.Agent == nil {
+		prog, found := fallbackProgram()
+		note(kindAgentFallback, "", fmt.Sprintf("note: no agent: block: chat falls back to %s", prog))
+		if !found {
+			find(kindAgentMissing, "", fmt.Sprintf(
+				"no agent: block and no %s on PATH: chat cannot start a session", prog))
+		}
 	}
 
 	// Config-level advisory, once per configured daemon (not per workspace):
@@ -389,6 +403,9 @@ func doctorReportOf(obs []doctorObs) doctorReport {
 // means the config loaded and validated, hence the unconditional OK.
 func printDoctorConfig(w io.Writer, cfg *config.Config) {
 	fmt.Fprintln(w, "config: OK")
+	if cfg.Agent != nil {
+		fmt.Fprintf(w, "agent: %s\n", cfg.Agent.Start)
+	}
 	names := slices.Sorted(maps.Keys(cfg.Projects))
 	fmt.Fprintf(w, "projects (%d): %s\n", len(names), joinOr(names, "none"))
 	valNames := make([]string, 0, len(cfg.Values))
