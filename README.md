@@ -419,7 +419,8 @@ agent:
   5 seconds, starts nothing and exits 1. `-R` skips the check. `resume` and
   `can_resume` come as a pair.
 - All three commands run as `$SHELL -lc <command>` in the workspace dir,
-  with the session environment. Your extra arguments are appended, quoted.
+  with the session environment. Your extra arguments are appended, quoted,
+  to `start` or `resume` (whichever runs), never to `can_resume`.
 - `instructions_file` is the file chaban writes once at the workspace root,
   with the `## Status` frame. Default: `AGENTS.md`.
 

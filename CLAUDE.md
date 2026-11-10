@@ -96,7 +96,7 @@ internal/assets ← assets/ (//go:embed carrier; skill, hook, wrappers, config s
 
 - goccy rejects unquoted `${…}` inside flow-style YAML collections — block
   style in all examples.
-- Claude project-dir encoding: EVERY non-alphanumeric byte → `-` (empirical;
+- Claude project-dir encoding: EVERY non-alphanumeric character → `-` (empirical; non-ASCII paths unverified;
   the `can_resume` line in `internal/config/claude_agent.yml`, the one home
   of Claude-specific session knowledge). `${WORKSPACE}` = task id, NOT the
   dir name.

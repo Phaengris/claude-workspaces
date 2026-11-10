@@ -114,8 +114,9 @@ the shell replaced itself with the agent (bash does, for a simple command),
 chaban sees the signal and exits 1. When the shell is still there (fish, or
 bash running a compound command like `a && b`) and the signal hit the agent
 alone, the shell can exit 128+n (143 for a SIGTERM sent to the agent), and
-chaban passes that on. A ^C, which reaches the shell too, and fish's SIGINT
-both show as exit 1. A configured agent whose program is missing is the
+chaban passes that on. A ^C reaches the shell too. If the agent survives it
+(most interactive agents do), chaban exits with the agent's own code, under
+fish as well; exit 1 is for an agent that dies from the signal. A configured agent whose program is missing is the
 shell's 127. A failed `can_resume` check is exit 1, before anything starts.
 
 ---
@@ -415,8 +416,8 @@ To skip permissions, copy the block into `config.yml` and add the flag to
 
 Its `can_resume` line looks for Claude Code's history:
 `~/.claude/projects/<encoded dir>/*.jsonl`, where the encoding maps **every
-non-alphanumeric byte to `-`** (verified against real Claude Code state, not
-guessed). It checks the directory as written (`pwd`) and its
+non-alphanumeric character to `-`** (verified against real Claude Code state,
+not guessed; non-ASCII paths are unverified). It checks the directory as written (`pwd`) and its
 symlink-resolved form (`pwd -P`), so a root reached through a symlink still
 finds its history. The pipeline's status is `grep`'s: 0 when a `.jsonl`
 exists, 1 when none does, including when neither folder exists. It uses

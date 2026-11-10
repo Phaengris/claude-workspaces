@@ -35,9 +35,10 @@ says exactly how far when built with `git describe`.)
   from config. `chat <ws> [-R] [args…]` runs the `agent:` block's `start` or
   `resume`; `launch` and `try` use the same path. `chaban claude` is a hidden
   command that exits 2 and names `chat`.
-- **chaban no longer injects `--dangerously-skip-permissions`** (or
-  `--continue`) and parses no agent flags. Skipping permissions is whatever
-  your `agent:` commands say.
+- **chaban no longer injects `--dangerously-skip-permissions`** and
+  parses no agent flags. Skipping permissions is whatever your `agent:`
+  commands say. `--continue` now comes from your `resume` command (the
+  built-in block's `resume: claude --continue`).
 - `-S`/`--claude-no-skip-permissions` are removed, and `--claude-no-resume`
   is now `-R`/`--no-resume`. Typed before `--`, the old flags are usage
   errors (exit 2) that name the replacement; after `--` they reach the agent.
@@ -55,6 +56,12 @@ says exactly how far when built with `git describe`.)
   into an `agent:` block in `config.yml`. It keeps
   `instructions_file: CLAUDE.md`. Put `--dangerously-skip-permissions` into
   its `start` and `resume` if you want it back.
+
+### Fixed
+
+- `chaban status` on a workspace with no projects (every `TRY-<n>` draft)
+  now shows its `## Status` note, and the `no <file> in this workspace`
+  line. Before, it returned early after `projects: none`.
 
 ### Added
 
