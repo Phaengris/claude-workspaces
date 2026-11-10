@@ -15,6 +15,15 @@ import (
 	"strings"
 )
 
+// Shell is the shell user commands run under: $SHELL from the current process
+// env, fallback /bin/sh.
+func Shell() string {
+	if s := os.Getenv("SHELL"); s != "" {
+		return s
+	}
+	return "/bin/sh"
+}
+
 // Run executes command via `$SHELL -lc <command>` with cmd.Dir = dir and
 // cmd.Env = env. SHELL is resolved from the CURRENT process env (fallback
 // /bin/sh); if SHELL names a missing binary, exec fails naturally and the
@@ -28,10 +37,7 @@ import (
 // (fallback: first non-empty stdout line, fallback: the exit status).
 // No timeout, no retry — foreground commands run to completion.
 func Run(dir, command string, env []string) error {
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
-	}
+	shell := Shell()
 	if env == nil {
 		env = []string{} // nil would make exec.Cmd inherit the raw parent env
 	}
