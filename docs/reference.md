@@ -99,14 +99,22 @@ with your text. bash's completion script keeps only exact-case prefix matches.
 zsh does the same by default; a `matcher-list` style turns on case-insensitive
 and substring matching there. A completer never reports a failure: a broken
 config or registry collapses to "no suggestions" rather than printing an error
-at your prompt or falling back to file names in a workspace slot. The two
-session commands (`claude`, `launch`) disable flag parsing so everything can
-reach Claude, which also means the shell can only be helped with their first
-argument. (`completion powershell` comes free from the CLI framework and is
+at your prompt or falling back to file names in a workspace slot. The
+session commands (`chat`, `launch`, `try`) disable flag parsing so everything
+can reach the agent, so completion helps only with `chat`'s workspace and
+`launch`'s task id and project names, never with the agent's own flags.
+(`completion powershell` comes free from the CLI framework and is
 untested here.) `ls -g`'s git stats run concurrently, bounded.
 
-**Exit codes.** A `claude`/`launch` session propagates **Claude's own exit
-code verbatim**, so a 3 from there is Claude's 3, not "not found".
+**Exit codes.** Once a `chat`/`launch`/`try` session starts, chaban exits
+with **the code of the shell that ran the agent, verbatim**, so a 3 from
+there is the agent's 3, not "not found". Normally that is the agent's own
+code. A signal death depends on the shell: one that replaces itself with a
+simple command (bash does) leaves chaban seeing the signal, and chaban exits
+1; fish, or any shell running a compound command (`a && b`), exits 128+n
+(130 for SIGINT), and chaban passes that on. A configured agent whose
+program is missing is the shell's 127. A failed `can_resume` check is exit 1,
+before anything starts.
 
 ---
 
@@ -149,13 +157,14 @@ There is no per-command version-manager wrapper. Three mechanisms, applied to
 inherit path through which the parent environment could leak.
 
 **Two tiers, deliberately.** Commands the tool runs *for you* get the curated
-environment above. A Claude **session** (`claude`, `launch`) gets the full
-**inherited** environment instead — already self-sanitized at startup, so
-version-manager pins are gone — overlaid with the workspace's resolved
-**global** `env` and the runtime variables themselves (`WORKSPACE`, `PORT0`, …)
-exported as real variables. Claude is the operator's tool and needs the real
-login environment. Note the consequence: a **project's** `env` entry reaches
-`exec`, `setup` and daemons, but **not** the session — `chaban exec T-1 app env`
+environment above. An agent **session** (`chat`, `launch`, `try`), and its
+`can_resume` check, get the full **inherited** environment instead — already
+self-sanitized at startup, so version-manager pins are gone — overlaid with
+the workspace's resolved **global** `env` and the runtime variables
+themselves (`WORKSPACE`, `PORT0`, …) exported as real variables. The agent is
+the operator's tool and needs the real login environment. Note the
+consequence: a **project's** `env` entry reaches `exec`, `setup` and daemons,
+but **not** the session — `chaban exec T-1 app env`
 and the session's environment legitimately differ.
 
 ### Limits — read these once
@@ -171,7 +180,8 @@ than mysterious:
   (`…/versions/<v>/bin`, `…/installs/<tool>/<v>/bin`). An unrecognized layout
   degrades to over-keeping a segment, which reproduces pin-to-launch-time
   behavior — never anything worse.
-- **Commands run under `$SHELL -lc "<command>"`** (fallback `/bin/sh`), so your
+- **Commands run under `$SHELL -lc "<command>"`** (fallback `/bin/sh`), the
+  `agent:` commands included, so your
   **login shell's own init runs first** and can reintroduce environment the
   allowlist just removed. That is outside the tool's control; if it matters,
   keep environment mutation out of your login files (or out of the
@@ -182,6 +192,10 @@ than mysterious:
   are interpreted by **your login shell** — if that is fish, `FOO=bar cmd`,
   `export FOO=bar` and `$(…)` are not valid, whatever your CI thinks. Write
   one-liners that work in *your* shell, or spell it out: `sh -c '…'`.
+- **Argument passthrough is guaranteed for sh, bash, zsh and fish only.**
+  `chat`'s extra arguments are quoted into the agent's command line in a
+  form those four read back verbatim. Under another `$SHELL` (tcsh,
+  nushell, …) an argument may be split or mangled.
 - A failed run-and-wait reports **the first non-empty stderr line**. Under a
   *login* shell that can be a line your `/etc/profile` printed rather than the
   command's own complaint; `chaban logs` and the command's own output are
@@ -294,53 +308,128 @@ their log files.
 ## Sessions
 
 ```sh
-chaban claude DEMO-1                    # session in the workspace dir
-chaban claude DEMO-1 -S                 # ... without --dangerously-skip-permissions
-chaban claude DEMO-1 -R                 # ... without --continue
-chaban claude DEMO-1 --model opus       # anything else goes to claude
+chaban chat DEMO-1                      # start or resume the agent in the workspace dir
+chaban chat DEMO-1 -R                   # ... always start fresh
+chaban chat DEMO-1 --model opus         # anything else goes to the agent
 chaban launch DEMO-1 "try the tool" demo -- --model opus
+chaban try websocket draft -- --model opus
 ```
 
-Both **disable flag parsing**: every flag except the tool's own two belongs to
-Claude, and the injection rules are:
+(`--model opus` is a Claude Code flag. chaban does not read it.)
 
-- `--dangerously-skip-permissions` is injected **unless** you passed `-S` /
-  `--claude-no-skip-permissions`, or took your own permission stance
-  (`--permission-mode[=…]`, or the flag itself).
-- `--continue` is injected **only when a conversation already exists for this
-  workspace directory**, and not when you passed `-R` /
-  `--claude-no-resume`, not in print mode (`-p`/`--print`), and not when you
-  passed your own resume flag (`-c`, `--continue`, `-r`, `--resume[=…]`,
-  `--from-pr[=…]`).
+**The `agent:` block** in `config.yml` is the session command. chaban knows no
+agent's flags; Claude Code's details live in one built-in block (below).
 
-Everything after a literal `--` is Claude's, verbatim — including a later `--`,
-and including strings spelled exactly like `-S`/`-R`. The tool's flags are only
-recognized *before* the first `--`. The **workspace identifier must come first**:
-with flag parsing off, `chaban claude --json DEMO-1` would otherwise resolve
-a workspace literally named `--json`, so a leading flag-looking token is a usage
-error (exit 2) that says so.
+```yaml
+agent:
+  start: <command for a fresh session>           # required
+  resume: <command that continues the last one>  # optional, with can_resume
+  can_resume: <exit 0 = resume, exit 1 = start>  # optional, with resume
+  instructions_file: AGENTS.md                   # optional, the default
+```
 
-Three sharp edges worth knowing:
+`resume` and `can_resume` come as a pair: one without the other is a config
+error (exit 4), reported with the other validation errors. Without the pair,
+`chat` always runs `start`. `agent:` with nothing under it counts as no block;
+`agent: {}` is a block without `start`, an error. The three commands get no
+`${…}` substitution: the session environment already exports `WORKSPACE`,
+`PORT0`, … as real variables, so write `$WORKSPACE`.
 
-- **The history probe.** Whether a conversation exists is decided by looking for
-  `~/.claude/projects/<encoded dir>/*.jsonl`, where the encoding maps **every
-  non-alphanumeric byte to `-`** (verified empirically against real Claude Code
-  state, not guessed). Both the directory as recorded and its symlink-resolved
-  form are probed, so a workspaces root reached through a symlink still finds
-  its history. Every failure to look is "no history", and the safe failure
-  direction is a **fresh session instead of `--continue`** — never the reverse.
-- **Bundled short flags are invisible to the injection detector.** It compares
-  whole tokens, so `-cp` is *not* seen as `-c` + `-p`: `--continue` would be
-  injected alongside your `-c`. Write short flags separately (`-c -p`) when you
-  care.
-- **`exec`'s project sniff, and the `--` rule.** In
-  `chaban exec <ws> [project] <cmd…>` the argument right after the workspace
-  is the **project** if (and only if) it names a configured project; otherwise it
-  *is* the command. To run a command that happens to be named like a project,
-  put `--` in that one slot (`chaban exec T-1 -- app`) or give a path
-  (`./app`). `--` is the sniff suppressor **only** in that position: a later
-  one belongs to your command and is passed through untouched, so
-  `chaban exec T-1 app git checkout -- README` still restores a file.
+**Start or resume.**
+
+1. `-R`/`--no-resume`, or a block without `resume`: run `start`.
+2. Otherwise run `can_resume` in the workspace dir, with the session
+   environment, stdin `/dev/null` and stdout discarded. The convention is
+   `test`'s and `grep -q`'s: **exit 0** runs `resume`, **exit 1** runs
+   `start`.
+3. Anything else starts **nothing**: another exit code, death by a signal, a
+   failure to spawn, or no exit within **5 seconds**. chaban prints how the
+   check failed with the check's own stderr, for example
+   `can_resume failed with exit 3: <stderr> (-R starts fresh without the check)`,
+   and exits 1. A broken check is reported, never papered over with a fresh
+   start; `-R` is the way past it. The check runs in its own process group,
+   and the whole group is killed when it ends or times out, so a background
+   child it leaves behind cannot stall `chat`.
+
+The chosen command runs as `$SHELL -lc <command>` (fallback `/bin/sh`, as
+for every config command) in the workspace dir, with inherited stdio and the
+session environment (see *Two tiers*). Its exit code becomes chaban's (see
+*Exit codes*).
+
+**Arguments.** Each extra argument is appended to the command line wrapped in
+single quotes, with `'` and `\` placed outside the quotes, escaped. sh, bash,
+zsh and fish all read that back as exactly one argument, verbatim: spaces,
+`$`, `*`, quotes, backslashes and newlines survive. Other shells are not
+supported for passthrough (see *Limits*).
+
+**Flags.** chaban's one session flag is `-R`/`--no-resume`, recognized
+anywhere **before** the first literal `--`. Everything else is the agent's,
+verbatim: flags chaban does not know, and everything after the first `--`
+(which is dropped), including a later `--` and strings spelled exactly like
+`-R`. For `launch` and `try`, the agent's arguments are only those after
+`--`, since their own positionals come before it. The old flags are usage
+errors (exit 2) before `--`, each naming what replaced it, so they cannot
+reach the agent by accident: `-S` and `--claude-no-skip-permissions`
+("skip-permissions is no longer injected; it is whatever your agent:
+commands say") and `--claude-no-resume` ("use -R/--no-resume"). After `--`
+they are ordinary agent arguments. `chaban claude` is a hidden command that
+exits 2 with "`chaban claude` is now `chaban chat`".
+
+The **workspace identifier must come first**: with flag parsing off,
+`chaban chat --json DEMO-1` would otherwise resolve a workspace literally
+named `--json`, so a leading flag-looking token is a usage error (exit 2)
+that says so.
+
+**No `agent:` block: the Claude fallback.** The built-in Claude block is one
+embedded YAML text. It is the fallback, the sample chaban prints, and the
+commented example in the starter config (a test keeps the stub's copy
+identical):
+
+```yaml
+agent:
+  start: claude
+  resume: claude --continue
+  can_resume: find ~/.claude/projects/$(pwd | sed 's/[^A-Za-z0-9]/-/g') ~/.claude/projects/$(pwd -P | sed 's/[^A-Za-z0-9]/-/g') -maxdepth 1 -name '*.jsonl' 2>/dev/null | grep -q .
+  instructions_file: CLAUDE.md
+```
+
+- **`claude` on PATH**: `chat` uses this block and prints to stderr, every
+  time, before the agent starts:
+  `chaban: no agent: in config.yml, starting claude (found on PATH); add an agent: block to choose`.
+  Every time, because chaban keeps no state to show it once.
+- **No `claude` on PATH**: chaban prints the block as a sample and exits 4.
+
+The lookup uses chaban's own `PATH` (self-sanitized at startup), for `chat`,
+`launch` and `try` alike; a `PATH` set in config `env:` does not count here.
+`launch` and `try` decide this **before** they create or check out anything,
+so a missing agent leaves no `TRY-<n>` draft or half-made workspace behind. A
+*configured* agent whose program is missing is not checked up front (chaban
+cannot know which word of a shell string is the program): the shell reports
+it and exits 127, which chaban passes on.
+
+The block has no `--dangerously-skip-permissions`: chaban injects no flags.
+To skip permissions, copy the block into `config.yml` and add the flag to
+`start` and `resume`.
+
+Its `can_resume` line looks for Claude Code's history:
+`~/.claude/projects/<encoded dir>/*.jsonl`, where the encoding maps **every
+non-alphanumeric byte to `-`** (verified against real Claude Code state, not
+guessed). It checks the directory as written (`pwd`) and its
+symlink-resolved form (`pwd -P`), so a root reached through a symlink still
+finds its history. The pipeline's status is `grep`'s: 0 when a `.jsonl`
+exists, 1 when none does, including when neither folder exists. It uses
+`find … | grep -q .` rather than a glob because fish prints an error for a
+glob that matches nothing. It works under sh, bash, zsh and fish (3.4 or
+later, for `$(…)`). Under another shell, write your own.
+
+**`exec`'s project sniff, and the `--` rule.** In
+`chaban exec <ws> [project] <cmd…>` the argument right after the workspace
+is the **project** if (and only if) it names a configured project; otherwise it
+*is* the command. To run a command that happens to be named like a project,
+put `--` in that one slot (`chaban exec T-1 -- app`) or give a path
+(`./app`). `--` is the sniff suppressor **only** in that position: a later
+one belongs to your command and is passed through untouched, so
+`chaban exec T-1 app git checkout -- README` still restores a file.
 
 **Titles.** A session names its terminal (OSC escape, when stdout is a
 terminal, first 40 characters of the workspace name) and, inside tmux, its
@@ -367,6 +456,35 @@ the terminal is about to become the session's, so a `cd` hint would read as a
 stale to-do — and instead prints `tip: in another terminal: chaban cd <id>
 — work alongside this session`. The reuse path prints neither.
 
+### The instructions file
+
+`new` (and so `launch` and `try`) and `adopt` write one file at the
+workspace root, once: a pointer to `WORKSPACE.md` and the seeded `## Status`
+frame. Its name is `instructions_file`: the configured one, `CLAUDE.md`
+with no `agent:` block (the built-in block's), or `AGENTS.md` when a block
+leaves it out or empty. It must be a plain file name: one containing `/` or
+`\`, or one that is `.` or `..`, is a config error (exit 4). Resolving the name needs no agent on
+`PATH`: with no block, `new` and `adopt` write `CLAUDE.md` whether or not
+`claude` is installed.
+
+The file is created only when absent and then never touched again, so the
+agent's notes survive every regeneration. Everything that names it uses the
+configured name:
+
+- `status` reads its `## Status` section and labels it
+  `status (from <file>):`;
+- `WORKSPACE.md` says "keep durable notes in `<file>` instead";
+- `chaban which --instructions-file` prints its absolute path (whether or
+  not it exists), and `which --json` carries the same path as
+  `instructions_file`;
+- the SessionStart hook asks `which --instructions-file` which file to check
+  for a `## Status` section.
+
+A workspace keeps the file it was born with. Change `instructions_file`
+later and existing workspaces still hold the old file: `status` reads only
+the configured name, and when that file is missing it says
+`no <file> in this workspace` rather than showing nothing.
+
 ---
 
 ## Workspace hygiene
@@ -375,7 +493,7 @@ Four commands, and one rule that runs through all of them: **the tool never
 deletes a directory it did not create.**
 
 - **`adopt [dir]`** gives an existing tree an allocation — an index, values, a
-  `.env` per project, `WORKSPACE.md`, `CLAUDE.md` if absent — and records it as
+  `.env` per project, `WORKSPACE.md`, the instructions file if absent — and records it as
   adopted. It creates no worktrees, clones nothing, moves nothing, and runs no
   setup. The task id is the directory's **base name, verbatim** (it must be a
   valid id — rename the directory rather than have the name on disk and the
@@ -436,14 +554,17 @@ predicate `ls -g` renders — which is why an untracked `.env` in a repo that do
 not gitignore it makes `gc -d` collect nothing, tool-wide. One definition of
 dirty, and the fix lives in the repo.
 
-**A live Claude session does not protect a workspace.** The daemon gate reads
+**A live agent session does not protect a workspace.** The daemon gate reads
 pid files, and a session (or a plain shell) sitting in the directory writes
 none — so a merged, clean, daemonless workspace can be collected out from under
 one. A session pid marker is future work; until then, `gc -d` is a deliberate
 act, and an unmerged or dirty workspace is safe by the gates above.
 
 **`doctor`** reports and never fixes (`gc` and `down` fix). It prints the config
-verdict, the configured projects and value blocks, then: stale allocations
+verdict, the configured agent (`agent: <start>`, when there is a block), the
+configured projects and value blocks, then: with no `agent:` block, a note
+that `chat` falls back to `claude` (and a finding when `claude` is not on
+`PATH` either, since `chat` could start nothing), stale allocations
 (dir gone), allocations **outside the root** — informational for an adopted
 workspace, a finding for a tool-created one, which is a corrupt or hand-edited
 registry and something `destroy` will refuse — configured projects whose `repo`
@@ -465,15 +586,15 @@ unreadable registry (exit 1) are errors. `--json` gives `findings` and
   the registry records a spelling, and the shell wrapper `cd`s to the spelling
   the tool printed, so the two agree by construction. Reaching the same
   directory by another route is honestly reported as "not inside a workspace".
-  (The Claude history probe is the one place that tries both spellings, because
-  Claude Code records whichever it ran in.)
+  (The built-in Claude `can_resume` line is the one place that tries both
+  spellings, because Claude Code records whichever it ran in.)
 - **State.** One registry, `<root>/.allocations.json` (JSON, per-root, flock'd,
   atomically written), and nothing else. Everything else is derived on demand:
   no status machine, no "broken workspace", no recorded project list.
   `WORKSPACE.md` — the task, the allocated values, each project's dir/branch,
   the per-project `instructions`, and each project's daemons with their
-  descriptions — is regenerated wholesale; `CLAUDE.md` is written once and
-  then never touched, so notes accumulated there survive every regeneration.
+  descriptions — is regenerated wholesale; the instructions file is written
+  once and then never touched, so notes accumulated there survive every regeneration.
 - **Boundaries.** No Docker runtime (a container-based flavor is on the
   roadmap), no Windows (POSIX: flock, process groups, `$SHELL -lc`), no
   profiles (named `start:` subsets) yet.
@@ -498,8 +619,8 @@ root. Both are exit 4 (config error).
 
 Either way the fix is to set `CHABAN_ROOT_DIR`, to the old path to keep it.
 Once `~/workspaces` exists, or any override is set, the legacy-root guard
-stays quiet. The step-by-step upgrade, including the `settings.json` entries
-and the one seeded `CLAUDE.md` line, is in the
+stays quiet. The step-by-step upgrade, including the `settings.json` entries,
+the `agent:` block and the one seeded `CLAUDE.md` line, is in the
 [README](../README.md#upgrading-from-claude-workspaces).
 
 ### The variable must reach every process
