@@ -6,7 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -158,6 +160,46 @@ func TestProbeCanResume(t *testing.T) {
 	_, err = probe("echo SECRETOUT; exit 3", 5*time.Second)
 	if err == nil || strings.Contains(err.Error(), "SECRETOUT") {
 		t.Fatalf("stdout leaked: %v", err)
+	}
+}
+
+func TestProbeCanResumeKillsLeftoverGrandchild(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	for _, tc := range []struct {
+		name string
+		cmd  string
+		want bool
+	}{{"false", "false", false}, {"true", "true", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			pidFile := filepath.Join(t.TempDir(), "pid")
+			cmd := "sleep 30 & echo $! > '" + pidFile + "'; " + tc.cmd
+			start := time.Now()
+			ok, err := probeCanResume(&config.Agent{CanResume: cmd}, t.TempDir(), os.Environ(), 5*time.Second)
+			if err != nil || ok != tc.want {
+				t.Fatalf("got %v %v, want %v nil", ok, err, tc.want)
+			}
+			if el := time.Since(start); el > 3*time.Second {
+				t.Fatalf("took %v", el)
+			}
+			raw, rerr := os.ReadFile(pidFile)
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
+			deadline := time.Now().Add(2 * time.Second)
+			for {
+				stat, _ := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+				// gone, or a zombie awaiting reaping
+				if len(stat) == 0 || strings.Contains(string(stat), ") Z ") {
+					return
+				}
+				if time.Now().After(deadline) {
+					syscall.Kill(pid, syscall.SIGKILL)
+					t.Fatalf("grandchild %d still alive", pid)
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+		})
 	}
 }
 

@@ -96,22 +96,30 @@ func probeCanResume(agent *config.Agent, dir string, env []string, timeout time.
 	})
 	err := cmd.Wait()
 	timer.Stop()
+	// Whatever the shell left behind (background children holding stderr)
+	// dies with its group; ESRCH when nothing is left is fine.
+	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	select {
 	case <-timedOut:
 		return false, fail("timed out after " + timeout.String())
 	default:
 	}
-	if err == nil {
+	// Classify by the shell's own exit status, not by err: a grandchild that
+	// outlives the shell makes Wait return ErrWaitDelay even after exit 0.
+	st := cmd.ProcessState
+	if st == nil {
+		return false, fail("failed: " + err.Error())
+	}
+	if ws, ok := st.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		return false, fail("killed by signal " + ws.Signal().String())
+	}
+	switch st.ExitCode() {
+	case 0:
 		return true, nil
+	case 1:
+		return false, nil
 	}
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		if ee.ExitCode() == 1 {
-			return false, nil
-		}
-		return false, fail(fmt.Sprintf("failed with exit %d", ee.ExitCode()))
-	}
-	return false, fail("failed: " + err.Error())
+	return false, fail(fmt.Sprintf("failed with exit %d", st.ExitCode()))
 }
 
 // agentCommandLine is the start or resume command with args appended quoted.
