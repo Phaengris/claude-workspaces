@@ -290,7 +290,7 @@ func runHook(t *testing.T, binDir string) (stdout, stderr string, code int) {
 func TestHookInsideWorkspacePrintsContext(t *testing.T) {
 	bin := shimBin(t, `#!/bin/sh
 case "$1" in
-which)  printf 'A-1_x\n' ;;
+which)  if [ "$2" = --instructions-file ]; then printf '/ws/A-1_x/AGENTS.md\n'; else printf 'A-1_x\n'; fi ;;
 status) printf 'workspace: %s\nindex: 0\n' "$2" ;;
 *)      exit 1 ;;
 esac
@@ -309,6 +309,10 @@ This session is inside workspace A-1_x.
 workspace: A-1_x
 index: 0
 
+This workspace has no "## Status" section in its AGENTS.md. Start one
+(About / Now / Next / Needs, with an as-of date) and refresh it at the end
+of every substantial turn — the user reads it via ` + "`chaban status`" + `.
+
 WORKSPACE.md holds the task, the allocated values and per-project instructions.
 Manage this workspace with: chaban status|up|down|logs|exec A-1_x
 Daemons are not auto-started; start what you need with: chaban up A-1_x <daemon>
@@ -316,7 +320,7 @@ Daemons are not auto-started; start what you need with: chaban up A-1_x <daemon>
 End every substantial turn with a handoff report — Done (outcomes, never the
 journey), Needs you (each ask self-contained: context, options and a
 recommendation in one breath), Watch out (problems found, with severity) — and
-refresh the ## Status section of CLAUDE.md in the same moment. Your LAST
+refresh the ## Status section of AGENTS.md in the same moment. Your LAST
 message is what the user reads when they switch back to this workspace; its
 job is re-entry in under a minute.
 `
@@ -330,12 +334,11 @@ job is re-entry in under a minute.
 func cdShim(dir string) string {
 	return fmt.Sprintf(`#!/bin/sh
 case "$1" in
-which)  printf 'A-1_x\n' ;;
+which)  if [ "$2" = --instructions-file ]; then printf '%%s\n' %q; else printf 'A-1_x\n'; fi ;;
 status) printf 'workspace: %%s\n' "$2" ;;
-cd)     printf '%%s\n' %q ;;
 *)      exit 1 ;;
 esac
-`, dir)
+`, filepath.Join(dir, "AGENTS.md"))
 }
 
 // The handoff rule is delivered UNCONDITIONALLY, unlike the status nag: it is
@@ -345,7 +348,7 @@ esac
 // nag. MUTATION-CHECKED: making the rule conditional on the file fails this.
 func TestHookPrintsHandoffRuleWithStatusSection(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("## Status\n\nAbout: x\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("## Status\n\nAbout: x\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stdout, _, code := runHook(t, shimBin(t, cdShim(dir)))
@@ -365,7 +368,7 @@ func TestHookPrintsHandoffRuleWithStatusSection(t *testing.T) {
 // deliveries, and a missing section must not cost the session the convention.
 func TestHookNagsWithoutStatusSectionAndStillPrintsRule(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("See @WORKSPACE.md\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("See @WORKSPACE.md\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stdout, _, code := runHook(t, shimBin(t, cdShim(dir)))
@@ -377,6 +380,48 @@ func TestHookNagsWithoutStatusSectionAndStillPrintsRule(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "End every substantial turn with a handoff report") {
 		t.Errorf("the handoff rule must survive the nag branch, got:\n%s", stdout)
+	}
+}
+
+// The nag and the closing line name the configured file. When the binary
+// prints no name (an older chaban, say) the nag is skipped and the closing line
+// says "the workspace's instructions file". Every path exits 0.
+// MUTATION-CHECKED: hard-coding CLAUDE.md in either message fails these.
+func TestHookNamesTheConfiguredFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("See @WORKSPACE.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, code := runHook(t, shimBin(t, cdShim(dir)))
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
+	}
+	if !strings.Contains(stdout, `no "## Status" section in its AGENTS.md.`) ||
+		!strings.Contains(stdout, "## Status section of AGENTS.md in the same moment") {
+		t.Errorf("both messages must name AGENTS.md, got:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "CLAUDE.md") {
+		t.Errorf("CLAUDE.md must not appear for an AGENTS.md workspace, got:\n%s", stdout)
+	}
+}
+
+func TestHookWithoutInstructionsFileNameStaysGeneric(t *testing.T) {
+	bin := shimBin(t, `#!/bin/sh
+case "$1" in
+which)  if [ "$2" = --instructions-file ]; then exit 0; fi; printf 'A-1_x\n' ;;
+status) printf 'workspace: %s\n' "$2" ;;
+*)      exit 1 ;;
+esac
+`)
+	stdout, _, code := runHook(t, bin)
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
+	}
+	if strings.Contains(stdout, `no "## Status" section`) {
+		t.Errorf("without a file name the nag must be skipped, got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "## Status section of the workspace's instructions file in the same moment") {
+		t.Errorf("closing line must name the file generically, got:\n%s", stdout)
 	}
 }
 

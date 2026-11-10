@@ -165,13 +165,13 @@ func TestWriteWorkspaceMDRegenerates(t *testing.T) {
 	}
 }
 
-func TestEnsureClaudeMDCreates(t *testing.T) {
+func TestEnsureInstructionsFileCreates(t *testing.T) {
 	ws := wsp.Workspace{Dir: t.TempDir(), Alloc: alloc.Allocation{
 		TaskID:      "T-1",
 		Description: "fix the thing",
 		CreatedAt:   "2026-09-03T12:00:00+03:00",
 	}}
-	if err := wsp.EnsureClaudeMD(ws); err != nil {
+	if err := wsp.EnsureInstructionsFile(ws, "CLAUDE.md"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
@@ -216,9 +216,9 @@ func TestEnsureClaudeMDCreates(t *testing.T) {
 // hook, which is recomputed from scratch every session and therefore
 // back-propagates for free.
 // MUTATION-CHECKED: re-adding the agreements block fails this.
-func TestEnsureClaudeMDSeedsNoToolOwnedConventions(t *testing.T) {
+func TestEnsureInstructionsFileSeedsNoToolOwnedConventions(t *testing.T) {
 	ws := wsp.Workspace{Dir: t.TempDir(), Alloc: alloc.Allocation{Description: "fix the thing"}}
-	if err := wsp.EnsureClaudeMD(ws); err != nil {
+	if err := wsp.EnsureInstructionsFile(ws, "CLAUDE.md"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
@@ -238,11 +238,11 @@ func TestEnsureClaudeMDSeedsNoToolOwnedConventions(t *testing.T) {
 // unflattened "\n## x" in About would truncate `chaban status` output for
 // the life of the workspace. MUTATION-CHECKED: dropping the flattening fails
 // this.
-func TestEnsureClaudeMDFlattensDescription(t *testing.T) {
+func TestEnsureInstructionsFileFlattensDescription(t *testing.T) {
 	ws := wsp.Workspace{Dir: t.TempDir(), Alloc: alloc.Allocation{
 		Description: "fix\n## pwned\r\nthing",
 	}}
-	if err := wsp.EnsureClaudeMD(ws); err != nil {
+	if err := wsp.EnsureInstructionsFile(ws, "CLAUDE.md"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
@@ -263,12 +263,12 @@ func TestEnsureClaudeMDFlattensDescription(t *testing.T) {
 
 // Adopted dirs hold work the tool did not create, so the seeded Now line must
 // not claim the workspace is freshly created and empty.
-func TestEnsureClaudeMDAdoptedWording(t *testing.T) {
+func TestEnsureInstructionsFileAdoptedWording(t *testing.T) {
 	ws := wsp.Workspace{Dir: t.TempDir(), Alloc: alloc.Allocation{
 		CreatedAt: "2026-09-03T12:00:00+03:00",
 		Adopted:   true,
 	}}
-	if err := wsp.EnsureClaudeMD(ws); err != nil {
+	if err := wsp.EnsureInstructionsFile(ws, "CLAUDE.md"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
@@ -287,9 +287,9 @@ func TestEnsureClaudeMDAdoptedWording(t *testing.T) {
 // A workspace with no description or creation time (possible for adopted
 // dirs and hand-edited registries) still gets a well-formed frame — never
 // empty parentheses or a bare "About:" trailing space artifact.
-func TestEnsureClaudeMDSeedsWithoutAllocationFacts(t *testing.T) {
+func TestEnsureInstructionsFileSeedsWithoutAllocationFacts(t *testing.T) {
 	ws := wsp.Workspace{Dir: t.TempDir()}
-	if err := wsp.EnsureClaudeMD(ws); err != nil {
+	if err := wsp.EnsureInstructionsFile(ws, "CLAUDE.md"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
@@ -305,9 +305,9 @@ func TestEnsureClaudeMDSeedsWithoutAllocationFacts(t *testing.T) {
 	}
 }
 
-// TestEnsureClaudeMDPreservesExisting is the spec §5 promise: agent notes
+// TestEnsureInstructionsFilePreservesExisting is the spec §5 promise: agent notes
 // accumulated in CLAUDE.md survive every regeneration, byte for byte.
-func TestEnsureClaudeMDPreservesExisting(t *testing.T) {
+func TestEnsureInstructionsFilePreservesExisting(t *testing.T) {
 	ws := wsp.Workspace{Dir: t.TempDir()}
 	path := filepath.Join(ws.Dir, "CLAUDE.md")
 	custom := "See @WORKSPACE.md\n\n## Agent notes\n\n- the seeds live in db/seeds.rb\n"
@@ -315,7 +315,7 @@ func TestEnsureClaudeMDPreservesExisting(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 2 { // idempotent: repeated calls change nothing
-		if err := wsp.EnsureClaudeMD(ws); err != nil {
+		if err := wsp.EnsureInstructionsFile(ws, "CLAUDE.md"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -462,5 +462,51 @@ func TestWriteEnvFileHonorsProjectPath(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(wsDir, "www", ".env")); err != nil {
 		t.Errorf(".env must land in the project's path override: %v", err)
+	}
+}
+
+// The file name is the configured one, and ONLY that file is created.
+func TestEnsureInstructionsFileUsesGivenName(t *testing.T) {
+	ws := goldenWorkspace(t)
+	if err := wsp.EnsureInstructionsFile(ws, "AGENTS.md"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(ws.Dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "WORKSPACE.md") || !strings.Contains(string(data), "## Status") {
+		t.Errorf("AGENTS.md must carry today's body, got:\n%s", data)
+	}
+	if _, err := os.Stat(filepath.Join(ws.Dir, "CLAUDE.md")); err == nil {
+		t.Error("CLAUDE.md must not be created when the configured name is AGENTS.md")
+	}
+
+	custom := []byte("agent notes\n")
+	if err := os.WriteFile(filepath.Join(ws.Dir, "AGENTS.md"), custom, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsp.EnsureInstructionsFile(ws, "AGENTS.md"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(ws.Dir, "AGENTS.md")); string(got) != string(custom) {
+		t.Errorf("existing file must stay byte for byte, got %q", got)
+	}
+}
+
+// WORKSPACE.md's hint names the configured file.
+func TestWriteWorkspaceMDNamesInstructionsFile(t *testing.T) {
+	ws := goldenWorkspace(t)
+	cfg := testCfg()
+	cfg.Agent = &config.Agent{Start: "gemini", InstructionsFile: "GEMINI.md"}
+	if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(ws.Dir, "WORKSPACE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "keep durable notes in GEMINI.md instead.") {
+		t.Errorf("hint must name GEMINI.md, got:\n%s", data)
 	}
 }

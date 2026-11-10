@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -184,5 +187,50 @@ func TestWorkspaceAt(t *testing.T) {
 	ws, _ := workspaceAt(reg, "/ws/N-1_outer/N-2_inner/sub")
 	if ws.Alloc.TaskID != "N-2" || ws.Dir != "/ws/N-1_outer/N-2_inner" {
 		t.Errorf("workspaceAt returned %+v, want dir /ws/N-1_outer/N-2_inner task N-2", ws)
+	}
+}
+
+// `which --instructions-file` prints the absolute path of the configured file
+// (existing or not); --json carries the same value; outside a workspace it is
+// still exit 3.
+func TestWhichInstructionsFile(t *testing.T) {
+	root := siblingRoot(t)
+	t.Chdir(filepath.Join(root, "A-1_x", "deep"))
+
+	run := func(args ...string) string {
+		t.Helper()
+		c := Root()
+		var out bytes.Buffer
+		c.SetArgs(args)
+		c.SetOut(&out)
+		c.SetErr(io.Discard)
+		if err := c.Execute(); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		return out.String()
+	}
+	want := filepath.Join(root, "A-1_x", "CLAUDE.md") // no agent: block
+	if got := run("which", "--instructions-file"); got != want+"\n" {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	var j whichEntry
+	if err := json.Unmarshal([]byte(run("which", "--json")), &j); err != nil {
+		t.Fatal(err)
+	}
+	if j.InstructionsFile != want {
+		t.Errorf("json instructions_file = %q, want %q", j.InstructionsFile, want)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "config.yml"), []byte(projectConfig+"agent:\n  start: x\n  instructions_file: GEMINI.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want = filepath.Join(root, "A-1_x", "GEMINI.md")
+	if got := run("which", "--instructions-file"); got != want+"\n" {
+		t.Errorf("configured: got %q, want %q", got, want)
+	}
+
+	t.Chdir(root)
+	if got := exitCodeFor(t, "which", "--instructions-file"); got != 3 {
+		t.Errorf("outside a workspace exit = %d, want 3", got)
 	}
 }
