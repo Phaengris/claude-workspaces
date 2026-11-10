@@ -10,6 +10,8 @@
 # cannot see exact codes); the exact pins live in chat_test.go.
 wsenv
 env SHELL=/bin/sh
+# testscript starts from a minimal env; prove no real tmux window can be named.
+exec sh -c 'test -z "$TMUX$TMUX_PANE"'
 workroot config.tmpl root/config.yml
 workroot config-fail.tmpl config-fail.yml
 workroot config-noagent.tmpl config-noagent.yml
@@ -96,10 +98,16 @@ env AGENT_SHIM_EXIT=
 # yet -> a fresh `claude`. The history dir is encoded with sed HERE, independent
 # of any Go code: every byte outside [A-Za-z0-9] becomes '-'.
 cp config-noagent.yml root/config.yml
+# Fail safely BEFORE chaban spawns anything if the login shell would resolve a
+# claude other than our shim (e.g. /etc/profile resetting PATH).
+exec /bin/sh -lc 'command -v claude'
+stdout '^'$WORK'/bin/claude$'
 exec chaban chat T-1
 stdout 'argv: $'
 cmp stderr notice.txt
 exec sh -c 'enc=$(printf %s "$WORK/root/T-1_x" | LC_ALL=C sed "s/[^A-Za-z0-9]/-/g"); mkdir -p "$HOME/.claude/projects/$enc" && : > "$HOME/.claude/projects/$enc/c.jsonl"'
+exec /bin/sh -lc 'command -v claude'
+stdout '^'$WORK'/bin/claude$'
 exec chaban chat T-1
 stdout 'argv: --continue$'
 cmp stderr notice.txt
@@ -109,6 +117,10 @@ cmp stderr notice.txt
 # claude, which must never run from here.
 rm $WORK/bin/claude
 env PATH=$WORK/bin:/usr/bin:/bin
+# A claude in the system dirs would be a real one: refuse to run.
+! exists /usr/bin/claude
+! exists /bin/claude
+! exec /bin/sh -lc 'command -v claude'
 ! exec chaban chat T-1
 stderr 'no claude on PATH'
 stderr 'agent:'

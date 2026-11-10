@@ -29,6 +29,10 @@ func sessionFixture(t *testing.T, agentYAML string) (root string) {
 	}
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("SHELL", "/bin/sh")
+	// setSessionTitle renames the tmux window named by these; /usr/bin may hold
+	// a real tmux, and the developer's window is not ours to rename.
+	t.Setenv("TMUX", "")
+	t.Setenv("TMUX_PANE", "")
 	// An empty dir first, then the system dirs: a login shell with a PATH
 	// lacking them forks without end on some machines' /etc/profile.d. The
 	// real claude lives elsewhere; refuse to run if it does not.
