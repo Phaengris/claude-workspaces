@@ -88,11 +88,12 @@ func wireCompletions(root *cobra.Command) {
 		"adopt":   completeDir,
 		"release": completeDir,
 
-		// Sessions: claude completes its workspace slot only (everything
-		// after it belongs to claude itself); launch re-parses its own
+		// Sessions: chat completes its workspace slot only (everything
+		// after it belongs to the agent itself); launch re-parses its own
 		// positional grammar (see completeLaunch).
-		"claude": completeSessionWorkspace,
+		"chat":   completeSessionWorkspace,
 		"launch": completeLaunch,
+		"claude": completeNothing, // removed tombstone: nothing to suggest
 		"try":    completeNothing, // free-text description — file names would be noise
 	}
 	for _, cmd := range root.Commands() {
@@ -138,10 +139,10 @@ func completeWorkspace(_ *cobra.Command, args []string, toComplete string) ([]st
 	return workspaceIdents(toComplete), cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeSessionWorkspace completes the workspace slot of `claude`. The
+// completeSessionWorkspace completes the workspace slot of `chat`. The
 // command sets DisableFlagParsing (spec §8), so cobra hands the completer the
 // raw argv; the first slot is the only one that is ours — everything after it
-// is claude's own argv, and suggesting anything there would be wrong.
+// is the agent's own argv, and suggesting anything there would be wrong.
 func completeSessionWorkspace(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -151,8 +152,8 @@ func completeSessionWorkspace(_ *cobra.Command, args []string, toComplete string
 
 // completeLaunch re-parses launch's positional grammar for the shell's
 // benefit, with the same pure helpers the command itself parses with: strip
-// the session flags (-S/-R — they never shift the positional count), stop at
-// `--` (everything after is claude passthrough), then complete by position —
+// the session flags (-R — it never shifts the positional count), stop at
+// `--` (everything after is agent passthrough), then complete by position —
 // task id (existing workspace idents: an existing id is what makes launch
 // reuse), description (free text, no suggestions), then configured project
 // names minus the ones already typed.
@@ -160,7 +161,7 @@ func completeLaunch(_ *cobra.Command, args []string, toComplete string) ([]strin
 	if slices.Contains(args, "--") {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	_, _, positionals := extractSessionFlags(args)
+	positionals := stripSessionFlags(args)
 	switch len(positionals) {
 	case 0:
 		return workspaceIdents(toComplete), cobra.ShellCompDirectiveNoFileComp
@@ -412,6 +413,22 @@ func matchingAnywhere(names []string, toComplete string) []string {
 		lower := strings.ToLower(name)
 		if !strings.HasPrefix(lower, want) && strings.Contains(lower, want) {
 			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// stripSessionFlags drops the session flags (including the retired -S and
+// --claude-no-resume spellings, so a half-typed old habit still completes)
+// from args. Unlike parseSessionFlags it never errors: completion must not
+// break the shell.
+func stripSessionFlags(args []string) []string {
+	var out []string
+	for _, a := range args {
+		switch a {
+		case "-R", "--no-resume", "-S", "--claude-no-skip-permissions", "--claude-no-resume":
+		default:
+			out = append(out, a)
 		}
 	}
 	return out

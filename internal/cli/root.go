@@ -67,7 +67,8 @@ func Root() *cobra.Command {
 	root.AddCommand(newDestroyCmd())
 	root.AddCommand(newGCCmd())
 	root.AddCommand(newDoctorCmd())
-	root.AddCommand(newClaudeCmd())
+	root.AddCommand(newChatCmd())
+	root.AddCommand(newClaudeRemovedCmd())
 	root.AddCommand(newLaunchCmd())
 	root.AddCommand(newTryCmd())
 	root.AddCommand(newInstallCmd())
@@ -99,7 +100,7 @@ func usageArgs(next cobra.PositionalArgs) cobra.PositionalArgs {
 // nothing below main prints-and-dies.
 func Main() int {
 	err := classifyUsageError(Root().Execute())
-	// A propagated child exit code (xerr.ExitError, from the claude session
+	// A propagated child exit code (xerr.ExitError, from the agent session
 	// runner) is deliberately NOT printed: the child owned the terminal and
 	// said whatever it had to say; a trailing "chaban: exit status 7"
 	// after every non-zero session would be pure noise. The code still

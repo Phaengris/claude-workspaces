@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Phaengris/chaban/v2/internal/alloc"
 	"github.com/Phaengris/chaban/v2/internal/config"
+	"github.com/Phaengris/chaban/v2/internal/wsp"
 	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
@@ -217,6 +219,41 @@ func TestAgentCommandLine(t *testing.T) {
 	} {
 		if got := agentCommandLine(a, tc.resume, tc.args); got != tc.want {
 			t.Errorf("got %q, want %q", got, tc.want)
+		}
+	}
+}
+
+// TestSessionEnv pins the session-env rule (M4 plan, Global Constraints): the
+// session inherits THIS process's env (already SanitizeSelf'd at startup) and
+// the workspace overlay — resolved global env plus the runtime vars (WORKSPACE
+// and the numbered values) — wins per key. This is deliberately NOT the
+// curated allowlist: the agent is the operator's tool.
+func TestSessionEnv(t *testing.T) {
+	t.Setenv("SESSION_PARENT_VAR", "inherited")
+	t.Setenv("DB_NAME", "parent-loses")   // collides with the overlay
+	t.Setenv("PWD", "/wherever/launched") // the launcher's cwd: stale for the child
+	cfg := &config.Config{
+		Values: map[string]config.Value{"PORT": {Start: 5000, PerWorkspace: 10}},
+		Env:    map[string]string{"DB_NAME": "app_${WORKSPACE}_dev"},
+	}
+	ws := wsp.Workspace{Dir: "/x/T-9_y", Alloc: alloc.Allocation{TaskID: "T-9", Index: 1}}
+
+	got := map[string]string{}
+	for _, kv := range sessionEnv(cfg, ws) {
+		k, v, _ := strings.Cut(kv, "=")
+		got[k] = v
+	}
+	want := map[string]string{
+		"SESSION_PARENT_VAR": "inherited",   // inherited env reaches the session
+		"DB_NAME":            "app_T-9_dev", // overlay wins over the parent
+		"WORKSPACE":          "T-9",         // runtime identity var exported
+		"PORT0":              "5010",        // value vars exported (index 1 × 10)
+		"PORT9":              "5019",        // ... the whole block
+		"PWD":                "/x/T-9_y",    // ws.Dir, not the launcher's cwd
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("sessionEnv[%s] = %q, want %q", k, got[k], v)
 		}
 	}
 }

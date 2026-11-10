@@ -13,16 +13,16 @@ import (
 )
 
 // newLaunchCmd builds `chaban launch <task_id> [<description> [project…]]
-// [-S] [-R] [-- claude args…]`: the one-shot that composes the daily entry
-// sequence — create-or-reuse, check out, then hand the terminal to Claude. It
+// [-R] [-- agent args…]`: the one-shot that composes the daily entry
+// sequence — create-or-reuse, check out, then hand the terminal to the agent. It
 // runs the OTHER commands' work functions (newWork, checkoutWork,
-// runClaudeSession); nothing about creation, ensuring or session policy is
+// runAgentSession); nothing about creation, ensuring or session policy is
 // re-implemented here, so `launch` cannot drift from the commands it stands in
 // for.
 //
 // PHASES, in order, and the abort rule (the decided row): any phase failing
 // stops the sequence and returns that phase's error — its kind picks the exit
-// code — so Claude is NEVER launched onto a broken environment. The create path
+// code — so the agent is NEVER launched onto a broken environment. The create path
 // is transactional (newWork undoes itself), while the reuse path converges: a
 // failure there leaves the workspace in place for a re-run, exactly as
 // `checkout` would.
@@ -39,7 +39,7 @@ import (
 //     the create path prints a tip for reaching the workspace from ANOTHER
 //     terminal while the session runs.
 //     Anything else (an ambiguous task id) is that error, verbatim.
-//  2. the session, via the same runner as `chaban claude`. Daemons are
+//  2. the session, via the same runner as `chaban chat`. Daemons are
 //     lazy: launch starts NONE of them, on either path — `chaban up` is
 //     the explicit start. A workspace with nothing checked out still gets the
 //     empty-workspace hint (up's own), since that is a fact about checkout,
@@ -54,19 +54,23 @@ import (
 // forgotten description makes a project name land in, BOTH paths print
 // noteProjectInDescriptionSlot's line when it does.
 //
-// DisableFlagParsing, as `claude` (spec §8) — the same three costs handled the
+// DisableFlagParsing, as `chat` — the same three costs handled the
 // same way (hand-written arg checks, -h answered here, a leading flag-looking
 // token refused by requireIdentFirst). One addition: launch has positionals of
 // its OWN after the flags, so extraction happens in two steps —
-// splitPassthrough first (everything after `--` is claude's, never a
-// positional), then extractSessionFlags over the region before it (so -S/-R
+// splitPassthrough first (everything after `--` is the agent's, never a
+// positional), then parseSessionFlags over the region before it (so -R
 // cannot be mistaken for a description or a project name).
+//
+// The agent is resolved right after the config loads, BEFORE anything is
+// created or checked out: no agent: block and no claude on PATH must leave the
+// registry and the root untouched.
 func newLaunchCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "launch <task_id> [<description> [project...]] [-S] [-R] [-- claude args...]",
-		Short: "Create or reuse a workspace and open a Claude session",
+		Use:   "launch <task_id> [<description> [project...]] [-R] [-- agent args...]",
+		Short: "Create or reuse a workspace and open an agent session",
 		Long: "Create or reuse a workspace, check out projects, " +
-			"then launch a Claude Code session in it.\n\n" +
+			"then launch an agent session in it.\n\n" +
 			"An existing workspace is reused as-is: the description is ignored " +
 			"and any projects listed after it are checked out.\n\n" +
 			"Daemons are not started; use `chaban up` for the services you need.",
@@ -78,8 +82,11 @@ func newLaunchCmd() *cobra.Command {
 			if err := requireIdentFirst("launch", "task id", args); err != nil {
 				return err
 			}
-			pre, claudeArgs := splitPassthrough(args)
-			skipPerms, noResume, positional := extractSessionFlags(pre)
+			pre, agentArgs := splitPassthrough(args)
+			noResume, positional, err := parseSessionFlags(pre)
+			if err != nil {
+				return err
+			}
 			if len(positional) == 0 {
 				return xerr.Wrap(xerr.ErrUsage, errors.New("a task id is required"))
 			}
@@ -89,6 +96,11 @@ func newLaunchCmd() *cobra.Command {
 			}
 
 			root, cfg, reg, err := loadRootDir()
+			if err != nil {
+				return err
+			}
+
+			agent, err := resolveAgent(cfg, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -136,7 +148,7 @@ func newLaunchCmd() *cobra.Command {
 			}
 
 			// --- phase 2: the session ------------------------------------
-			return runClaudeSession(cfg, ws, skipPerms, noResume, claudeArgs)
+			return runAgentSession(cfg, ws, agent, noResume, agentArgs)
 		},
 	}
 }
@@ -145,7 +157,7 @@ func newLaunchCmd() *cobra.Command {
 // must not handle silently: positional 2 exactly names a CONFIGURED project, so
 // the command was almost certainly `launch <id> <project>` typed with the
 // description forgotten. Either way the project is NOT checked out, and without
-// this line the user gets a Claude session in a workspace missing the very thing
+// this line the user gets an agent session in a workspace missing the very thing
 // they named, with nothing on screen saying why.
 //
 // It fires on BOTH paths — the grammar does not bend on either (positional 2 is
@@ -166,14 +178,14 @@ func noteProjectInDescriptionSlot(out io.Writer, cfg *config.Config, positional 
 }
 
 // splitPassthrough splits args at the FIRST literal `--`: pre is launch's own
-// positional region, post is claude's verbatim passthrough (the separator
-// dropped, any later `--` kept — it belongs to claude too). No separator means
+// positional region, post is the agent's verbatim passthrough (the separator
+// dropped, any later `--` kept — it belongs to the agent too). No separator means
 // no passthrough.
 //
-// `claude` needs no such split (everything after its workspace argument is
-// already claude's); launch does, because its positionals and claude's
-// arguments would otherwise be indistinguishable — extractSessionFlags merges
-// the two regions into one rest, which is exactly right for `claude` and
+// `chat` needs no such split (everything after its workspace argument is
+// already the agent's); launch does, because its positionals and the agent's
+// arguments would otherwise be indistinguishable — parseSessionFlags merges
+// the two regions into one rest, which is exactly right for `chat` and
 // exactly wrong here.
 func splitPassthrough(args []string) (pre, post []string) {
 	for i, a := range args {

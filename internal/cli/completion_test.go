@@ -135,14 +135,15 @@ func TestDynamicCompletions(t *testing.T) {
 		"exec workspace":             {args: []string{"exec", ""}, want: wsIdents, directive: noFile},
 		// Session commands parse their own flags, so cobra hands the completer
 		// the raw argv: only the first slot is reliably identifiable.
-		"claude workspace":  {args: []string{"claude", ""}, want: wsIdents, directive: noFile},
-		"launch workspace":  {args: []string{"launch", ""}, want: wsIdents, directive: noFile},
-		"claude past first": {args: []string{"claude", "A-1", ""}, want: nil, directive: noFile},
+		"chat workspace":   {args: []string{"chat", ""}, want: wsIdents, directive: noFile},
+		"launch workspace": {args: []string{"launch", ""}, want: wsIdents, directive: noFile},
+		"claude removed":   {args: []string{"claude", ""}, want: nil, directive: noFile},
+		"chat past first":  {args: []string{"chat", "A-1", ""}, want: nil, directive: noFile},
 		// launch's positional grammar IS re-parsed for completion (the pure
 		// helpers exist anyway): task id, then description (free text — no
 		// suggestions), then project names minus the ones already typed.
-		// -S/-R don't shift the positional count; after `--` everything
-		// belongs to claude.
+		// -R does not shift the positional count; after `--` everything
+		// belongs to the agent.
 		"launch flag then ws":     {args: []string{"launch", "-S", ""}, want: wsIdents, directive: noFile},
 		"launch desc slot":        {args: []string{"launch", "PATFIX", ""}, want: nil, directive: noFile},
 		"launch projects":         {args: []string{"launch", "PATFIX", "little fixes", ""}, want: []string{"app", "lib"}, directive: noFile},
@@ -224,7 +225,7 @@ func TestCompletionsSurviveBrokenRoot(t *testing.T) {
 		{"checkout", "A-1", ""},
 		{"down", "A-1", ""},
 		{"logs", "A-1", ""},
-		{"claude", ""},
+		{"chat", ""},
 		{"adopt", "--projects", ""},
 	}
 	for name, files := range roots {

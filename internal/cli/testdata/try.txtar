@@ -1,22 +1,21 @@
 # try: one word to a thinking room — a projectless workspace with an
-# auto-generated TRY-<n> id, straight into a claude session (the launch
+# auto-generated TRY-<n> id, straight into an agent session (the launch
 # machinery minus the ceremony). The description is REQUIRED and unquoted:
 # every positional word joins it, because the name is how a draft is
 # recalled later (TRY-225_serious-tsiolkovsky recalls nothing — the decided
 # reason there is no docker-style name generator here).
 #
-# The `claude` on PATH is the printing shim (PATH discipline: prepended
-# first, a real claude can never run); HOME is a fixture so the history
-# probe stays hermetic.
+# The config's agent: block points at the printing `agent` shim (so a real
+# claude can never run); HOME is a fixture and SHELL explicit.
 wsenv
+env SHELL=/bin/sh
 workroot config.tmpl root/config.yml
 ! grep WORKROOT root/config.yml
 
 env HOME=$WORK/home
 mkdir $WORK/home
-chmod 0755 $WORK/bin/claude
-env PATH=$WORK/bin:$PATH
-env CLAUDE_SHIM_LOG=$WORK/claude.log
+chmod 0755 $WORK/bin/agent
+env AGENT_SHIM_LOG=$WORK/agent.log
 
 # --- first try: TRY-1, unquoted words join the description --------------------
 exec chaban try websocket reconnect draft
@@ -24,10 +23,11 @@ stdout 'workspace TRY-1_websocket-reconnect-draft created \(index 0\)'
 # No "nothing checked out" nag: projectless is what try MEANS, not a mistake.
 ! stdout 'nothing checked out'
 stdout 'tip: in another terminal: chaban cd TRY-1'
-stdout 'argv: --dangerously-skip-permissions$'
+stdout 'mode: start$'
+stdout 'argv: $'
 stdout 'cwd: '$WORK'/root/TRY-1_websocket-reconnect-draft$'
 stdout 'WORKSPACE=TRY-1$'
-grep -count=1 'invoked' $WORK/claude.log
+grep -count=1 'invoked' $WORK/agent.log
 
 # --- ids are monotonic over the registry ---------------------------------------
 exec chaban try another idea
@@ -40,31 +40,39 @@ exec chaban release $WORK/root/TRY-2_another-idea
 exec chaban try third idea
 stdout 'workspace TRY-3_third-idea created'
 
-# --- -S is ours, `--` is claude's ----------------------------------------------
-exec chaban try flagged draft -S -- --model opus
+# --- -S is a usage error, `--` is the agent's ----------------------------------
+! exec chaban try flagged draft -S
+stderr 'no longer injected'
+! exists $WORK/root/TRY-4_flagged-draft
+exec chaban try flagged draft -- --model opus
 stdout 'workspace TRY-4_flagged-draft created'
 stdout 'argv: --model opus$'
-! stdout 'dangerously'
 
 # --- no description → usage error, nothing created ----------------------------
-env CLAUDE_SHIM_LOG=$WORK/no-claude.log
+env AGENT_SHIM_LOG=$WORK/no-agent.log
 ! exec chaban try
 stderr 'description'
-! exists $WORK/no-claude.log
+! exists $WORK/no-agent.log
 ! grep 'TRY-5' $WORK/root/.allocations.json
 
 -- config.tmpl --
+agent:
+  start: WORKDIR/bin/agent start
+  resume: WORKDIR/bin/agent resume
+  can_resume: exit 1
 values:
   PORT: { start: 18400, per_workspace: 2 }
 projects:
   app:
     repo: WORKROOT/src/app
--- bin/claude --
+-- bin/agent --
 #!/bin/sh
+echo "mode: $1"
+shift
 echo "argv: $@"
 echo "cwd: $(pwd)"
 echo "WORKSPACE=$WORKSPACE"
-echo invoked >> "$CLAUDE_SHIM_LOG"
+echo invoked >> "$AGENT_SHIM_LOG"
 exit 0
 -- root/src/app/README --
 app source

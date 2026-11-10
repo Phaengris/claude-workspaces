@@ -13,3 +13,7 @@ stderr 'unknown flag'
 # Too many args for a NoArgs command.
 ! exec chaban doctor extra-arg
 stderr 'unknown command'
+
+# The retired command and flags point at their replacements.
+! exec chaban claude T-1
+stderr 'is now `chaban chat`'
