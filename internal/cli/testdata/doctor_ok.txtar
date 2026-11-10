@@ -34,6 +34,8 @@ stdout '"findings": \[\]'
 stdout '"kind": "daemon_no_description"'
 
 -- config.tmpl --
+agent:
+  start: my-agent
 values:
   PORT: { start: 5000, per_workspace: 10 }
 projects:

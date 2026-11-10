@@ -189,6 +189,8 @@ stdout '^A-1_x +#0 *$'
 echo "git $@" >> "$WORK/git-calls"
 exit 1
 -- root/config.yml --
+agent:
+  start: my-agent
 values:
   PORT: { start: 5000, per_workspace: 10 }
 projects:
