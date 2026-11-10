@@ -130,13 +130,18 @@ func TestClaudeCanResumeLine(t *testing.T) {
 
 func TestAgentValidation(t *testing.T) {
 	for name, tc := range map[string]struct{ yml, want string }{
-		"empty block":          {"agent: {}", "agent: start is required"},
-		"resume only":          {"agent: {start: a, resume: b}", "agent: resume and can_resume go together"},
-		"can_resume only":      {"agent: {start: a, can_resume: 'true'}", "agent: resume and can_resume go together"},
-		"instructions subdir":  {"agent: {start: a, instructions_file: sub/AGENTS.md}", "agent: instructions_file must be a plain file name"},
-		"instructions dot":     {"agent: {start: a, instructions_file: .}", "agent: instructions_file must be a plain file name"},
-		"instructions dotdot":  {"agent: {start: a, instructions_file: ..}", "agent: instructions_file must be a plain file name"},
-		"instructions absolut": {"agent: {start: a, instructions_file: /AGENTS.md}", "agent: instructions_file must be a plain file name"},
+		"empty block":                {"agent: {}", "agent: start is required"},
+		"resume only":                {"agent: {start: a, resume: b}", "agent: resume and can_resume go together"},
+		"can_resume only":            {"agent: {start: a, can_resume: 'true'}", "agent: resume and can_resume go together"},
+		"instructions subdir":        {"agent: {start: a, instructions_file: sub/AGENTS.md}", "agent: instructions_file must be a plain file name"},
+		"instructions dot":           {"agent: {start: a, instructions_file: .}", "agent: instructions_file must be a plain file name"},
+		"instructions dotdot":        {"agent: {start: a, instructions_file: ..}", "agent: instructions_file must be a plain file name"},
+		"blank resume only":          {"agent: {start: a, resume: '  ', can_resume: 'true'}", "agent: resume and can_resume go together"},
+		"blank can_resume only":      {"agent: {start: a, resume: b, can_resume: ' '}", "agent: resume and can_resume go together"},
+		"instructions newline":       {"agent: {start: a, instructions_file: \"CLAUDE.md\\n\"}", "agent: instructions_file must be a plain file name"},
+		"instructions leading space": {"agent: {start: a, instructions_file: \" AGENTS.md\"}", "agent: instructions_file must be a plain file name"},
+		"instructions inner space":   {"agent: {start: a, instructions_file: \"my file.md\"}", "agent: instructions_file must be a plain file name"},
+		"instructions absolut":       {"agent: {start: a, instructions_file: /AGENTS.md}", "agent: instructions_file must be a plain file name"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Load(writeConfig(t, tc.yml))
@@ -167,5 +172,15 @@ func TestAgentNullAndFull(t *testing.T) {
 	want := Agent{Start: "aider --yes", Resume: "aider --restore", CanResume: "test -f .aider.chat.history.md", InstructionsFile: "CONVENTIONS.md"}
 	if cfg.Agent == nil || *cfg.Agent != want {
 		t.Errorf("Agent = %+v, want %+v", cfg.Agent, want)
+	}
+}
+
+func TestAgentBlankPairIsNeither(t *testing.T) {
+	cfg, err := Load(writeConfig(t, "agent: {start: a, resume: '  ', can_resume: '  '}"))
+	if err != nil {
+		t.Fatalf("both blank means neither, got %v", err)
+	}
+	if cfg.Agent == nil || cfg.Agent.Start != "a" {
+		t.Fatalf("agent not loaded: %+v", cfg.Agent)
 	}
 }

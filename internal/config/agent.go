@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/goccy/go-yaml"
 )
@@ -45,10 +46,10 @@ func (a *Agent) validate() []error {
 	if strings.TrimSpace(a.Start) == "" {
 		errs = append(errs, fmt.Errorf("agent: start is required"))
 	}
-	if (a.Resume == "") != (a.CanResume == "") {
+	if (strings.TrimSpace(a.Resume) == "") != (strings.TrimSpace(a.CanResume) == "") {
 		errs = append(errs, fmt.Errorf("agent: resume and can_resume go together"))
 	}
-	if f := a.InstructionsFile; f != "" && (f == "." || f == ".." || strings.ContainsAny(f, `/\`)) {
+	if f := a.InstructionsFile; f != "" && (f == "." || f == ".." || strings.ContainsAny(f, `/\`) || strings.IndexFunc(f, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0) {
 		errs = append(errs, fmt.Errorf("agent: instructions_file must be a plain file name (got %q)", f))
 	}
 	return errs

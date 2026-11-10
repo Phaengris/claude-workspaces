@@ -47,8 +47,8 @@ func parseSessionFlags(args []string) (noResume bool, rest []string, err error) 
 var quoteArgEscaper = strings.NewReplacer(`\`, `'\\'`, `'`, `'\''`)
 
 // quoteArg single-quotes s so sh, bash, zsh and fish all read it back as one
-// literal word: each ' becomes '\” and each \ becomes '\\' (close the quote,
-// escaped char, reopen).
+// literal word. A quote becomes: close the quote, backslash-quote, reopen it.
+// A backslash becomes: close the quote, two backslashes, reopen it.
 func quoteArg(s string) string {
 	return "'" + quoteArgEscaper.Replace(s) + "'"
 }
@@ -186,7 +186,7 @@ func requireIdentFirst(cmdName, noun string, args []string) error {
 func runAgentSession(cfg *config.Config, ws wsp.Workspace, agent *config.Agent, noResume bool, args []string) error {
 	env := sessionEnv(cfg, ws)
 	resume := false
-	if !noResume && agent.Resume != "" {
+	if !noResume && strings.TrimSpace(agent.Resume) != "" {
 		var err error
 		if resume, err = probeCanResume(agent, ws.Dir, env, canResumeTimeout); err != nil {
 			return err

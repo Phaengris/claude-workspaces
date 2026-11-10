@@ -20,7 +20,7 @@ var version = "dev"
 func Root() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "chaban",
-		Short:         "Isolated, runnable dev-stack instances for parallel Claude Code sessions",
+		Short:         "Isolated, runnable dev-stack instances for parallel coding-agent sessions",
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
