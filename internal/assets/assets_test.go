@@ -195,6 +195,9 @@ func TestConfigStubExamplesAreValidWhenUncommented(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the stub's example blocks must be a valid config, got: %v\n--- document ---\n%s", err, doc)
 	}
+	if cfg.Agent == nil || cfg.Agent.Start == "" {
+		t.Errorf("the stub's agent example must load as an agent block, got %+v", cfg.Agent)
+	}
 	app := cfg.Projects["my-app"]
 	if app == nil {
 		t.Fatal("example must define project my-app")
@@ -628,4 +631,31 @@ func TestSkillFrontmatterIsFirst(t *testing.T) {
 	if !closed {
 		t.Error("SKILL.md frontmatter is not closed by a `---` line")
 	}
+}
+
+// TestConfigStubCarriesClaudeAgent pins the stub's commented agent section to
+// the built-in block: every line of config.ClaudeAgentYAML(), prefixed "# ",
+// appears as consecutive lines in order.
+func TestConfigStubCarriesClaudeAgent(t *testing.T) {
+	var want []string
+	for _, l := range strings.Split(strings.TrimRight(string(config.ClaudeAgentYAML()), "\n"), "\n") {
+		want = append(want, "# "+l)
+	}
+	have := strings.Split(string(assets.ConfigStub()), "\n")
+	for i := range have {
+		if i+len(want) > len(have) {
+			break
+		}
+		match := true
+		for j, w := range want {
+			if have[i+j] != w {
+				match = false
+				break
+			}
+		}
+		if match {
+			return
+		}
+	}
+	t.Errorf("config_stub.yml does not carry the built-in agent block as consecutive %q-prefixed lines:\n%s", "# ", strings.Join(want, "\n"))
 }

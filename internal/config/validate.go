@@ -83,6 +83,9 @@ func (c *Config) validate() error {
 			errs = append(errs, fmt.Errorf("value %q: per_workspace must be at least 1", name))
 		}
 	}
+	if c.Agent != nil {
+		errs = append(errs, c.Agent.validate()...)
+	}
 	if err := checkCycles(c.Projects); err != nil {
 		errs = append(errs, err)
 	}
