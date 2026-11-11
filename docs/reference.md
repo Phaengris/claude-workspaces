@@ -604,38 +604,23 @@ unreadable registry (exit 1) are errors. `--json` gives `findings` and
 
 ---
 
-## Upgrading from claude-workspaces
+## A root other than `~/workspaces`
 
-The rename to `chaban` moved the root and its env var. Two config guards
-make a stale setup fail loudly instead of quietly starting from an empty
-root. Both are exit 4 (config error).
-
-- **Old env var.** `CLAUDE_WORKSPACES_ROOT_DIR` is set and `CHABAN_ROOT_DIR`
-  is not. The message is `CLAUDE_WORKSPACES_ROOT_DIR is no longer read:
-  rename it to CHABAN_ROOT_DIR`. The old variable is never read, only
-  noticed.
-- **Legacy default root.** No override is set, `~/workspaces` does not exist,
-  and `~/claude-workspaces` does. The message is `<abs legacy path> exists,
-  but the default root is now ~/workspaces: set CHABAN_ROOT_DIR=<abs legacy
-  path> to keep using it`. It also stops `chaban install`, which
-  would otherwise create an empty `~/workspaces` and hide your workspaces.
-
-Either way the fix is to set `CHABAN_ROOT_DIR`, to the old path to keep it.
-Once `~/workspaces` exists, or any override is set, the legacy-root guard
-stays quiet. The step-by-step upgrade, including the `settings.json` entries,
-the `agent:` block and the one seeded `CLAUDE.md` line, is in the
-[README](../README.md#upgrading-from-claude-workspaces).
+`CHABAN_ROOT_DIR` points chaban at another root. Each root is independent:
+its own `config.yml`, registry and workspaces. Coming from claude-workspaces,
+whose root was `~/claude-workspaces`, read
+[Upgrading from claude-workspaces](upgrading-from-claude-workspaces.md)
+first: it covers the switch and the two guards that catch an old setup.
 
 ### The variable must reach every process
 
-If you keep an old root through `CHABAN_ROOT_DIR`, every process that runs
-`chaban` needs it.
+If you set `CHABAN_ROOT_DIR`, every process that runs `chaban` needs it.
 
 - User commands (`setup`, `start`, `stop`, `teardown`, `exec`) get the
   curated env, which does not carry it. If those commands call `chaban`, add
   `CHABAN_ROOT_DIR` to `env_allow` in `config.yml` (a list of names, global or
   per project).
-- Claude Code launched outside your shell (an IDE, the desktop app) does not
+- An agent launched outside your shell (an IDE, a desktop app) does not
   see a shell-only variable. Set it session-wide instead, for example in
   `~/.config/environment.d/`.
 

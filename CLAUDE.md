@@ -124,6 +124,10 @@ internal/assets ← assets/ (//go:embed carrier; skill, hook, wrappers, config s
 - `docs/superpowers/plans/2026-08-10-m5-deferred-items.md` — the post-v1.0
   backlog + standing decisions (do not re-litigate without cause).
 - `README.md` — the front door: short sentences, primary info only, links out.
+  Real examples over abstract ones (real values, real commands); a one-line
+  comment where the reader stands, a link for anything longer.
+- `docs/upgrading-from-claude-workspaces.md` — the 1.x → 2.0 migration guide
+  (steps + the two root guards); README only links to it.
   `docs/reference.md` — the deep contracts behind it. BOTH are
   accuracy-audited against the code; if behavior changes, whichever documents
   it changes in the same commit (README for headline behavior, reference for

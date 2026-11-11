@@ -31,8 +31,8 @@ says exactly how far when built with `git describe`.)
   `CHABAN_ROOT_DIR` to set, so `install` never creates an empty root beside
   your real one.
 - New workspaces' seeded `CLAUDE.md` says `chaban status`. Existing ones keep
-  the old line; the README's "Upgrading from claude-workspaces" section has
-  the one-line fix.
+  the old line; [Upgrading from claude-workspaces](docs/upgrading-from-claude-workspaces.md)
+  has the one-line fix.
 - **`chaban chat` replaces `chaban claude`**, and the session command comes
   from config. `chat <ws> [-R] [args…]` runs the `agent:` block's `start` or
   `resume`; `launch` and `try` use the same path. `chaban claude` is a hidden

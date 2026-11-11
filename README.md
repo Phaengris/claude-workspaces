@@ -4,80 +4,84 @@
 [![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-`chaban` runs several copies of your dev stack on one machine — one per
-task — without containers.
+`chaban` runs several copies of your dev stack on one machine, one per task,
+without containers. *Chaban* means shepherd: it keeps each task in its own
+pen. ([Why the name](#why-chaban).)
 
-Each workspace gets:
+Each copy is a workspace. Each workspace gets:
 
 - a git worktree per project, on its own branch;
-- its own ports and numbered values, derived from an allocated index;
+- its own ports and other numbered values;
 - its own generated environment;
-- its own daemons, logs, and lifecycle.
+- its own daemons and logs.
 
-Two workspaces never fight over port 3000, a database, or a checkout. Built
-for running several coding-agent sessions in parallel (Claude Code unless you
-configure another); equally usable without them.
+So two workspaces never fight over port 3000, a database, or a checkout.
 
-The tool records almost nothing. Branches, setup freshness, running daemons —
-derived live from git, the filesystem, and `/proc`. No status machine, no
-"broken" state: every command converges when re-run.
+It is built for running several coding-agent sessions side by side, one per
+workspace. chaban starts whatever agent you configure. It also has extras for
+[Claude Code](https://claude.com/claude-code): a skill and a session-start
+hook. You can use it with no agent at all, too.
 
-One static binary. Linux first; macOS builds and is expected to work, with
-lighter liveness checks.
+chaban records almost nothing. Branches, whether setup is current, which
+daemons run: all of it is read live from git, the filesystem and `/proc`.
+There is no "broken" state to repair. Every command converges when you run it
+again.
 
-Details and reasoning live in [`docs/reference.md`](docs/reference.md); this
-file is the short version.
+It is one static binary. Linux is the main platform. macOS builds and should
+work, with simpler liveness checks.
 
----
-
-## Why "chaban"
-
-*Chaban* means shepherd. The word came from Persian *chupan* through Turkic *çoban*, and lives on in Russian and Ukrainian *чабан* and Romanian *cioban*. A shepherd keeps one flock where every animal has its own pen. chaban keeps your parallel Claude Code sessions the same way: each workspace gets its own worktree, ports and daemons. The tool was called claude-workspaces before v2.0.
+This file is the short version. The details and the reasons behind them are in
+[`docs/reference.md`](docs/reference.md).
 
 ---
 
-## Separation, not virtualization
+## How workspaces are kept apart
 
-How are workspaces isolated? **They aren't — they are separated.** A workspace
-is ordinary processes in ordinary directories. No container, no VM, no
-namespace. Nothing collides because everything collidable is routed through
-the allocated values: the server listens on `${PORT0}`, the database is
-`my_app_${WORKSPACE}`, and each workspace gets its own numbers and its own
+A workspace is ordinary processes in ordinary directories: no container, no
+VM, no namespace. Nothing collides because everything that could collide goes
+through the allocated values. The server listens on `${PORT0}`, the database
+is `my_app_${WORKSPACE}`, and each workspace gets its own numbers and its own
 name.
 
-That means the separation is exactly as complete as **your config** makes it.
-The tool guarantees no two live workspaces share an allocation. It cannot know
-that your app hardcodes port 3000 somewhere. If two workspaces fight over a
-resource, route that resource through `values`/`env` — the starter config and
-[`examples/rails.md`](examples/rails.md) show the patterns.
+So the separation is only as complete as your config makes it. chaban makes
+sure no two live workspaces share an allocation. It can't know that your app
+hardcodes port 3000 somewhere. If two workspaces fight over something, route
+it through `values` and `env`. The starter config and
+[`examples/rails.md`](examples/rails.md) show how.
 
-Why not real isolation? Because bare metal is simple and fast: no images, no
-volume mounts, identical on Linux and macOS — and native processes mean native
-tooling. Your debugger attaches. Version-manager shims resolve each worktree's
-own `.ruby-version`. A container-based flavor is on the roadmap; today's trade
-is deliberate.
+### Why not containers
 
-**Isn't this built into Claude Code?** Partly — and the parts compose. Claude
-Code's worktree isolation gives a session its own *checkout*. This tool owns
-everything around the checkout: ports, env, databases-by-name, daemons, and a
-durable task identity that outlives any one session. A session inside a
-workspace can still spawn worktree-isolated subagents — code isolation nested
-inside environment separation.
+Plain processes are simple and fast. There are no images and no volume
+mounts, and it works the same on Linux and macOS. Your debugger attaches.
+Version-manager shims pick up each worktree's own `.ruby-version`. A
+container-based flavor is on the roadmap, but today's trade is deliberate.
+
+### Doesn't my agent already do worktrees?
+
+Some do. Claude Code, for example, can give a session its own checkout. That
+covers the code. chaban covers everything around it: ports, env, databases by
+name, daemons, and a task identity that outlives any one session. The two work
+together. A session inside a workspace can still start worktree-isolated
+subagents.
 
 ---
 
 ## Install
 
 ```sh
-go install github.com/Phaengris/chaban/v2/cmd/chaban@latest
+CGO_ENABLED=0 go install github.com/Phaengris/chaban/v2/cmd/chaban@latest
 chaban install
 ```
 
-(A go-install'd binary reports version `dev` — `go install` cannot apply
-`-ldflags`. To build from a checkout: `CGO_ENABLED=0 go build -o chaban
-./cmd/chaban`, plus `-ldflags "-X
-github.com/Phaengris/chaban/v2/internal/cli.version=X.Y.Z"` if the
-version matters. Prerequisites: a Go toolchain and `git`.)
+You need a Go toolchain and `git`. A binary from `go install` reports its
+version as `dev`, because `go install` can't set `-ldflags`. To build from a
+checkout with a real version:
+
+```sh
+CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/chaban/v2/internal/cli.version=X.Y.Z" -o chaban ./cmd/chaban
+```
+
+### What install writes
 
 `chaban install` copies the running binary and writes:
 
@@ -86,119 +90,80 @@ version matters. Prerequisites: a Go toolchain and `git`.)
 | `~/.local/bin/chaban` | the binary |
 | `~/.config/fish/functions/chaban.fish` | fish `cd` wrapper (autoloaded) |
 | `~/.config/fish/completions/chaban.fish` | fish completions (autoloaded) |
-| `~/.local/share/chaban/shell/chaban.bash` | bash/zsh `cd` wrapper — *you* source it |
-| `~/.local/share/chaban/completions/…` | bash/zsh completions — *you* wire them |
+| `~/.local/share/chaban/shell/chaban.bash` | bash/zsh `cd` wrapper (you source it) |
+| `~/.local/share/chaban/completions/…` | bash/zsh completions (you wire them) |
 | `~/.claude/skills/chaban/SKILL.md` | the Claude Code skill |
-| `~/.local/share/chaban/hooks/session-start.sh` | the SessionStart hook |
-| `~/.local/share/chaban/install-manifest.json` | the uninstall contract |
+| `~/.local/share/chaban/hooks/session-start.sh` | the Claude Code SessionStart hook |
+| `~/.local/share/chaban/install-manifest.json` | the list `uninstall` removes |
 | `<root>/config.yml` | a commented starter config, only if absent |
 | `<root>/` | the workspaces root, created if missing |
 
-Everything is embedded in the binary; completions are generated from the live
-command tree at install time. Re-running `install` is idempotent, and your
-`config.yml` is never overwritten.
+Everything comes from inside the binary. Completions are generated from the
+live command tree. You can run `install` again at any time, and it never
+overwrites your `config.yml`. Installing again from the installed binary
+itself is safe too.
 
-`install` **edits nothing that is yours** — no `settings.json`, no shell rc.
-It prints what to add instead:
+Make sure `~/.local/bin` is on your `PATH`.
 
-- the SessionStart hook entry for `~/.claude/settings.json` (the hook prints
-  workspace identity and status into every session that starts inside a
-  workspace; it never mutates anything);
-- the shell lines for `~/.bashrc` / `~/.zshrc` (fish needs nothing). The
-  wrapper exists because `chaban cd` can only *print* a directory — a child
-  process cannot chdir your shell.
+### What you add yourself
 
-Make sure `~/.local/bin` is on your `PATH`. Re-installing *from* the
-installed binary is safe (the same-file case is detected).
+`install` edits none of your files: no `settings.json`, no shell rc. It prints
+what to add instead:
 
-`chaban uninstall` removes exactly what the manifest lists — never the
-root, your config, or your workspaces — and tells you what it left behind,
-including the SessionStart entry in `settings.json` (not ours to remove,
-since it was not ours to add). A manifest entry pointing at `/`, `$HOME`, or
-the workspaces root is refused rather than executed. With nothing installed
-it prints `nothing installed` and exits 0.
+- The SessionStart hook entry for `~/.claude/settings.json`. Claude Code only;
+  see [Claude Code extras](#claude-code-extras).
+- The lines for `~/.bashrc` or `~/.zshrc`. fish needs nothing. The wrapper is
+  there because `chaban cd` can only print a directory: a child process can't
+  change your shell's directory.
 
----
+### Uninstall
 
-## Upgrading from claude-workspaces
+`chaban uninstall` removes exactly what the manifest lists. It never removes
+the root, your config or your workspaces. It tells you what it left behind,
+including the hook entry in `settings.json`: that one is yours to remove,
+since you added it. The manifest lives in your home and anything could edit
+it, so entries no install could have written are refused: a relative path,
+`/`, `$HOME`, and the root or anything under it. With nothing installed, it
+prints `nothing installed` and exits 0.
 
-The command is now `chaban`, the default root is `~/workspaces`, and the
-root env var is `CHABAN_ROOT_DIR`. Two guards keep an old setup from
-breaking quietly; both exit 4 with the fix in the message. Details,
-including moving a root, are in
-[`docs/reference.md`](docs/reference.md#upgrading-from-claude-workspaces).
-In order:
+### Coming from claude-workspaces
 
-1. Uninstall with the old binary: `workspace uninstall`.
-2. Keep your old root. Set `CHABAN_ROOT_DIR` to it before installing, or
-   `chaban install` stops on the legacy-root guard. Use the value of
-   `CLAUDE_WORKSPACES_ROOT_DIR` if you had one, otherwise
-   `~/claude-workspaces`. Then unset the old variable.
-
-   ```sh
-   set -Ux CHABAN_ROOT_DIR ~/claude-workspaces     # fish
-   export CHABAN_ROOT_DIR=~/claude-workspaces      # bash/zsh, in your rc file
-   ```
-
-3. Install: `chaban install`.
-4. Replace the old entries. The old SessionStart hook in `settings.json`
-   points at a script the old uninstall deleted, and the old bash/zsh rc
-   lines source files that are gone. Remove both, then add the ones
-   `chaban install` prints. Fix any statusline command that calls `workspace`.
-5. Add an `agent:` block to `config.yml`. `chaban claude` is now
-   `chaban chat`, and chaban no longer adds `--dangerously-skip-permissions`.
-   Copy the Claude sample from [Agents](#agents); it keeps
-   `instructions_file: CLAUDE.md`, the file your workspaces already have. Put
-   `--dangerously-skip-permissions` into its `start` and `resume` if you want
-   it back. Without a block, `chat` still starts `claude`, with a notice
-   each time.
-6. Existing workspaces' `CLAUDE.md` files are written once, so they still say
-   `workspace status` in one seeded line. Preview which files carry it:
-
-   ```sh
-   grep -lx 'every substantial turn. The user reads it from outside via `workspace status`,' <root>/*/CLAUDE.md
-   ```
-
-   Then replace that exact line in those files. Nothing else is touched:
-
-   ```sh
-   sed -i.bak 's/^every substantial turn\. The user reads it from outside via `workspace status`,$/every substantial turn. The user reads it from outside via `chaban status`,/' <those files>
-   ```
-
-   The `.bak` copies stay until you delete them.
-7. Restart Claude sessions running inside workspaces. They still know the
-   old skill and command, and their env lacks `CHABAN_ROOT_DIR`.
-
-Each existing workspace's `WORKSPACE.md` says `` Generated by `workspace` ``
-until the next `chaban up` or `checkout` regenerates it.
+chaban was called claude-workspaces before v2.0. If you used it,
+[Upgrading from claude-workspaces](docs/upgrading-from-claude-workspaces.md)
+moves your setup over.
 
 ---
 
 ## Quick start
 
-The root is `~/workspaces` (override: `CHABAN_ROOT_DIR`;
-each root is an independent universe). Describe a project in
-`<root>/config.yml`:
+The root is `~/workspaces`. Set `CHABAN_ROOT_DIR` to use another one; each
+root is independent. Describe a project in `<root>/config.yml`:
 
 ```yaml
+# 10 ports per workspace: workspace 0 gets PORT0..PORT9 = 5000..5009,
+# workspace 1 gets 5010..5019, and so on.
 values:
   PORT:
     start: 5000
     per_workspace: 10
 
+# The command you'd type in a terminal to start your agent.
+agent:
+  start: claude
+
 projects:
   demo:
-    repo: ~/dev/demo
-    setup:
+    repo: ~/dev/demo               # a git repo you have; each workspace gets a worktree of it
+    setup:                         # runs once, when the project is checked out
       - echo "setup ran"
-    start:
-      - echo "migrations go here"
-      - web: python3 -u -m http.server ${PORT0}
-    teardown:
+    start:                         # what `chaban up` runs, in order
+      - echo "migrations go here"  #   a plain line runs and finishes
+      - web: python3 -u -m http.server ${PORT0}   # a named line is a daemon
+    teardown:                      # runs on `chaban destroy`
       - echo "teardown ran"
-    env:
+    env:                           # for the project's commands, and written to its .env
       DEMO_URL: http://localhost:${PORT0}
-    browse_port: ${PORT0}
+    browse_port: ${PORT0}          # the port `chaban browse` opens
 ```
 
 Then:
@@ -216,50 +181,87 @@ cd ~
 chaban destroy DEMO-1
 ```
 
-What happened: `new` allocated index 0 (so `PORT0..PORT9` = 5000..5009),
-created the dir, checked out a `demo` worktree on branch `DEMO-1_try-the-tool`,
-wrote the `.env`, and ran `setup:` once (re-run only when its lines change).
-`up` ran the bare `start:` entry to completion, then started the daemon.
-`chat` started Claude Code in the workspace (no `agent:` block yet, so it
-printed a one-line notice; see [Agents](#agents)). `destroy` ran `teardown:`
-and removed everything, allocation included.
+What happened:
 
-Notes: use `python3 -u` (and equivalents) — a daemon's stdout is a file, and
-block-buffering makes `logs` unreadable otherwise (and a daemon started a
-second ago may not have written anything yet — run `logs` again). And `cd ~` before
-`destroy`: don't saw off the directory you're standing in.
+- `new` allocated index 0, so `PORT0..PORT9` are 5000..5009. It created the
+  directory, checked out a `demo` worktree on branch `DEMO-1_try-the-tool`,
+  wrote the `.env` and ran `setup:`. `setup:` runs again only when its lines
+  change.
+- `up` ran the plain `start:` entry to completion, then started the `web`
+  daemon.
+- `chat` ran `claude` in the workspace directory. Put your own agent's
+  command in `start`; see [Agents](#agents).
+- `destroy` ran `teardown:`, removed the worktree and the directory, and
+  released the allocation. The branch `DEMO-1_try-the-tool` stays in
+  `~/dev/demo`: a branch is your work.
+
+Two tips. Use `python3 -u` (or your language's equivalent): a daemon's stdout
+is a file, and buffered output makes `logs` look empty. A daemon started a
+second ago may not have written anything yet either, so run `logs` again. And
+`cd ~` before `destroy`, so you aren't standing in the directory it removes.
+
+### Day to day: `launch`
+
+The steps above show each part on its own. Day to day, one command does it:
+
+```sh
+chaban launch DEMO-2 "fix the header" demo
+```
+
+It creates `DEMO-2` (or reuses it, if it exists), checks out `demo` and starts
+your agent there. Daemons stay down until you or the agent run
+`chaban up DEMO-2`. For an experiment with no project yet,
+`chaban try "does this library fit"` makes a `TRY-<n>` workspace and starts
+the agent in it.
 
 ---
 
 ## Configuration
 
-One file: `<root>/config.yml`. Decoded **strictly** — unknown keys are errors
-with `line:column` positions — and validated on every load. No reload step, no
-cache.
+Everything is in one file, `<root>/config.yml`. It is read strictly: an
+unknown key is an error, with its `line:column`. Each command reads it fresh,
+so there is no reload step.
 
-Onboarding a real project is two halves: this file, and making the app
-*consume* what the env provides (no hardcoded ports or database names).
+Onboarding a real project has two halves: this file, and making the app use
+what the env gives it (no hardcoded ports or database names).
 [`examples/rails.md`](examples/rails.md) walks a Rails + Vite + Sidekiq app
-through both — and the installed skill teaches sessions the same procedure, so
-"configure workspaces for my project" is a thing you can ask a session to do.
+through both. The installed skill teaches Claude Code sessions the same steps,
+so you can ask a session to "configure workspaces for my project".
 
-The full key set, annotated:
+All the keys, with real values:
 
 ```yaml
-# Workspace at index i gets NAME0..NAME<k-1> = start + i*k + n
+# Numbered values per workspace. With start 5000 and 10 per workspace,
+# workspace 0 gets PORT0..PORT9 = 5000..5009, workspace 1 gets 5010..5019.
+# REDIS gives each workspace one Redis database: workspace 0 gets REDIS0 = 1.
 values:
   PORT:
     start: 5000
     per_workspace: 10
+  REDIS:
+    start: 1
+    per_workspace: 1
 
-# environment for every project's commands, ${…} substituted
+# Environment for every project's commands.
 env:
   RAILS_ENV: development
 
-# extra PARENT variables allowed through the curated environment
+# chaban starts with your shell's whole environment, but passes only a short
+# list of variables to the commands it runs (HOME, LANG, SSH_AUTH_SOCK, ...),
+# so a workspace doesn't pick up stray settings. Name here any other
+# variable your commands need.
 env_allow: [MY_API_TOKEN]
 
-# reusable project definitions
+# How `chaban chat` starts your agent. Each line is a terminal command.
+agent:
+  start: claude                    # a new session
+  resume: claude --continue        # continue the last session
+  # chooses between the two: exit 0 runs `resume`, exit 1 runs `start`.
+  # Your own script here; the built-in check for Claude Code is in Agents.
+  can_resume: ~/.local/bin/claude-has-session-here.sh
+  instructions_file: CLAUDE.md     # the file chaban writes for the agent (default AGENTS.md)
+
+# Shared project definitions; ${NAME} is filled in by each project that uses it.
 templates:
   rails-client:
     params: [NAME]
@@ -270,131 +272,142 @@ templates:
 
 projects:
   my-app:
-    repo: ~/dev/my-app             # REQUIRED; ~ expanded
-    base_branch: main              # branch off this (default: the repo's HEAD)
-    path: my-app                   # subdir in the workspace (default: the key)
-    depends: shared-lib            # orders setup/up; reversed for down
-    setup:                         # at checkout; re-run when these lines change
+    repo: ~/dev/my-app             # required
+    base_branch: main              # new branches start from here (default: the repo's HEAD)
+    path: my-app                   # its directory inside the workspace (default: the key)
+    depends: shared-lib            # set up and started after shared-lib, stopped before it
+    setup:                         # runs at checkout, and again when these lines change
       - bundle install
       - bin/rails db:prepare
-    start:                         # what `up` runs, in order
-      - bin/rails db:migrate       #   bare string  = run-and-wait
-      - rails: bin/rails s -p ${PORT0}   # {name: cmd} = daemon
-      - worker:                    # {name: {command, description}} = daemon
-          command: bin/sidekiq     #   whose description status/WORKSPACE.md
-          description: background jobs   # show, so sessions know what it's for
-    stop:                          # optional; AFTER this project's daemons stop
+    start:                         # what `chaban up` runs, in order
+      - bin/rails db:migrate       #   a plain line runs and finishes
+      - rails: bin/rails s -p ${PORT0}   # a named line is a daemon
+      - worker:                    # a daemon with a description, which `status`
+          command: bin/sidekiq     #   and WORKSPACE.md show, so a session
+          description: background jobs   # knows what it is for
+    stop:                          # runs on `chaban down`, after the daemons stop
       - bin/rails tmp:clear
-    teardown:                      # on `destroy`, before the worktree goes
+    teardown:                      # runs on `chaban destroy`, before the worktree goes
       - dropdb --if-exists my_app_${WORKSPACE}
-    env:                           # project env, over the global env
-      DATABASE_URL: postgres:///my_app_${WORKSPACE}
+    env_allow: [STRIPE_KEY]        # like env_allow above, for this project only
+    env:                           # over the global env; also written to the .env
+      DATABASE_URL: postgres:///my_app_${WORKSPACE}   # my_app_DEMO-1 in workspace DEMO-1
+      REDIS_URL: redis://localhost:6379/${REDIS0}
       PORT: ${PORT0}
-    browse_port: ${PORT0}
-    instructions: |                # verbatim into WORKSPACE.md: what the app is, where its docs are
+    browse_port: ${PORT0}          # the port `chaban browse` opens
+    instructions: |                # copied into WORKSPACE.md for the agent
       A booking system for small clinics. Rails 8, PostgreSQL.
-      Read my-app/CLAUDE.md first.
+      Read my-app/AGENTS.md first.
       Tests: `bin/rspec`.
   shared-lib:
     repo: ~/dev/shared-lib
-  acme:
-    template: rails-client
-    params:
-      NAME: acme
+  acme:                            # uses the template; after filling it in, this is:
+    template: rails-client         #   acme:
+    params:                        #     repo: ~/dev/clients/acme
+      NAME: acme                   #     start:
+                                   #       - rails: bin/rails s -p ${PORT0}
+                                   #     browse_port: ${PORT0}
 ```
 
-Runtime tokens: `${WORKSPACE}` (the task id), `${PROJECT}`, and the derived
-values (`${PORT0}`, …) — substituted in `env`, `setup`, `start`, `stop`,
-`teardown`, `browse_port`. Unknown tokens pass through.
+Runtime tokens are `${WORKSPACE}` (the task id, like `DEMO-1`), `${PROJECT}`
+(the project's key, like `my-app`), and the values (`${PORT0}`,
+`${REDIS0}`, …). They are filled in inside `env`, `setup`, `start`, `stop`,
+`teardown` and `browse_port`. Unknown tokens are left as they are.
 
-**Two YAML caveats**, worth knowing before they bite:
+### Two YAML traps
 
-- Unquoted `${…}` inside **flow style** is invalid YAML: `env: {A: ${PORT0}}`
-  fails. Use block style (as above) or quote the value.
-- A colon **followed by a space** inside a bare `start:` entry makes it a
-  *map* — `- echo "run: it"` becomes a daemon named `echo "run`. Quote the
-  whole entry whenever it contains `: ` (a colon without a space, as in URLs,
-  is fine).
+- Unquoted `${…}` inside flow style is invalid YAML: `env: {A: ${PORT0}}`
+  fails. Use block style, as above, or quote the value.
+- A colon followed by a space turns a plain `start:` entry into a map:
+  `- echo "run: it"` becomes a daemon named `echo "run`. Quote the whole entry
+  when it contains `: `. A colon without a space, as in a URL, is fine.
 
-Deep semantics — template merging, values math, `depends`/`path` rules, `.env`
-seeding, error positions — in [`docs/reference.md`](docs/reference.md#configuration-semantics).
+Template merging, the values math, the `depends` and `path` rules, `.env`
+seeding and error positions are in
+[`docs/reference.md`](docs/reference.md#configuration-semantics).
 
 ---
 
 ## Commands
 
-`<ws>` is a workspace identifier: the full directory name or the task id. An
-ambiguous task id is a plain error listing the candidates.
+`<ws>` is a workspace: its task id (`DEMO-1`) or its full directory name
+(`DEMO-1_try-the-tool`). A task id that matches more than one workspace is an
+error that lists them.
 
 | Group | Command | What it does |
 |---|---|---|
-| **Lifecycle** | `new <task_id> <description> [project…]` | Allocate, create, check projects out. Transactional: any failure undoes everything. |
-| | `checkout <ws> <project…>` | Add projects: worktree, `.env`, stamped `setup`. Idempotent. |
-| | `destroy [--force] <ws>` | `down` → `teardown` → remove → release. Only removes dirs the tool created. |
-| **Allocation** | `adopt [dir] [--projects a,b]` | Give an existing directory an allocation and env. Never claims ownership; idempotent. Defaults to the cwd's workspace. |
-| | `release [dir]` | Drop the allocation, touch no files. Defaults to the cwd's workspace. |
-| | `gc [-d]` | Release vanished allocations, reap stale pid files; `-d` also destroys fully merged, clean, daemonless, tool-created workspaces. |
-| **Services** | `up <ws> [target…]` (alias `start`) | Ensure setup, run the run-and-waits, start daemons. Idempotent. |
-| | `down <ws> [target…]` (alias `stop`) | Stop daemons (group TERM → ≤5s → KILL), then run `stop:`. |
-| | `restart <ws> [target…]` | `down` with confirmed death, then `up`. |
-| | `logs <ws> <daemon> [-n N] [-f]` | One daemon's log; `-f` follows stdout+stderr. |
-| | `exec <ws> [project] <cmd…>` | Replace this process with the command, under the curated environment. |
-| | `browse <ws> [project]` | Open `http://localhost:<browse_port>` — after checking something actually listens; refuses dead ports. |
-| **Observe** | `ls [-g] [-a]` | Every workspace, one line each. `-g`: `project@branch` cells, `*` = dirty. `-a`: also unallocated root dirs — released workspaces (identity from the dir name; `adopt` to reuse) and strangers, labeled `(unmanaged)`. |
-| | `status [ws]` | One workspace in full, derived live — plus the `## Status` note sessions keep in the workspace's instructions file, so "where was I with this?" is answerable without opening a session. No argument: the `ls` listing. |
+| **Lifecycle** | `new <task_id> <description> [project…]` | Allocate, create, check projects out. If any step fails, everything is undone. |
+| | `checkout <ws> <project…>` | Add projects: worktree, `.env`, `setup`. Safe to repeat. |
+| | `destroy [--force] <ws>` | `down`, `teardown`, remove, release. Removes only directories chaban created. |
+| **Allocation** | `adopt [dir] [--projects a,b]` | Give an existing directory an allocation and env. Never takes ownership of it. Safe to repeat. Defaults to the current directory. |
+| | `release [dir]` | Drop the allocation, touch no files. Defaults to the current workspace. |
+| | `gc [-d]` | Release allocations whose directory is gone, clean stale pid files. `-d` also destroys workspaces created by chaban that have at least one project checked out, all merged, clean, with no daemons. |
+| **Services** | `up <ws> [target…]` (alias `start`) | Make sure setup is current, run the run-and-waits, start daemons. Safe to repeat. |
+| | `down <ws> [target…]` (alias `stop`) | Stop daemons (TERM to the group, KILL after 5s), then run `stop:`. |
+| | `restart <ws> [target…]` | `down`, wait until each daemon's main process is gone, then `up`. |
+| | `logs <ws> <daemon> [-n N] [-f]` | One daemon's log. `-f` follows stdout and stderr. |
+| | `exec <ws> [project] <cmd…>` | Run a command in place of chaban, with the curated environment. |
+| | `browse <ws> [project]` | Open `http://localhost:<browse_port>`, after checking something listens there. |
+| **Observe** | `ls [-g] [-a]` | Every workspace, one line each. `-g` adds `project@branch` cells (`*` means changed or untracked files). `-a` also lists root directories with no allocation: released workspaces (`adopt` to reuse) and strangers, marked `(unmanaged)`. |
+| | `status [ws]` | One workspace in full, read live, plus the `## Status` note its agent keeps. With no argument, the `ls` listing. |
 | | `env <ws> [project]` | The resolved environment. |
 | | `ports` | Allocated value blocks across workspaces. |
-| **Sessions** | `chat <ws> [-R] [args…]` | Start or resume your agent in the workspace dir. `-R` always starts fresh; other args go to the agent. |
-| | `launch <task_id> [<description> [project…]] [-R] [-- args…]` | `new`-or-reuse + `checkout` + `chat`, one shot. Daemons are lazy — start them with `up`. |
-| | `try <description…> [-R] [-- args…]` | A draft workspace: no projects, generated `TRY-<n>` id, the words are the description, straight into a session — allocated values included, so a scratch server has its ports. Graduate with `checkout`, or `destroy`. |
+| **Sessions** | `chat <ws> [-R] [args…]` | Start or resume your agent in the workspace. `-R` always starts fresh. Other arguments go to the agent. |
+| | `launch <task_id> [<description> [project…]] [-R] [-- args…]` | `new` (or reuse), `checkout` and `chat` in one go. Daemons stay down until you `up` them. |
+| | `try <description…> [-R] [-- args…]` | A draft workspace with no projects and a generated `TRY-<n>` id, straight into a session. It still gets its values, so a scratch server has ports. Keep it with `checkout`, or `destroy` it. |
 | **Navigate** | `cd <ws> [project]` | Print the directory; the shell wrapper does the `cd`. |
-| | `which` | The workspace containing the cwd (exit 3 if none). |
-| **Meta** | `doctor` | Health report: config, registry, repos, daemons, unregistered dirs. Reports, never fixes. |
-| | `install` / `uninstall` | See *Install*. |
-| | `completion <shell>` | Generated completion script (bash, zsh, fish). |
+| | `which` | The workspace you're in (exit 3 if none). |
+| **Meta** | `doctor` | Health report: config, registry, repos, agent, daemons, stray directories. Reports, never fixes. |
+| | `install` / `uninstall` | See [Install](#install). |
+| | `completion <shell>` | The completion script for bash, zsh or fish. |
 
-Three creation commands, one door: `new` scripts, `launch` is the daily
-one-shot, `try` is the scratchpad.
+Three commands create workspaces. `new` is for scripts, `launch` is the daily
+one, `try` is the scratchpad.
 
-Exit codes mean things: 0 ok, 1 failed, 2 usage, 3 not found, 4 config error.
-`--json` on the query commands. Targets for `up`/`down`/`restart`/`logs` are
-project names, daemon names, or `project:daemon`.
-[More on the command surface.](docs/reference.md#command-surface-details)
-
----
-
-## The environment, briefly
-
-Commands the tool runs for you (`setup`, `start:`, `exec`, …) get a **curated**
-environment: a fixed allowlist of parent variables, a PATH with per-version
-bins stripped (so version-manager *shims* resolve each worktree's own
-`.ruby-version`), and your `env:` on top. A variable not on the allowlist
-doesn't arrive — `env_allow:` is the door.
-
-Agent **sessions** (`chat`, `launch`, `try`) get your real login environment
-instead (sanitized of version pins), overlaid with the workspace's values.
-Two tiers, on purpose: daemons need reproducibility, the operator's tool
-needs your actual setup.
-
-The full model — the allowlist, the PATH heuristic, the login-shell caveats —
-in [`docs/reference.md`](docs/reference.md#environment-curation--the-shims-model).
-Read its *Limits* once; it will save you a confused hour.
+Exit codes: 0 ok, 1 failed, 2 usage, 3 not found, 4 config error. The query
+commands take `--json`. Targets for `up`, `down`, `restart` and `logs` are
+project names, daemon names, or `project:daemon`: `chaban up DEMO-1 my-app`
+runs my-app's run-and-waits and starts all its daemons, and
+`chaban down DEMO-1 my-app:worker` stops only the worker.
+[More on the commands.](docs/reference.md#command-surface-details)
 
 ---
 
-## Services, briefly
+## Environment
 
-`start:` entries are run-and-waits (bare strings — migrations, preludes) or
-daemons (named — own process group, own logs, pid+starttime liveness that
-survives pid reuse). **Daemons are lazy**: nothing starts them until
-`chaban up`. Give them `description:`s — `status` shows those to every
-session, which is how a session knows what to start.
+Commands chaban runs for you (`setup`, `start:`, `exec`, …) get a curated
+environment. Only an allowlist of your variables gets through, plus your
+`env:` on top. `PATH` loses per-version bin directories, so version-manager
+shims pick each worktree's own `.ruby-version`. To let another variable
+through, add it to `env_allow:`.
 
-`down` stops by group TERM with a KILL escalation and takes its no-target
-inventory from the pid files on disk, not the config — a daemon you renamed
-away still gets stopped. `stop:` runs *after* daemons are down.
+Agent sessions (`chat`, `launch`, `try`) get your real login environment
+instead, without version pins, plus the workspace's values. Daemons need a
+reproducible environment; your agent needs your actual setup.
 
-The full lifecycle — liveness details, restart asymmetry, logs behavior — in
+The allowlist, the `PATH` rule and the login-shell caveats are in
+[`docs/reference.md`](docs/reference.md#environment-curation--the-shims-model).
+Read its *Limits* section once. It will save you a confused hour.
+
+---
+
+## Daemons
+
+A `start:` entry is either a run-and-wait (a plain string: migrations,
+preludes) or a daemon (a named entry). Each daemon has its own process group
+and its own logs. Its liveness is checked by pid and start time, so a reused
+pid doesn't fool it.
+
+Daemons are lazy: nothing starts them until `chaban up`. Give them a
+`description:`. `status` shows it to every session, so a session knows what to
+start.
+
+`down` sends TERM to each daemon's process group. If the daemon itself is
+still alive 5 seconds later, the group gets KILL. With no targets, it stops whatever has a pid file on disk, not what the config lists,
+so a daemon you renamed still gets stopped. `stop:` runs after the daemons are
+down.
+
+Liveness, the restart details and how logs behave are in
 [`docs/reference.md`](docs/reference.md#services--daemons).
 
 ---
@@ -402,8 +415,8 @@ The full lifecycle — liveness details, restart asymmetry, logs behavior — in
 ## Agents
 
 `chaban chat <ws>` starts your coding agent in the workspace. The `agent:`
-block in `config.yml` says which agent and how. This is the built-in Claude
-Code block:
+block in `config.yml` says which agent and how. Any agent you can start from a
+shell works. This is the built-in block for Claude Code:
 
 ```yaml
 agent:
@@ -413,22 +426,35 @@ agent:
   instructions_file: CLAUDE.md
 ```
 
-- `start` opens a fresh session. It is the one required key.
-- `resume` continues the last session. `can_resume` picks between the two:
+The smallest block is one line. For example, for
+[Codex](https://github.com/openai/codex), which reads `AGENTS.md`:
+
+```yaml
+agent:
+  start: codex
+```
+
+Every `chat` then starts a new session, and chaban writes `AGENTS.md` as the
+workspace's instructions file. The keys:
+
+- `start` opens a new session. It is the only required key.
+- `resume` continues the last session. `can_resume` chooses between the two:
   exit 0 runs `resume`, exit 1 runs `start`. Any other exit, or no answer in
   5 seconds, starts nothing and exits 1. `-R` skips the check. `resume` and
-  `can_resume` come as a pair.
-- All three commands run as `$SHELL -lc <command>` in the workspace dir,
-  with the session environment. Your extra arguments are appended, quoted,
-  to `start` or `resume` (whichever runs), never to `can_resume`.
+  `can_resume` go together: give both or neither.
+- All three run as `$SHELL -lc <command>` in the workspace directory, with the
+  session environment. Your extra arguments are added, quoted, to `start` or
+  `resume` (whichever runs), never to `can_resume`.
 - `instructions_file` is the file chaban writes once at the workspace root,
-  with the `## Status` frame. Default: `AGENTS.md`.
+  with a `## Status` section for the agent to fill in. If your block leaves
+  it out, it is `AGENTS.md`. With no `agent:` block at all, it is
+  `CLAUDE.md`, to match the `claude` fallback below.
 
-chaban adds no agent flags of its own: `--dangerously-skip-permissions`
-reaches Claude only if your block says so.
+chaban adds no agent flags of its own. `--dangerously-skip-permissions`
+reaches Claude Code only if your block says so.
 
-With no `agent:` block, `chat` uses the block above when `claude` is on
-your `PATH`, and says so on stderr every time:
+With no `agent:` block, `chat` uses the block above if `claude` is on your
+`PATH`, and says so on stderr every time:
 
 ```
 chaban: no agent: in config.yml, starting claude (found on PATH); add an agent: block to choose
@@ -436,46 +462,61 @@ chaban: no agent: in config.yml, starting claude (found on PATH); add an agent: 
 
 With no `claude` either, it prints the block as a sample and exits 4.
 `launch` and `try` check this before they create anything.
-[The full session contract.](docs/reference.md#sessions)
+[The full session rules.](docs/reference.md#sessions)
+
+### The status note
+
+Each workspace's instructions file has a `## Status` section. The agent keeps
+it up to date, and `chaban status` shows it. So you, or the next session, can
+pick a workspace up again days later without reading old sessions. This works
+with any agent: it is a file and a command.
 
 ---
 
-## Claude Code integration
+## Claude Code extras
 
-This is the part built *for* running agent fleets:
+Two pieces only help Claude Code. Another agent still gets everything above.
+`install` writes both either way; without Claude Code they do nothing.
 
-- **The skill** (installed) teaches sessions the whole convention: create with
-  `launch`/`try`, start only the daemons the task needs, verify against a
-  running server, keep names short, and end substantial turns with a handoff
-  report (done / needs you / watch out).
-- **The SessionStart hook** prints the workspace's identity and live status
-  into every session that opens inside one — including each daemon's
-  description and the status note — and closes with the handoff-report
-  convention. Conventions ride the hook rather than the scaffolded
-  instructions file, which is written once and then belongs to the agent:
-  the hook stores nothing, so a change reaches every workspace at once.
-- **The status note**: sessions maintain a `## Status` section in the
-  workspace's instructions file (`CLAUDE.md` with the Claude block; the tool
-  writes that file once and never touches it again). `chaban status` renders
-  it, the hook delivers it — so both you and the next session re-enter a
-  workspace in seconds, days later.
-
-The skill and the hook are Claude Code's. Another agent gets the launcher
-and the instructions file, but not the hook's per-session context. None of it
-requires Claude: every convention is a file or a CLI surface.
+- **The skill** teaches sessions how to work with chaban: create workspaces
+  with `launch` and `try`, start only the daemons the task needs, check work
+  against a running server, keep names short, and end a substantial turn with
+  a handoff report (done / needs you / watch out).
+- **The SessionStart hook** prints the workspace's name and live status into
+  every session that opens inside one, including each daemon's description
+  and the status note. It ends with the handoff-report rule. The rules live in
+  the hook, not in the instructions file: that file is written once and then
+  belongs to the agent, while the hook stores nothing, so a change reaches
+  every workspace at once.
 
 ---
 
-## Workspace hygiene
+## What chaban deletes
 
-One rule runs through everything: **the tool never deletes a directory it did
-not create.** `adopt` manages what you made; `release` un-manages without
-touching files; `destroy` is transactional and aborts on any stop/teardown
-failure; `gc -d` destroys only what is provably done — tool-created, merged,
-clean, daemonless — and doubt always reads as "keep".
+chaban never deletes a directory it didn't create.
 
-The exact gates, `--force`'s narrow meaning, and doctor's checks:
-[`docs/reference.md`](docs/reference.md#workspace-hygiene).
+- `adopt` manages a directory you made, and never deletes it.
+- `release` stops managing a workspace without touching its files.
+- `destroy` removes nothing if any stop or teardown fails, so running it
+  again picks up where it stopped. It removes worktrees, which discards
+  uncommitted changes in them, but it never deletes a branch.
+- `gc -d` destroys only what is provably done: created by chaban, at least
+  one project checked out, all merged, clean, with no daemons. When in doubt,
+  it keeps. A `TRY-` draft with nothing checked out is never collected:
+  `destroy` it yourself.
+
+The exact checks, what `--force` does and doesn't do, and what `doctor` looks
+at are in [`docs/reference.md`](docs/reference.md#workspace-hygiene).
+
+---
+
+## Why "chaban"
+
+*Chaban* means shepherd. The word came from Persian *chupan* through Turkic
+*çoban*, and lives on in Russian and Ukrainian *чабан* and Romanian *cioban*.
+A shepherd keeps one flock where every animal has its own pen. chaban does the
+same for parallel agent sessions: each workspace gets its own worktree, ports
+and daemons. The tool was called claude-workspaces before v2.0.
 
 ---
 
@@ -489,42 +530,43 @@ CGO_ENABLED=0 go build -ldflags "-X github.com/Phaengris/chaban/v2/internal/cli.
 ```
 
 Runtime dependencies: `spf13/cobra`, `goccy/go-yaml`, `golang.org/x/sys` (and
-cobra's `pflag`). Test-only: `rogpeppe/go-internal/testscript`.
+cobra's `pflag`). Tests only: `rogpeppe/go-internal/testscript`.
 
-Layout: `cmd/chaban` is a thin main; `internal/cli` is the cobra tree, one
-file per command; `config`, `alloc`, `wsp`, `proc` are the domain;
-`envx`/`gitx`/`ui`/`xerr` are leaves. Assets are `//go:embed`ed. Tests are
-table tests for pure logic plus `testscript` flows against real processes and
-real git repos, isolated per-test by `CHABAN_ROOT_DIR`.
+Layout: `cmd/chaban` is a thin main. `internal/cli` is the cobra tree, one
+file per command. `config`, `alloc`, `wsp` and `proc` are the domain;
+`envx`, `gitx`, `ui` and `xerr` are leaves. Assets are embedded with
+`//go:embed`. Tests are table tests for pure logic plus `testscript` flows
+against real processes and real git repos. Each test gets its own
+`CHABAN_ROOT_DIR`.
 
 ---
 
 ## How this was built
 
-This tool is itself a product of the workflow it serves. I designed and
-specified it and own every product and architecture decision; the
-implementation was AI-driven ([Claude Code](https://claude.com/claude-code),
-end to end, a clean-room rewrite of an earlier private tool) under per-task
-independent review. The paper trail is checked in — commit trailers say who
-typed, the specs say who decided.
+chaban was built with coding agents, the way it is meant to be used. I
+designed and specified it, and I own every product and architecture decision. The
+implementation was done by AI ([Claude Code](https://claude.com/claude-code),
+end to end, a clean-room rewrite of an earlier private tool), with an
+independent review of each task. The paper trail is checked in: commit
+trailers say who typed, the specs say who decided.
 
-- **Spec first**: [`docs/superpowers/specs/`](docs/superpowers/specs/) — every
+- **Spec first:** [`docs/superpowers/specs/`](docs/superpowers/specs/). Every
   decided behavior has a written row.
-- **Milestone plans**: [`docs/superpowers/plans/`](docs/superpowers/plans/) —
-  binding contracts, named test cases, decided-behaviors tables.
-- **Subagent-driven execution**: fresh AI implementer per task, independent AI
-  review per task, whole-branch reviews before merges.
-- **TDD with mutation-checked pins**: load-bearing assertions are verified to
+- **Milestone plans:** [`docs/superpowers/plans/`](docs/superpowers/plans/).
+  Binding contracts, named test cases, tables of decided behaviors.
+- **Subagent-driven execution:** a fresh AI implementer per task, an
+  independent AI review per task, and a whole-branch review before each merge.
+- **TDD with mutation-checked tests:** load-bearing assertions are checked to
   fail when the behavior they pin breaks.
-- **Human owner in the loop**: design decisions, reviews of reviews, and every
-  release call.
+- **A human owner in the loop:** design decisions, reviews of the reviews, and
+  every release.
 
-Post-1.0 development runs the same loop in miniature, driven by daily use —
-see the [CHANGELOG](CHANGELOG.md): most entries trace to a real moment at a
-real terminal.
+After 1.0, development runs the same loop on a smaller scale, driven by daily
+use. Most entries in the [CHANGELOG](CHANGELOG.md) trace back to a real moment
+at a real terminal.
 
 ---
 
-chaban is an independent open-source project (MIT), not affiliated
-with, endorsed by or sponsored by Anthropic. Claude and Claude Code are
-trademarks of Anthropic.
+chaban is an independent open-source project (MIT), not affiliated with,
+endorsed by or sponsored by Anthropic. Claude and Claude Code are trademarks
+of Anthropic.
