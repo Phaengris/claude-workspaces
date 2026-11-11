@@ -10,11 +10,13 @@ All notable changes to `chaban` (called claude-workspaces before 2.0) are docume
 installed daily driver may be ahead of the last tag — `chaban --version`
 says exactly how far when built with `git describe`.)
 
+## [2.0.0] — 2026-11-11
+
 ### Changed (breaking)
 
 - The tool is renamed from claude-workspaces to chaban (Persian *chupan*,
   "shepherd"). The command is `chaban`, the module is
-  `github.com/Phaengris/chaban`, and the stderr prefix is `chaban:`. The
+  `github.com/Phaengris/chaban/v2`, and the stderr prefix is `chaban:`. The
   `launch` subcommand keeps its name; `claude` became `chat` (below).
 - Installed paths move: `~/.local/bin/chaban`, `~/.local/share/chaban/`, the
   fish wrapper and completions as `chaban.fish`, and the skill as
@@ -383,7 +385,8 @@ of an earlier personal Ruby tool (never publicly released).
   skill, SessionStart hook, shell wrappers and completions for
   fish/bash/zsh.
 
-[Unreleased]: https://github.com/Phaengris/chaban/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/Phaengris/chaban/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/Phaengris/chaban/compare/v1.8.1...v2.0.0
 [1.8.1]: https://github.com/Phaengris/chaban/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/Phaengris/chaban/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/Phaengris/chaban/compare/v1.7.0...v1.7.1
