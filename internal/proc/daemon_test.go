@@ -272,24 +272,25 @@ func TestAliveRejectsRecycledStarttime(t *testing.T) {
 
 func TestStarttimeEvilComm(t *testing.T) {
 	// comm (field 2 of /proc/<pid>/stat) is the executable basename and may
-	// contain spaces and parentheses — the classic stat-parsing bug. Run a
-	// copy of sleep under an evil name and exec it so the daemon pid IS the
-	// evil binary, then Starttime must still parse the REAL file.
+	// contain spaces and parentheses — the classic stat-parsing bug. Exec a
+	// script under an evil name so the daemon pid IS the evil process, then
+	// Starttime must still parse the REAL file.
+	//
+	// A script, not a renamed copy of sleep: the kernel names a #! process
+	// after the script file, and a multicall coreutils (uutils, on Ubuntu
+	// 26.04) picks its applet from argv[0], so a renamed sleep exits at once.
+	// The script's sleep child shares the group killAndReap kills.
 	t.Setenv("SHELL", "/bin/sh")
 	dir := t.TempDir()
-	sleepBin, err := os.ReadFile("/usr/bin/sleep")
-	if err != nil {
-		t.Skipf("cannot read /usr/bin/sleep: %v", err)
-	}
 	evil := filepath.Join(dir, "ev) il (nm")
-	if err := os.WriteFile(evil, sleepBin, 0o755); err != nil {
-		t.Fatalf("writing evil sleep copy: %v", err)
+	if err := os.WriteFile(evil, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("writing evil script: %v", err)
 	}
 
 	logPath := filepath.Join(dir, "d.log")
 	errPath := filepath.Join(dir, "d.err.log")
 	pidPath := filepath.Join(dir, "d.pid")
-	if err := proc.StartDaemon(dir, `exec './ev) il (nm' 30`, daemonEnv(dir), logPath, errPath, pidPath); err != nil {
+	if err := proc.StartDaemon(dir, `exec './ev) il (nm'`, daemonEnv(dir), logPath, errPath, pidPath); err != nil {
 		t.Fatalf("StartDaemon: %v", err)
 	}
 	pid, recorded, err := proc.ReadPidFile(pidPath)

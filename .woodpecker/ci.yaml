@@ -1,0 +1,46 @@
+# The Linux half of .github/workflows/ci.yml, run before a push to GitHub.
+#
+# Same base as GitHub's ubuntu-latest (26.04) and an unprivileged user like
+# its runner: three tests skip as root, and the coreutils on 26.04 differ
+# from 24.04's (uutils). Go comes from go.mod's `go` line, as setup-go reads
+# it. The macOS build job has no counterpart here.
+when:
+  - event: [push, tag, manual]
+
+variables:
+  - &setup |
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq --no-install-recommends git ca-certificates curl gcc libc6-dev >/dev/null
+    GOV=$(sed -n 's/^go //p' go.mod)
+    case $GOV in *.*.*) ;; *) GOV=$GOV.0 ;; esac # `go 1.27` ships as go1.27.0
+    curl -fsSL "https://go.dev/dl/go$GOV.linux-amd64.tar.gz" | tar -C /usr/local -xz
+    useradd -m ci
+    cp -r . /home/ci/src
+    chown -R ci /home/ci/src
+
+steps:
+  - name: test
+    image: ubuntu:26.04
+    depends_on: []
+    commands:
+      - *setup
+      - |
+        su ci -c 'set -e
+          cd ~/src
+          export PATH=/usr/local/go/bin:$PATH SHELL=/bin/bash
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          CGO_ENABLED=0 go build ./...
+          go test ./...'
+
+  - name: race
+    image: ubuntu:26.04
+    depends_on: []
+    commands:
+      - *setup
+      - |
+        su ci -c 'set -e
+          cd ~/src
+          export PATH=/usr/local/go/bin:$PATH SHELL=/bin/bash
+          go test -race ./internal/proc ./internal/wsp ./internal/cli'

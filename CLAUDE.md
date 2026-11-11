@@ -19,6 +19,9 @@ go test -race ./internal/proc ./internal/wsp ./internal/cli
 gofmt -l . && go vet ./...                                # both must be clean before commit
 # landing a change: commit, push master to BOTH remotes (origin = private mirror, github = public),
 #   add its CHANGELOG entry under "Unreleased". Do NOT tag per change.
+#   Order: origin FIRST. Its CI (.woodpecker/ci.yaml: GitHub's Linux jobs on the same
+#   Ubuntu, as a non-root user) must pass before github; a local pre-push hook refuses
+#   a github push of any commit without a green run.
 # daily-driver install between releases: build with
 #   -ldflags "-X github.com/Phaengris/chaban/v2/internal/cli.version=$(git describe --tags --always)"
 #   then ./chaban install — the user runs master, tags are for the world.
