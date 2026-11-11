@@ -11,7 +11,9 @@ variables:
   - &setup |
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
-    apt-get install -y -q --no-install-recommends git ca-certificates curl gcc libc6-dev
+    # No ca-certificates package: the agent mounts its own CA bundle over
+    # /etc/ssl/certs/ca-certificates.crt, which the package cannot replace.
+    apt-get install -y -q --no-install-recommends git curl gcc libc6-dev
     GOV=$(sed -n 's/^go //p' go.mod)
     case $GOV in *.*.*) ;; *) GOV=$GOV.0 ;; esac # `go 1.27` ships as go1.27.0
     curl -fsSL "https://go.dev/dl/go$GOV.linux-amd64.tar.gz" | tar -C /usr/local -xz
