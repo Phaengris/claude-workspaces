@@ -15,7 +15,7 @@ says exactly how far when built with `git describe`.)
 - The tool is renamed from claude-workspaces to chaban (Persian *chupan*,
   "shepherd"). The command is `chaban`, the module is
   `github.com/Phaengris/chaban`, and the stderr prefix is `chaban:`. The
-  `claude` and `launch` subcommands keep their names.
+  `launch` subcommand keeps its name; `claude` became `chat` (below).
 - Installed paths move: `~/.local/bin/chaban`, `~/.local/share/chaban/`, the
   fish wrapper and completions as `chaban.fish`, and the skill as
   `~/.claude/skills/chaban/`. The SessionStart hook path changes, so redo the
@@ -31,6 +31,52 @@ says exactly how far when built with `git describe`.)
 - New workspaces' seeded `CLAUDE.md` says `chaban status`. Existing ones keep
   the old line; the README's "Upgrading from claude-workspaces" section has
   the one-line fix.
+- **`chaban chat` replaces `chaban claude`**, and the session command comes
+  from config. `chat <ws> [-R] [args…]` runs the `agent:` block's `start` or
+  `resume`; `launch` and `try` use the same path. `chaban claude` is a hidden
+  command that exits 2 and names `chat`.
+- **chaban no longer injects `--dangerously-skip-permissions`** and
+  parses no agent flags. Skipping permissions is whatever your `agent:`
+  commands say. `--continue` now comes from your `resume` command (the
+  built-in block's `resume: claude --continue`).
+- `-S`/`--claude-no-skip-permissions` are removed, and `--claude-no-resume`
+  is now `-R`/`--no-resume`. Typed before `--`, the old flags are usage
+  errors (exit 2) that name the replacement; after `--` they reach the agent.
+- With no `agent:` block, `chat`, `launch` and `try` start `claude` when it
+  is on `PATH`, printing a one-line notice on stderr every time. Without
+  `claude` they print the built-in block as a sample and exit 4; `launch`
+  and `try` check this before creating anything.
+- The workspace's instructions file (the one with the `## Status` note) is
+  named by `agent: instructions_file`: `CLAUDE.md` with no block, `AGENTS.md`
+  when a block leaves it out. `status`, `WORKSPACE.md`'s hint and the
+  SessionStart hook use the configured name. Existing workspaces keep their
+  file; `status` says `no <file> in this workspace` when the configured one is
+  missing.
+- **Upgrading:** copy the Claude sample from the README's Agents section
+  into an `agent:` block in `config.yml`. It keeps
+  `instructions_file: CLAUDE.md`. Put `--dangerously-skip-permissions` into
+  its `start` and `resume` if you want it back.
+
+### Fixed
+
+- `chaban status` on a workspace with no projects (every `TRY-<n>` draft)
+  now shows its `## Status` note, and the `no <file> in this workspace`
+  line. Before, it returned early after `projects: none`.
+
+### Added
+
+- The `agent:` config block: `start` (required), `resume` and `can_resume`
+  (a pair), `instructions_file`. Commands run as `$SHELL -lc` in the
+  workspace with the session env. `can_resume` exits 0 for `resume`, 1 for
+  `start`; anything else, or no answer within 5 seconds, starts nothing and
+  exits 1 (`-R` skips the check). Extra arguments are quoted to arrive
+  verbatim under sh, bash, zsh and fish.
+- `chaban which --instructions-file` prints the absolute path of the
+  workspace's instructions file; `which --json` carries it as
+  `instructions_file`.
+- `doctor` shows the configured agent (`agent: <start>`), notes when there is
+  no `agent:` block (`chat` falls back to `claude`), and reports a finding when
+  `claude` is missing as well.
 
 ### Changed
 

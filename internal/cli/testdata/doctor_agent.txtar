@@ -1,0 +1,60 @@
+# doctor reports the agent: block (or its absence) and the claude fallback.
+#
+# PATH holds only a temp dir (a claude SHIM, or nothing): a real claude must
+# never be reachable, and doctor spawns no shell.
+wsenv
+mkdir $WORK/root/src/app-a
+workroot noblock.tmpl root/config.yml
+mkdir bin-with
+cp claude-shim bin-with/claude
+chmod 755 bin-with/claude
+mkdir bin-empty
+exec sh -c 'ln -s "$(command -v chaban)" "$WORK/bin-with/chaban"; ln -s "$(command -v chaban)" "$WORK/bin-empty/chaban"'
+
+# 1. No block, claude on PATH: a note, no finding.
+env PATH=$WORK/bin-with
+exec chaban doctor
+stdout 'no agent: block: chat falls back to claude'
+! stdout 'cannot start a session'
+stdout '^doctor: no findings$'
+! stdout '^agent: '
+
+exec chaban doctor --json
+stdout '"findings": \[\]'
+stdout '"kind": "agent_fallback"'
+
+# 2. No block, no claude: the note plus a finding the summary counts.
+env PATH=$WORK/bin-empty
+exec chaban doctor
+stdout 'no agent: block: chat falls back to claude'
+stdout 'no agent: block and no claude on PATH: chat cannot start a session'
+stdout '^doctor: 1 finding\(s\)$'
+
+exec chaban doctor --json
+stdout '"kind": "agent_fallback"'
+stdout '"kind": "agent_missing"'
+stdout '"detail": "no agent: block and no claude on PATH: chat cannot start a session"'
+
+# 3. A configured block: config section prints it; no note, no finding.
+workroot block.tmpl root/config.yml
+exec chaban doctor
+stdout '^agent: my-agent --go$'
+! stdout 'falls back'
+stdout '^doctor: no findings$'
+exec chaban doctor --json
+! stdout 'agent_fallback'
+! stdout 'agent_missing'
+
+-- claude-shim --
+#!/bin/sh
+exit 0
+-- noblock.tmpl --
+projects:
+  app-a:
+    repo: WORKROOT/src/app-a
+-- block.tmpl --
+agent:
+  start: my-agent --go
+projects:
+  app-a:
+    repo: WORKROOT/src/app-a

@@ -46,9 +46,10 @@ chaban launch TASK-123 "short description" project-a project-b
 ```
 
 `launch` = create-or-reuse the workspace → check the listed projects out →
-open a Claude Code session in the workspace dir. **Daemons are not
-started.** An existing workspace is reused as-is (the description is
-ignored; listed projects are checked out). Pass session flags after `--`.
+open an agent session (the `agent:` block in config; Claude Code when there
+is none) in the workspace dir. **Daemons are not started.** An existing
+workspace is reused as-is (the description is ignored; listed projects are
+checked out). Pass session flags after `--`.
 
 **Naming.** The workspace name is `<task id>_<description-slug>` and doubles
 as the branch name; listings clip it at 60 characters. When YOU create a
@@ -83,6 +84,7 @@ into project work in place via `chaban checkout TRY-<n> <project>`.
 | open the app | `chaban browse <ws> [project]` |
 | resolve a directory | `chaban cd <ws> [project]` (prints the path; the installed shell wrapper does the chdir) |
 | where am I? | `chaban which` |
+| open a session in it | `chaban chat <ws> [-R]` (`-R`: fresh, no resume) |
 | tear it all down | `chaban destroy <ws>` |
 
 A workspace is addressed by its full directory name or by its task id.
@@ -101,8 +103,9 @@ description, the allocated values (`PORT0=…`), each checked-out project's
 directory and branch, and the per-project `instructions:` from config. Read it
 first — the ports and the project layout are there, and its instructions are
 the project owner's words about that project. It is regenerated on every
-`new`/`checkout`, so never edit it; durable notes belong in `CLAUDE.md` next
-to it, which the tool writes once and then never touches.
+`new`/`checkout`, so never edit it; durable notes belong in the workspace's
+instructions file (WORKSPACE.md names it) next to it, which the tool writes
+once and then never touches.
 
 `chaban status <ws>` is the live view: which projects are checked out, on
 what branch, whether setup is current, which daemons are running.
@@ -128,9 +131,9 @@ boots slowly → then browse or verify.
 
 ## The environment contract
 
-Commands the tool spawns (`setup`, `start`, `stop`, `teardown`, `exec`, the
-Claude session) do **not** inherit the ambient shell environment. They get a
-curated one: a fixed allowlist of safe parent vars, a PATH with per-version
+Commands the tool spawns (`setup`, `start`, `stop`, `teardown`, `exec`) do
+**not** inherit the ambient shell environment. They get a curated one: a
+fixed allowlist of safe parent vars, a PATH with per-version
 install directories stripped so version-manager shims resolve each worktree's
 own `.ruby-version`/`.tool-versions`, plus the workspace and project `env` on
 top. Consequences worth remembering:
@@ -200,8 +203,9 @@ reads it cold, mid-context-switch.
 
 **Persist it.** The user may return DAYS later, to the workspace rather than
 to this conversation, so keep the report durable too: maintain a `## Status`
-section in this workspace's `CLAUDE.md` (the tool never touches that file —
-it is yours) and refresh it at the end of every substantial turn:
+section in the workspace's instructions file (WORKSPACE.md names it; the
+tool never touches that file — it is yours) and refresh it at the end of
+every substantial turn:
 
 ```markdown
 ## Status

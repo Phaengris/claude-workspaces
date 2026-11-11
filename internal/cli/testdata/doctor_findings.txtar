@@ -80,6 +80,8 @@ stdout '"workspace": "T-2_daemons"'
 ! stdout 'doctor: '
 
 -- config.tmpl --
+agent:
+  start: my-agent
 values:
   PORT: { start: 5000, per_workspace: 10 }
 projects:

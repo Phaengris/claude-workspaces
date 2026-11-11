@@ -1,15 +1,16 @@
-# launch: the one-shot — create (or reuse) + checkout + claude session. Daemons
+# launch: the one-shot — create (or reuse) + checkout + agent session. Daemons
 # are lazy (spec 2026-08-11): launch does not start them, on either the create
 # or the reuse path — `chaban up` is the explicit start.
 #
-# The `claude` on PATH is a shim that prints its argv and cwd and APPENDS a line
-# to $CLAUDE_SHIM_LOG — PATH discipline (it is prepended first, so a real claude
-# can never be invoked) plus an invocation MARKER: the abort contract ("no
-# claude on a broken env") is asserted as the absence of that file, so each
-# abort case points the log at a fresh path.
+# The config's agent: block points at an `agent` shim that prints its mode
+# (start|resume), argv and cwd and APPENDS a line to $AGENT_SHIM_LOG — an
+# invocation MARKER: the abort contract ("no agent on a broken env") is asserted
+# as the absence of that file, so each abort case points the log at a fresh
+# path. can_resume is `exit 1`, so every session starts fresh. The configured
+# block means a real claude can never be invoked from here.
 #
-# HOME is redirected to a fixture so the history probe sees OUR
-# ~/.claude/projects, never the developer's.
+# HOME is redirected to a fixture; SHELL is explicit (agent commands run as
+# `$SHELL -lc`).
 #
 # Daemon lifetime discipline (as up.txtar): the one daemon this script starts
 # (via an explicit `up`, at the end) is `sleep 30` and the script ends with
@@ -18,6 +19,7 @@
 # `wsenv` and `workroot` are the shared-preamble helpers from cli_test.go
 # (hermetic git env + root at $WORK/root; WORKROOT template substitution).
 wsenv
+env SHELL=/bin/sh
 workroot config.tmpl root/config.yml
 ! grep WORKROOT root/config.yml
 
@@ -35,17 +37,15 @@ exec git -C $WORK/root/src/flaky init -b main
 exec git -C $WORK/root/src/flaky add README
 exec git -C $WORK/root/src/flaky commit -m init
 
-# Hermetic HOME + the shim first on PATH.
+# Hermetic HOME.
 env HOME=$WORK/home
 mkdir $WORK/home
-chmod 0755 $WORK/bin/claude
-env PATH=$WORK/bin:$PATH
-env CLAUDE_SHIM_LOG=$WORK/claude.log
+chmod 0755 $WORK/bin/agent
+env AGENT_SHIM_LOG=$WORK/agent.log
 
 # --- fresh launch: create, check out, then the session — no daemon starts ----
 # One command: new's creation output, then the shim's own output — proving the
-# session ran LAST, in the workspace dir, with the decided injection (no
-# --continue: this dir has no history under our fixture HOME). Daemons are
+# session ran LAST, in the workspace dir, as a fresh start. Daemons are
 # lazy: nothing starts, and the pids dir does not even exist yet.
 exec chaban launch T-1 'fix thing' app
 stdout '  app: checking out \(branch T-1_fix-thing\)… ok \(\d+\.\d+s\)'
@@ -54,17 +54,18 @@ stdout 'workspace T-1_fix-thing created \(index 0\)'
 stdout 'tip: in another terminal: chaban cd T-1 — work alongside this session'
 ! stdout 'hint: chaban cd'
 ! stdout 'started'
-stdout 'argv: --dangerously-skip-permissions$'
+stdout 'mode: start$'
+stdout 'argv: $'
 stdout 'cwd: '$WORK'/root/T-1_fix-thing$'
 stdout 'WORKSPACE=T-1$'
 exists $WORK/root/T-1_fix-thing/app/README
 exists $WORK/root/T-1_fix-thing/.workspace/setup-app.ok
 ! exists $WORK/root/T-1_fix-thing/.workspace/pids
-grep -count=1 'invoked' $WORK/claude.log
+grep -count=1 'invoked' $WORK/agent.log
 
 # --- re-launch the same task id: reuse, no duplicate allocation, no daemons --
 # The workspace is found by task id, so nothing is created and nothing is
-# re-allocated; reuse no longer converges daemons either, so claude just runs
+# re-allocated; reuse no longer converges daemons either, so the agent just runs
 # again.
 exec chaban launch T-1
 ! stdout 'tip: in another terminal'
@@ -73,8 +74,9 @@ stdout 'using existing workspace T-1_fix-thing'
 ! stdout 'created'
 ! stdout 'started'
 ! stdout 'already running'
-stdout 'argv: --dangerously-skip-permissions$'
-grep -count=2 'invoked' $WORK/claude.log
+stdout 'mode: start$'
+stdout 'argv: $'
+grep -count=2 'invoked' $WORK/agent.log
 
 # One row in ls, one entry in the registry: the reuse path allocated nothing.
 exec chaban ls
@@ -118,30 +120,31 @@ exists $WORK/root/T-1_fix-thing/.workspace/setup-api.ok
 grep '### api' $WORK/root/T-1_fix-thing/WORKSPACE.md
 
 # --- session flags and `--` passthrough, end to end ---------------------------
-# -S is OURS (before the separator): it suppresses the skip-permissions
-# injection. Everything after `--` is claude's, verbatim — including a token
-# spelled like our own flag.
-exec chaban launch T-1 -S -- -S --model opus
+# -S before the separator is a usage error. Everything after `--` is the
+# agent's, verbatim — including a token spelled like the retired flag.
+! exec chaban launch T-1 -S
+stderr 'no longer injected'
+exec chaban launch T-1 -- -S --model opus
 stdout 'using existing workspace T-1_fix-thing'
+stdout 'mode: start$'
 stdout 'argv: -S --model opus$'
-! stdout 'dangerously'
 
 # --- create without a description: usage error, NOTHING created ---------------
 # Exit 2 is pinned in TestLaunchExitCodes; here: the refusal names the missing
-# description, no dir and no allocation appear, and claude never runs.
-env CLAUDE_SHIM_LOG=$WORK/no-claude-usage.log
+# description, no dir and no allocation appear, and the agent never runs.
+env AGENT_SHIM_LOG=$WORK/no-agent-usage.log
 ! exec chaban launch T-9
 stderr 'description'
 ! exists $WORK/root/T-9
 ! grep 'T-9' $WORK/root/.allocations.json
-! exists $WORK/no-claude-usage.log
+! exists $WORK/no-agent-usage.log
 
 # --- create: a description that NAMES a project is called out too --------------
 # The same mistake on the create path (`launch <id> <project>` with the
 # description forgotten) is just as invisible: T-9 would be created described as
 # "api", with api NOT checked out. The grammar still does not bend — the word IS
 # the description — but the note makes the reading explicit.
-env CLAUDE_SHIM_LOG=$WORK/claude-create-note.log
+env AGENT_SHIM_LOG=$WORK/agent-create-note.log
 exec chaban launch T-9 api
 stdout 'workspace T-9_api created'
 stdout 'note: "api" is in the description slot'
@@ -151,23 +154,23 @@ stdout 'nothing checked out'
 
 # --- create-phase failure: rolled back, no session ----------------------------
 # bad's setup is `false`, so `new`'s transaction undoes itself: no dir, no
-# allocation — and claude is NOT launched onto a broken environment.
-env CLAUDE_SHIM_LOG=$WORK/no-claude-create.log
+# allocation — and the agent is NOT launched onto a broken environment.
+env AGENT_SHIM_LOG=$WORK/no-agent-create.log
 ! exec chaban launch T-3 'broken' bad
 stdout '  bad: checking out \(branch T-3_broken\)… ok \(\d+\.\d+s\)'
 stdout '  bad: setup: false… failed'
 stderr 'project "bad"'
 ! exists $WORK/root/T-3_broken
 ! grep 'T-3' $WORK/root/.allocations.json
-! exists $WORK/no-claude-create.log
+! exists $WORK/no-agent-create.log
 
 # --- no up phase: a project whose start would fail launches fine --------------
 # flaky's run-and-wait is `false`; with launch lazy it never runs — the session
 # starts, and the failure is deferred to an explicit `chaban up`.
-env CLAUDE_SHIM_LOG=$WORK/claude-flaky.log
+env AGENT_SHIM_LOG=$WORK/agent-flaky.log
 exec chaban launch T-1 'fix thing' flaky
 exists $WORK/root/T-1_fix-thing/flaky/README
-grep -count=1 'invoked' $WORK/claude-flaky.log
+grep -count=1 'invoked' $WORK/agent-flaky.log
 ! exec chaban up T-1 flaky
 stderr 'project "flaky"'
 
@@ -178,6 +181,10 @@ exec chaban down T-1
 stdout 'stopped app:sleeper \(TERM\)'
 
 -- config.tmpl --
+agent:
+  start: WORKDIR/bin/agent start
+  resume: WORKDIR/bin/agent resume
+  can_resume: exit 1
 values:
   PORT: { start: 18300, per_workspace: 5 }
 projects:
@@ -197,13 +204,15 @@ projects:
     repo: WORKROOT/src/flaky
     start:
       - "false"
--- bin/claude --
+-- bin/agent --
 #!/bin/sh
+echo "mode: $1"
+shift
 echo "argv: $@"
 echo "cwd: $(pwd)"
 echo "WORKSPACE=$WORKSPACE"
-echo invoked >> "$CLAUDE_SHIM_LOG"
-exit ${CLAUDE_SHIM_EXIT:-0}
+echo invoked >> "$AGENT_SHIM_LOG"
+exit ${AGENT_SHIM_EXIT:-0}
 -- root/src/app/README --
 app source
 -- root/src/api/README --

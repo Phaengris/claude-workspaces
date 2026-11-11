@@ -22,6 +22,9 @@ type whichEntry struct {
 	Dir    string `json:"dir"`
 	Name   string `json:"name"`
 	TaskID string `json:"task_id"`
+	// InstructionsFile is the absolute path of the workspace's instructions
+	// file (config-derived); it need not exist.
+	InstructionsFile string `json:"instructions_file"`
 }
 
 // newWhichCmd builds `chaban which`: the workspace containing the current
@@ -35,7 +38,7 @@ type whichEntry struct {
 // (spec §3), so an unregistered directory that merely looks like a workspace is
 // correctly reported as "not inside a workspace".
 func newWhichCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "which",
 		Short: "Print the workspace containing the current directory",
 		Args:  usageArgs(cobra.NoArgs), // extra args are a usage error → exit 2 (spec §9)
@@ -44,11 +47,14 @@ func newWhichCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// loadRoot, not alloc.Load alone: which needs no config value, but
-			// every read-only command must fail the same way on a broken root
-			// (config → exit 4, unreadable registry → exit 1). Diagnosing the
-			// root twice differently would be worse than the wasted parse.
-			_, reg, err := loadRoot()
+			wantFile, err := cmd.Flags().GetBool("instructions-file")
+			if err != nil {
+				return err
+			}
+			// loadRoot also makes every read-only command fail the same way on
+			// a broken root (config → exit 4, unreadable registry → exit 1);
+			// the config supplies the instructions file name.
+			cfg, reg, err := loadRoot()
 			if err != nil {
 				return err
 			}
@@ -64,17 +70,25 @@ func newWhichCmd() *cobra.Command {
 				return xerr.Wrap(xerr.ErrNotFound, errors.New("not inside a workspace"))
 			}
 			out := cmd.OutOrStdout()
+			file := filepath.Join(ws.Dir, cfg.InstructionsFile())
 			if asJSON {
 				return ui.PrintJSON(out, whichEntry{
-					Dir:    ws.Dir,
-					Name:   ws.Name(),
-					TaskID: ws.Alloc.TaskID,
+					Dir:              ws.Dir,
+					Name:             ws.Name(),
+					TaskID:           ws.Alloc.TaskID,
+					InstructionsFile: file,
 				})
+			}
+			if wantFile {
+				fmt.Fprintln(out, file)
+				return nil
 			}
 			fmt.Fprintln(out, ws.Name())
 			return nil
 		},
 	}
+	cmd.Flags().Bool("instructions-file", false, "print the absolute path of the workspace's instructions file")
+	return cmd
 }
 
 // workspaceAt finds the workspace whose dir contains path (or is path itself).

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Phaengris/chaban/v2/internal/alloc"
@@ -245,5 +246,39 @@ func TestStatusOfListsEveryConfiguredProject(t *testing.T) {
 		if p.CheckedOut || p.Branch != "" || p.SetupCurrent {
 			t.Errorf("project %q = %+v, want zero state (nothing checked out)", p.Name, p)
 		}
+	}
+}
+
+// The status note is read from the CONFIGURED instructions file, never a
+// hard-coded name. MUTATION-CHECKED: reading CLAUDE.md fails this.
+func TestStatusReadsConfiguredInstructionsFile(t *testing.T) {
+	cfg := &config.Config{Agent: &config.Agent{Start: "x"}} // default: AGENTS.md
+	dir := t.TempDir()
+	ws := wsp.Workspace{Dir: dir, Alloc: alloc.Allocation{TaskID: "A-1"}}
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("CLAUDE.md", "## Status\n\nwrong file\n")
+
+	var b strings.Builder
+	printStatus(&b, statusOf(cfg, ws))
+	if !strings.Contains(b.String(), "no AGENTS.md in this workspace") || strings.Contains(b.String(), "wrong file") {
+		t.Errorf("missing AGENTS.md must be reported, CLAUDE.md ignored, got:\n%s", b.String())
+	}
+
+	write("AGENTS.md", "## Status\n\nAbout: right\n")
+	b.Reset()
+	printStatus(&b, statusOf(cfg, ws))
+	if !strings.Contains(b.String(), "status (from AGENTS.md):\nAbout: right") {
+		t.Errorf("got:\n%s", b.String())
+	}
+	if got, ok := recordedStatus(ws, "AGENTS.md"); got != "About: right" || !ok {
+		t.Errorf("recordedStatus = %q, %v", got, ok)
+	}
+	if got, ok := recordedStatus(ws, "NOPE.md"); got != "" || ok {
+		t.Errorf("missing file: recordedStatus = %q, %v", got, ok)
 	}
 }

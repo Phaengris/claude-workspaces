@@ -14,7 +14,7 @@ import (
 	"github.com/Phaengris/chaban/v2/internal/xerr"
 )
 
-// newTryCmd builds `chaban try <description words…> [-S] [-R] [-- claude
+// newTryCmd builds `chaban try <description words…> [-R] [-- agent
 // args…]`: one command to a thinking room. It is launch's create path minus
 // the ceremony — no projects, and the task id is generated (`TRY-<n>`) — for
 // the draft/discussion that precedes real work (the "legitimate place to
@@ -30,18 +30,17 @@ import (
 // recalls nothing, which is the same reason launch refuses to create without
 // a description.
 //
-// DisableFlagParsing, as claude/launch (spec §8): -S/-R are sniffed by
-// extractSessionFlags from the region before `--`, everything after `--` is
-// claude's verbatim. A leading flag-looking token is NOT refused here unlike
+// DisableFlagParsing, as chat/launch: -R is sniffed by parseSessionFlags
+// from the region before `--`, everything after `--` is the agent's verbatim. A leading flag-looking token is NOT refused here unlike
 // launch — there is no identifier slot for it to be confused with; an
 // unknown flag before `--` simply joins the description, which is the cost
 // of unquoted free text and is visible immediately in the created name.
 func newTryCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "try <description...> [-S] [-R] [-- claude args...]",
+		Use:   "try <description...> [-R] [-- agent args...]",
 		Short: "Create a projectless draft workspace (TRY-<n>) and open a session in it",
 		Long: "Create a workspace with no projects checked out — a place to think, " +
-			"discuss or draft before real work — and open a Claude Code session in it.\n\n" +
+			"discuss or draft before real work — and open an agent session in it.\n\n" +
 			"The task id is generated (TRY-<n>); the description is required and is " +
 			"all the words you type (no quotes needed). Graduate the draft later with " +
 			"`chaban checkout`, or `chaban destroy` it.",
@@ -50,8 +49,11 @@ func newTryCmd() *cobra.Command {
 			if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 				return cmd.Help()
 			}
-			pre, claudeArgs := splitPassthrough(args)
-			skipPerms, noResume, words := extractSessionFlags(pre)
+			pre, agentArgs := splitPassthrough(args)
+			noResume, words, err := parseSessionFlags(pre)
+			if err != nil {
+				return err
+			}
 			if len(words) == 0 {
 				return xerr.Wrap(xerr.ErrUsage, errors.New(
 					"a description is required — it is how you will recall the draft: chaban try <description words...>"))
@@ -61,13 +63,18 @@ func newTryCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Resolve the agent BEFORE creating anything: a failure leaves the root as it was.
+			agent, err := resolveAgent(cfg, cmd.ErrOrStderr())
+			if err != nil {
+				return err
+			}
 			ws, err := newWork(cmd, cfg, root, nextTryID(root, reg), strings.Join(words, " "), nil)
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "tip: in another terminal: chaban cd %s — work alongside this session\n", ws.Alloc.TaskID)
-			return runClaudeSession(cfg, ws, skipPerms, noResume, claudeArgs)
+			return runAgentSession(cfg, ws, agent, noResume, agentArgs)
 		},
 	}
 }

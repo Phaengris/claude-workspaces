@@ -36,10 +36,7 @@ import (
 // (best effort) and the error returned: an untracked daemon is worse than
 // no daemon.
 func StartDaemon(dir, command string, env []string, logPath, errPath, pidPath string) error {
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
-	}
+	shell := Shell()
 	if env == nil {
 		env = []string{} // nil would make exec.Cmd inherit the raw parent env
 	}

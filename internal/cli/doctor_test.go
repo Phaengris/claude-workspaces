@@ -174,7 +174,8 @@ func TestDoctorJSONShape(t *testing.T) {
 // A nil slice marshals to null, which forces every consumer to special-case it;
 // the txtar pins the bytes, this pins the reason.
 func TestDoctorEmptyArraysNotNull(t *testing.T) {
-	fixtureRoot(t, map[string]string{"config.yml": validConfig})
+	// An agent: block keeps the result independent of whether claude is on PATH.
+	fixtureRoot(t, map[string]string{"config.yml": validConfig + doctorAgentYAML})
 	raw := doctorStdout(t, "doctor", "--json")
 	for _, want := range []string{`"findings": []`, `"informational": []`} {
 		if !strings.Contains(raw, want) {
@@ -227,5 +228,9 @@ func TestDoctorExitCodes(t *testing.T) {
 // process's cwd, not the root.
 func doctorConfig(repo string) string {
 	return "values:\n  PORT: { start: 5000, per_workspace: 10 }\n" +
-		"projects:\n  app:\n    repo: " + repo + "\n    start:\n      - sleeper: sleep 30\n"
+		"projects:\n  app:\n    repo: " + repo + "\n    start:\n      - sleeper: sleep 30\n" + doctorAgentYAML
 }
+
+// doctorAgentYAML is an agent: block for fixtures that must not depend on
+// whether claude happens to be on the test process's PATH.
+const doctorAgentYAML = "agent:\n  start: my-agent\n"

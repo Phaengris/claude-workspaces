@@ -83,6 +83,26 @@ values:
 #     browse_port: ${PORT0}
 # <<< example
 
+# ================================================================ agent =====
+# The coding agent `chaban chat` starts in a workspace. With no `agent:` block
+# chat starts `claude` (found on PATH) and prints a one-line notice; add a
+# block to choose. Commands run as `$SHELL -lc <command>` in the workspace,
+# with your inherited env plus the workspace overlay. If you want
+# `--dangerously-skip-permissions`, put it in `start` and `resume` yourself.
+#   start             the command for a fresh session (required)
+#   resume            the command that continues the last one
+#   can_resume        exit 0 -> run `resume`, exit 1 -> run `start`; anything
+#                     else aborts. `resume` and `can_resume` go together.
+#   instructions_file the workspace file the agent reads (default AGENTS.md)
+# The block below is what chat uses when you configure nothing:
+# >>> example
+# agent:
+#   start: claude
+#   resume: claude --continue
+#   can_resume: find ~/.claude/projects/$(pwd | sed 's/[^A-Za-z0-9]/-/g') ~/.claude/projects/$(pwd -P | sed 's/[^A-Za-z0-9]/-/g') -maxdepth 1 -name '*.jsonl' 2>/dev/null | grep -q .
+#   instructions_file: CLAUDE.md
+# <<< example
+
 # ============================================================ projects =====
 # The projects `new`/`checkout` can check out, by name. Each becomes a git
 # worktree of `repo` on a branch named after the task id. Replace the `{}`

@@ -24,7 +24,7 @@ import (
 //
 // Nothing is created and nothing is cloned: adopt does not add worktrees, does
 // not run setup, and does not move anything. It writes exactly three kinds of
-// file into the dir — a .env per adopted project, WORKSPACE.md, and CLAUDE.md
+// file into the dir — a .env per adopted project, WORKSPACE.md, and the instructions file
 // if absent — and records Adopted=true, which is what tells `destroy` and `gc`
 // that this directory is not theirs to delete (spec §2).
 //
@@ -134,7 +134,7 @@ func newAdoptCmd() *cobra.Command {
 			if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {
 				return fail(err)
 			}
-			if err := wsp.EnsureClaudeMD(ws); err != nil {
+			if err := wsp.EnsureInstructionsFile(ws, cfg.InstructionsFile()); err != nil {
 				return fail(err)
 			}
 

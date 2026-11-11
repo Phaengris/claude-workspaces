@@ -9,6 +9,7 @@ type Config struct {
 	Env      map[string]string   `yaml:"env"`
 	EnvAllow []string            `yaml:"env_allow"`
 	Projects map[string]*Project `yaml:"projects"`
+	Agent    *Agent              `yaml:"agent"`
 }
 
 // Value derives per-workspace numbers from the allocation index:

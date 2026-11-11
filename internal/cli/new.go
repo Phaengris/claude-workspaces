@@ -133,7 +133,7 @@ func requireValidTaskID(taskID string) error {
 //     workspace dir must not exist on disk, and alloc.Allocate rejects a
 //     duplicate dir or task id (its error already names the existing dir).
 //
-// Then the transaction: allocate → mkdir → CLAUDE.md + WORKSPACE.md →
+// Then the transaction: allocate → mkdir → instructions file + WORKSPACE.md →
 // EnsureProject per project in dependency order → WORKSPACE.md refreshed to
 // list what was checked out. ANY failure runs the undo stack LIFO and reports
 // the original error joined with any undo errors; the original error's kind
@@ -193,7 +193,7 @@ func newWork(cmd *cobra.Command, cfg *config.Config, root, taskID, desc string, 
 	undo.push(func() error { return os.RemoveAll(dir) })
 
 	ws := wsp.Workspace{Dir: dir, Alloc: a}
-	if err := wsp.EnsureClaudeMD(ws); err != nil {
+	if err := wsp.EnsureInstructionsFile(ws, cfg.InstructionsFile()); err != nil {
 		return fail(err) // dir removal is undo enough for both docs
 	}
 	if err := wsp.WriteWorkspaceMD(cfg, ws); err != nil {

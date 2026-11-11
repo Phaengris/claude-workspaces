@@ -25,7 +25,7 @@ func TestLaunchExitCodes(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			claudeFixture(t, "#!/bin/sh\nexit 0\n")
+			sessionFixture(t, "agent:\n  start: exit 0\n")
 			if got := exitCodeFor(t, tc.args...); got != tc.want {
 				t.Errorf("exit code = %d, want %d", got, tc.want)
 			}
@@ -41,13 +41,13 @@ func TestLaunchExitCodes(t *testing.T) {
 // It is a usage error (exit 2) naming the rule instead.
 func TestSessionCommandsRejectLeadingFlag(t *testing.T) {
 	for _, args := range [][]string{
-		{"claude", "-S", "T-1"},
-		{"claude", "--json", "T-1"},
+		{"chat", "-S", "T-1"},
+		{"chat", "--json", "T-1"},
 		{"launch", "-S", "T-1"},
 		{"launch", "--json", "T-1", "desc"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			claudeFixture(t, "#!/bin/sh\nexit 0\n")
+			sessionFixture(t, "agent:\n  start: exit 0\n")
 			if got := exitCodeFor(t, args...); got != 2 {
 				t.Errorf("exit code = %d, want 2 (usage)", got)
 			}
@@ -63,19 +63,19 @@ func TestSessionCommandsRejectLeadingFlag(t *testing.T) {
 }
 
 // TestLaunchExitCodePropagation pins that launch ends in the SAME session
-// runner as `claude`: the child's code becomes ours, verbatim. T-1 exists in
+// runner as `chat`: the child's code becomes ours, verbatim. T-1 exists in
 // the fixture (reuse path) and the fixture config has no projects, so nothing
 // but the session runs and the shim's 7 is the only thing left to report.
 func TestLaunchExitCodePropagation(t *testing.T) {
-	claudeFixture(t, "#!/bin/sh\nexit 7\n")
+	sessionFixture(t, "agent:\n  start: exit 7\n")
 	if got := exitCodeFor(t, "launch", "T-1"); got != 7 {
 		t.Errorf("exit code = %d, want 7 (the shim's own)", got)
 	}
 }
 
-// TestSplitPassthrough pins the boundary launch needs and `claude` does not:
+// TestSplitPassthrough pins the boundary launch needs and `chat` does not:
 // everything before the first literal `--` is launch's own positional region,
-// everything after it is claude's verbatim passthrough (the separator dropped,
+// everything after it is the agent's verbatim passthrough (the separator dropped,
 // later `--`s kept). A nil post means "no separator was typed" and is
 // deliberately distinct from an empty-but-present one only in that both yield
 // no passthrough args.
@@ -89,7 +89,7 @@ func TestSplitPassthrough(t *testing.T) {
 		{"no separator", []string{"T-1", "desc", "app"}, []string{"T-1", "desc", "app"}, nil},
 		{"separator at the end", []string{"T-1", "desc", "--"}, []string{"T-1", "desc"}, nil},
 		{"passthrough args", []string{"T-1", "d", "--", "-p", "hi"}, []string{"T-1", "d"}, []string{"-p", "hi"}},
-		{"later separators belong to claude", []string{"T-1", "--", "-x", "--", "-y"}, []string{"T-1"}, []string{"-x", "--", "-y"}},
+		{"later separators belong to the agent", []string{"T-1", "--", "-x", "--", "-y"}, []string{"T-1"}, []string{"-x", "--", "-y"}},
 		{"separator first", []string{"--", "-p"}, nil, []string{"-p"}},
 		{"empty", nil, nil, nil},
 	}

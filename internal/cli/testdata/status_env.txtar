@@ -54,8 +54,15 @@ stdout '^  app: checked out \(branch main\), setup current$'
 stdout '^  lib: not checked out$'
 stdout '(?s)workspace:.*task:.*dir:.*index:.*projects:'
 stdout '(?s)  api:.*  app:.*  lib:'
-# No ## Status section in this workspace's CLAUDE.md → no status block at all.
+# No instructions file at all → say so, by its configured name.
 ! stdout 'status \(from CLAUDE.md\)'
+stdout '^no CLAUDE.md in this workspace$'
+# A file without a ## Status section → no status block, no "no file" line.
+exec sh -c 'printf "just notes\n" > "$WORK/root/B-7_y/CLAUDE.md"'
+exec chaban status B-7
+! stdout 'status \(from'
+! stdout 'no CLAUDE.md'
+exec rm $WORK/root/B-7_y/CLAUDE.md
 
 # --- the recorded status note: sessions maintain it, status renders it ---------
 # The ## Status section of the workspace's CLAUDE.md (the agent-owned durable

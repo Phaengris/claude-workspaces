@@ -1,0 +1,221 @@
+# chat: start or resume the configured agent, end to end.
+#
+# The agent: block points at an `agent` shim through the WORKDIR/WORKROOT
+# templates. PATH discipline: the shims dir is prepended FIRST so a real claude
+# can never be invoked from this script; HOME is a fixture so nothing reads the
+# developer's ~/.claude; SHELL is explicit because chaban runs agent commands as
+# `$SHELL -lc`.
+#
+# Exit-code PROPAGATION is asserted here only as zero/non-zero (testscript
+# cannot see exact codes); the exact pins live in chat_test.go.
+wsenv
+env SHELL=/bin/sh
+# testscript starts from a minimal env; prove no real tmux window can be named.
+exec sh -c 'test -z "$TMUX$TMUX_PANE"'
+workroot config.tmpl root/config.yml
+workroot config-fail.tmpl config-fail.yml
+workroot config-noagent.tmpl config-noagent.yml
+! grep WORKROOT root/config.yml
+cp root/config.yml config-main.yml
+
+exec git -C $WORK/root/src/app init -b main
+exec git -C $WORK/root/src/app add README
+exec git -C $WORK/root/src/app commit -m init
+
+exec chaban new T-1 x app
+
+env HOME=$WORK/home
+mkdir $WORK/home
+chmod 0755 $WORK/bin/agent
+chmod 0755 $WORK/bin/claude
+env PATH=$WORK/bin:$PATH
+# A stable path to chaban for the PATH rebuilds further down.
+exec sh -c 'ln -s "$(command -v chaban)" "$WORK/bin/chaban"'
+
+# --- no can-resume file: start, in the workspace dir, with the overlay ---------
+exec chaban chat T-1
+stdout 'mode: start$'
+stdout 'argv: $'
+stdout 'cwd: '$WORK'/root/T-1_x$'
+stdout 'WORKSPACE=T-1$'
+stdout 'PORT0=18200$'
+stdout 'DB_NAME=app_T-1_dev$'
+stdout 'GLOBAL_VAR=from-config$'
+! stderr .
+
+# --- the file appears: can_resume says yes -> resume ---------------------------
+exec sh -c ': > "$WORK/root/can-resume"'
+exec chaban chat T-1
+stdout 'mode: resume$'
+
+# --- -R starts fresh without asking ---------------------------------------------
+exec chaban chat T-1 -R
+stdout 'mode: start$'
+exec chaban chat T-1 --no-resume
+stdout 'mode: start$'
+
+# --- args after -- reach the agent verbatim, shell-hostile ones included --------
+exec chaban chat T-1 -- 'it''s' '$HOME *'
+stdout 'mode: resume$'
+stdout 'argv: it''s \$HOME \*$'
+exec chaban chat T-1 -R -- --model opus
+stdout 'mode: start$'
+stdout 'argv: --model opus$'
+
+# --- the retired spellings after -- belong to the agent (Review Focus 3) --------
+exec chaban chat T-1 -- -S --claude-no-resume
+stdout 'argv: -S --claude-no-resume$'
+
+# --- retired flags before -- are usage errors ----------------------------------
+! exec chaban chat T-1 -S
+stderr 'no longer injected'
+! stdout 'mode:'
+! exec chaban chat T-1 --claude-no-resume
+stderr 'renamed'
+
+# --- the old command says where it went -----------------------------------------
+! exec chaban claude T-1
+stderr 'is now `chaban chat`'
+! stdout 'mode:'
+
+# --- a failing can_resume: nothing starts, the error names it -------------------
+cp config-fail.yml root/config.yml
+! exec chaban chat T-1
+! stdout 'mode:'
+stderr 'can_resume failed'
+exec chaban chat T-1 -R
+stdout 'mode: start$'
+
+# --- non-zero agent exit propagates with NO added stderr noise ------------------
+cp config-main.yml root/config.yml
+env AGENT_SHIM_EXIT=7
+! exec chaban chat T-1
+! stderr .
+env AGENT_SHIM_EXIT=
+
+# --- fallback: no agent: block, claude on PATH ----------------------------------
+# stderr carries exactly the notice. The built-in can_resume finds no history
+# yet -> a fresh `claude`. The history dir is encoded with sed HERE, independent
+# of any Go code: every byte outside [A-Za-z0-9] becomes '-'.
+cp config-noagent.yml root/config.yml
+# Fail safely BEFORE chaban spawns anything if the login shell would resolve a
+# claude other than our shim (e.g. /etc/profile resetting PATH).
+exec /bin/sh -lc 'command -v claude'
+stdout '^'$WORK'/bin/claude$'
+exec chaban chat T-1
+stdout 'argv: $'
+cmp stderr notice.txt
+exec sh -c 'enc=$(printf %s "$WORK/root/T-1_x" | LC_ALL=C sed "s/[^A-Za-z0-9]/-/g"); mkdir -p "$HOME/.claude/projects/$enc" && : > "$HOME/.claude/projects/$enc/c.jsonl"'
+exec /bin/sh -lc 'command -v claude'
+stdout '^'$WORK'/bin/claude$'
+exec chaban chat T-1
+stdout 'argv: --continue$'
+cmp stderr notice.txt
+
+# --- fallback with no claude on PATH: exit non-zero, config error ---------------
+# PATH is rebuilt from the system dirs: the developer's PATH may hold a real
+# claude, which must never run from here.
+rm $WORK/bin/claude
+env PATH=$WORK/bin:/usr/bin:/bin
+# A claude in the system dirs would be a real one: refuse to run.
+! exists /usr/bin/claude
+! exists /bin/claude
+! exec /bin/sh -lc 'command -v claude'
+! exec chaban chat T-1
+stderr 'no claude on PATH'
+stderr 'agent:'
+
+# --- session titles: tmux window renamed, auto-name restored after ------------
+env PATH=$WORK/bin:/usr/bin:/bin
+cp config-main.yml root/config.yml
+chmod 0755 $WORK/bin/tmux
+env TMUX_SHIM_LOG=$WORK/tmux.log
+env TMUX=/tmp/fake-socket,1234,0
+env TMUX_PANE=%42
+exec chaban chat T-1
+grep -count=1 'rename-window -t %42 T-1_x' $WORK/tmux.log
+grep -count=1 'set-option -w -t %42 -u automatic-rename' $WORK/tmux.log
+exec sh -c 'test "$(sed -n 1p "$TMUX_SHIM_LOG")" = "rename-window -t %42 T-1_x"'
+
+# --- titles: the tmux window name is truncated to 20 runes --------------------
+env TMUX_SHIM_LOG=$WORK/tmux-long.log
+exec chaban new T-2 abcdefghijklmnopqrstuvwxyz app
+exec chaban chat T-2
+grep -count=1 'rename-window -t %42 T-2_abcdefghijklmnop$' $WORK/tmux-long.log
+
+# --- titles: $TMUX without $TMUX_PANE renames nothing -------------------------
+env TMUX_SHIM_LOG=$WORK/tmux-nopane.log
+env TMUX_PANE=
+exec chaban chat T-1
+! exists $WORK/tmux-nopane.log
+env TMUX_PANE=%42
+
+# --- titles: outside tmux nothing is renamed; piped stdout stays clean --------
+env TMUX_SHIM_LOG=$WORK/tmux-none.log
+env TMUX=
+exec chaban chat T-1
+! exists $WORK/tmux-none.log
+! stdout ']0;'
+
+# --- titles: a failed rename is NOT followed by a restore ---------------------
+# Mutation check: deleting setSessionTitle's `.Run() != nil` early return makes
+# this block fail.
+env TMUX_SHIM_EXIT=1
+env TMUX_SHIM_LOG=$WORK/tmux-fail.log
+env TMUX=/tmp/fake-socket,1234,0
+exec chaban chat T-1
+grep -count=1 'rename-window' $WORK/tmux-fail.log
+! grep 'set-option' $WORK/tmux-fail.log
+env TMUX_SHIM_EXIT=
+
+-- config.tmpl --
+values:
+  PORT: { start: 18200, per_workspace: 5 }
+env:
+  DB_NAME: app_${WORKSPACE}_dev
+  GLOBAL_VAR: from-config
+projects:
+  app:
+    repo: WORKROOT/src/app
+agent:
+  start: WORKDIR/bin/agent start
+  resume: WORKDIR/bin/agent resume
+  can_resume: test -e WORKROOT/can-resume
+-- config-fail.tmpl --
+values:
+  PORT: { start: 18200, per_workspace: 5 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+agent:
+  start: WORKDIR/bin/agent start
+  resume: WORKDIR/bin/agent resume
+  can_resume: exit 2
+-- config-noagent.tmpl --
+values:
+  PORT: { start: 18200, per_workspace: 5 }
+projects:
+  app:
+    repo: WORKROOT/src/app
+-- notice.txt --
+chaban: no agent: in config.yml, starting claude (found on PATH); add an agent: block to choose
+-- bin/agent --
+#!/bin/sh
+echo "mode: $1"
+shift
+echo "argv: $@"
+echo "cwd: $(pwd)"
+echo "WORKSPACE=$WORKSPACE"
+echo "PORT0=$PORT0"
+echo "DB_NAME=$DB_NAME"
+echo "GLOBAL_VAR=$GLOBAL_VAR"
+exit ${AGENT_SHIM_EXIT:-0}
+-- bin/claude --
+#!/bin/sh
+echo "argv: $@"
+-- bin/tmux --
+#!/bin/sh
+echo "$@" >> "$TMUX_SHIM_LOG"
+exit ${TMUX_SHIM_EXIT:-0}
+-- root/src/app/README --
+app source

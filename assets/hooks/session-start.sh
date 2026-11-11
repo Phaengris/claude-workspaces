@@ -37,13 +37,18 @@ printf '# chaban\n\n'
 printf 'This session is inside workspace %s.\n\n' "$name"
 chaban status "$name" 2>/dev/null
 # Workspaces created before the seeded frame (v1.8) have no ## Status section
-# in CLAUDE.md; nag until a session starts one. Read-only: a grep, no writes.
+# in the instructions file; nag until a session starts one. Read-only: a grep,
+# no writes.
 # The pattern mirrors recordedStatus's predicate (case-insensitive, the
 # trimmed line is exactly "## status") so the nag and the renderer cannot
 # disagree about whether a note exists.
-dir=$(chaban cd "$name" 2>/dev/null)
-if [ -n "$dir" ] && ! grep -qi '^[[:space:]]*## status[[:space:]]*$' "$dir/CLAUDE.md" 2>/dev/null; then
-	printf '\nThis workspace has no "## Status" section in its CLAUDE.md. Start one\n'
+# The file's name is configured (agent: instructions_file), so ask the binary;
+# an empty answer skips the nag and the closing line names it generically.
+file=$(chaban which --instructions-file 2>/dev/null)
+fname=${file##*/}
+[ -n "$fname" ] || fname="the workspace's instructions file"
+if [ -n "$file" ] && ! grep -qi '^[[:space:]]*## status[[:space:]]*$' "$file" 2>/dev/null; then
+	printf '\nThis workspace has no "## Status" section in its %s. Start one\n' "$fname"
 	printf '(About / Now / Next / Needs, with an as-of date) and refresh it at the end\n'
 	printf 'of every substantial turn — the user reads it via `chaban status`.\n'
 fi
@@ -53,7 +58,7 @@ printf 'Manage this workspace with: chaban status|up|down|logs|exec %s\n' "$name
 printf 'Daemons are not auto-started; start what you need with: chaban up %s <daemon>\n' "$name"
 
 # The handoff-report convention, delivered here rather than seeded into the
-# workspace's CLAUDE.md. CLAUDE.md is written once and then belongs to the
+# workspace's instructions file. It is written once and then belongs to the
 # agent (spec §5), so a convention seeded there is frozen at the workspace's
 # birth and cannot be revised — while this hook stores nothing, is recomputed
 # every session, and updates for every workspace at once the moment the binary
@@ -65,7 +70,7 @@ printf 'Daemons are not auto-started; start what you need with: chaban up %s <da
 printf '\nEnd every substantial turn with a handoff report — Done (outcomes, never the\n'
 printf 'journey), Needs you (each ask self-contained: context, options and a\n'
 printf 'recommendation in one breath), Watch out (problems found, with severity) — and\n'
-printf 'refresh the ## Status section of CLAUDE.md in the same moment. Your LAST\n'
+printf 'refresh the ## Status section of %s in the same moment. Your LAST\n' "$fname"
 printf 'message is what the user reads when they switch back to this workspace; its\n'
 printf 'job is re-entry in under a minute.\n'
 

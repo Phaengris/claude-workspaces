@@ -26,9 +26,11 @@ stdout 'T-1_fix-thing'
 stdout '^  app: checked out \(branch T-1_fix-thing\), setup current$'
 stdout 'hint: chaban cd T-1'
 
-# Docs scaffolded: CLAUDE.md once, WORKSPACE.md listing the project.
+# Docs scaffolded: the instructions file (CLAUDE.md: no agent: block) once, WORKSPACE.md listing the project.
 exists $WORK/root/T-1_fix-thing/CLAUDE.md
 grep '### app' $WORK/root/T-1_fix-thing/WORKSPACE.md
+! exists $WORK/root/T-1_fix-thing/AGENTS.md
+grep 'keep durable notes in CLAUDE.md instead' $WORK/root/T-1_fix-thing/WORKSPACE.md
 
 # Worktree on a branch named after the FULL workspace name (v1.4: the branch
 # says in `git branch` what a bare task id cannot); allocation visible in ls;
@@ -84,6 +86,14 @@ exec git -C $WORK/root/T-2_x/app rev-parse --abbrev-ref HEAD
 stdout '^T-2_x$'
 exec chaban status T-2
 stdout '^  app: checked out \(branch T-2_x\), setup current$'
+
+# --- the instructions file follows config: an agent: block without
+# instructions_file means AGENTS.md, and CLAUDE.md is not created.
+exec sh -c 'printf "agent:\n  start: some-agent\n" >> "$WORK/root/config.yml"'
+exec chaban new T-4 other app
+exists $WORK/root/T-4_other/AGENTS.md
+! exists $WORK/root/T-4_other/CLAUDE.md
+grep 'keep durable notes in AGENTS.md instead' $WORK/root/T-4_other/WORKSPACE.md
 
 # --- usage: fewer than two positionals → exit 2 -------------------------------
 ! exec chaban new T-9

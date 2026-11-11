@@ -72,11 +72,16 @@ type statusEntry struct {
 	CreatedAt   string          `json:"created_at"`
 	Adopted     bool            `json:"adopted"`
 	Projects    []statusProject `json:"projects"`
-	// Status is the workspace CLAUDE.md's `## Status` section, verbatim —
+	// Status is the workspace instructions file's `## Status` section, verbatim —
 	// the durable handoff note sessions maintain (the skill's convention).
 	// The tool never writes it; like a pid file, it is a fact of the world
 	// the tool only displays. Absent when the file or section is.
 	Status string `json:"status,omitempty"`
+
+	// The configured instructions file's name and whether it exists: human
+	// rendering only (the label and the "no <file>" line), not in the JSON.
+	instructionsFile   string
+	instructionsExists bool
 }
 
 // newStatusCmd builds `chaban status [workspace]`. With an identifier it
@@ -166,6 +171,8 @@ func statusOf(cfg *config.Config, ws wsp.Workspace) statusEntry {
 		// the path) and leave branch/setup zero — there is nothing to measure.
 		projects = append(projects, statusProject{Name: name, Dir: wsp.ProjectDir(ws, cfg, name)})
 	}
+	file := cfg.InstructionsFile()
+	recorded, exists := recordedStatus(ws, file)
 	return statusEntry{
 		Dir:         ws.Dir,
 		Name:        ws.Name(),
@@ -175,21 +182,25 @@ func statusOf(cfg *config.Config, ws wsp.Workspace) statusEntry {
 		CreatedAt:   ws.Alloc.CreatedAt,
 		Adopted:     ws.Alloc.Adopted,
 		Projects:    projects,
-		Status:      recordedStatus(ws),
+		Status:      recorded,
+
+		instructionsFile:   file,
+		instructionsExists: exists,
 	}
 }
 
 // recordedStatus extracts the `## Status` section of the workspace's
-// CLAUDE.md — the durable handoff note the skill has sessions maintain
+// instructions file (file, relative to ws.Dir) — the durable handoff note the skill has sessions maintain
 // (About / Now / Next / Needs, with an as-of date). Verbatim, heading
-// stripped, ended by the next `##` heading or EOF; the rest of CLAUDE.md is
+// stripped, ended by the next `##` heading or EOF; the rest of the file is
 // the agent's private space and is deliberately NOT shown. Any failure —
 // no file, no section — is simply "no status recorded", an empty string:
-// re-entry help is a bonus, never an error.
-func recordedStatus(ws wsp.Workspace) string {
-	data, err := os.ReadFile(filepath.Join(ws.Dir, "CLAUDE.md"))
+// re-entry help is a bonus, never an error. fileExists tells a missing file
+// from a file without the section, so the human block can say which.
+func recordedStatus(ws wsp.Workspace, file string) (status string, fileExists bool) {
+	data, err := os.ReadFile(filepath.Join(ws.Dir, file))
 	if err != nil {
-		return ""
+		return "", false
 	}
 	var body []string
 	in := false
@@ -198,12 +209,12 @@ func recordedStatus(ws wsp.Workspace) string {
 		case strings.EqualFold(strings.TrimSpace(line), "## status"):
 			in = true
 		case in && strings.HasPrefix(line, "## "):
-			return strings.TrimSpace(strings.Join(body, "\n"))
+			return strings.TrimSpace(strings.Join(body, "\n")), true
 		case in:
 			body = append(body, line)
 		}
 	}
-	return strings.TrimSpace(strings.Join(body, "\n"))
+	return strings.TrimSpace(strings.Join(body, "\n")), true
 }
 
 // statusDaemonsOf measures one checked-out project's configured daemons, in
@@ -252,9 +263,9 @@ func printStatus(w io.Writer, entry statusEntry) {
 	fmt.Fprintln(w, "index:", entry.Index)
 	if len(entry.Projects) == 0 {
 		fmt.Fprintln(w, "projects: none")
-		return
+	} else {
+		fmt.Fprintln(w, "projects:")
 	}
-	fmt.Fprintln(w, "projects:")
 	for _, p := range entry.Projects {
 		fmt.Fprintf(w, "  %s: %s\n", p.Name, statusProjectDetail(p))
 		// Daemons hang off their project line at one extra indent level. Nil
@@ -269,8 +280,11 @@ func printStatus(w io.Writer, entry statusEntry) {
 	// The recorded status note comes LAST: it is the "should I get back to
 	// this?" answer, and last is what the eye lands on. Absent section,
 	// absent block — no nag; the skill drives the convention.
-	if entry.Status != "" {
-		fmt.Fprintf(w, "\nstatus (from CLAUDE.md):\n%s\n", entry.Status)
+	switch {
+	case entry.Status != "":
+		fmt.Fprintf(w, "\nstatus (from %s):\n%s\n", entry.instructionsFile, entry.Status)
+	case entry.instructionsFile != "" && !entry.instructionsExists:
+		fmt.Fprintf(w, "\nno %s in this workspace\n", entry.instructionsFile)
 	}
 }
 

@@ -60,7 +60,8 @@ internal/assets ← assets/ (//go:embed carrier; skill, hook, wrappers, config s
 - **Two-tier env**: user commands (setup/start/stop/teardown/exec) get the
   CURATED env — `wsp.CommandEnv` → `envx.Curated`, exact-name allowlist +
   `env_allow` + sanitized PATH (concrete `/versions|installs/.../bin` stripped,
-  shims kept). Claude sessions get sanitized-INHERITED env + workspace overlay.
+  shims kept). Agent sessions (chat/launch/try, and their `can_resume`
+  probe) get sanitized-INHERITED env + workspace overlay (`sessionEnv`).
   `proc.Run`/`StartDaemon` are the only user-command spawn paths; nil env means
   empty, never parent.
 - **Destruction safety, layered**: config rejects escaping `path:`; every
@@ -95,8 +96,10 @@ internal/assets ← assets/ (//go:embed carrier; skill, hook, wrappers, config s
 
 - goccy rejects unquoted `${…}` inside flow-style YAML collections — block
   style in all examples.
-- Claude project-dir encoding: EVERY non-alphanumeric byte → `-` (empirical;
-  probe in claude.go). `${WORKSPACE}` = task id, NOT the dir name.
+- Claude project-dir encoding: EVERY non-alphanumeric character → `-` (empirical; non-ASCII paths unverified;
+  the `can_resume` line in `internal/config/claude_agent.yml`, the one home
+  of Claude-specific session knowledge). `${WORKSPACE}` = task id, NOT the
+  dir name.
 - `--` in session commands is the sniff-suppressor ONLY at the slot after the
   workspace; later `--` reaches the child verbatim.
 - The public docs never mention v1/the Ruby predecessor beyond one line in
@@ -109,6 +112,9 @@ internal/assets ← assets/ (//go:embed carrier; skill, hook, wrappers, config s
 - `docs/superpowers/specs/2026-07-30-claude-workspaces-go-design.md` — THE
   spec; decided behaviors live here and in each milestone plan's
   Decided-behaviors table (`docs/superpowers/plans/*-m[0-5]-*.md`).
+- `docs/superpowers/specs/2026-11-09-agent-chat-design.md` — agent-neutral
+  sessions (`chat`, the `agent:` block, `instructions_file`); supersedes the
+  main spec's §8 injection matrix.
 - Ideas/backlog now live on the user's Fizzy board named `claude-workspaces`
   (internal tracker; find it via `fizzy board list` — never put its URL in
   this public repo). The md backlog below is historical.
